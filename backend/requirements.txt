@@ -1,0 +1,21 @@
+
+# Core FastAPI stack
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+websockets==12.0
+
+# Audio processing
+torch==2.7.0
+torchaudio==2.7.0
+numpy==1.24.3
+soundfile==0.12.1
+
+# Data validation
+pydantic==2.5.0
+python-dotenv==1.0.0
+
+# Development
+pytest==7.4.3
+pytest-asyncio==0.21.1
+
