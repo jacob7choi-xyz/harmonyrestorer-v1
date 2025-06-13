@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Upload, Music, BarChart3, Settings, Download, Play, Pause, Volume2, Zap, Sparkles, FileAudio, CheckCircle, AlertCircle, Loader2, RotateCcw, Brain, TrendingUp, Activity, Crown, Palette, Award } from 'lucide-react';
+import { Upload, BarChart3, Settings, Download, Loader2, RotateCcw, Brain, TrendingUp, Activity, CheckCircle, AlertCircle, Crown, FileAudio, Sparkles } from 'lucide-react';
 
 // Types
 interface ProcessingSettings {
@@ -129,7 +129,7 @@ const AppleUploadArea = ({
         {currentFile ? (
           <>
             <div className="w-16 h-16 rounded-2xl bg-blue-500/20 flex items-center justify-center backdrop-blur-sm border border-blue-400/30">
-              <Music className="w-8 h-8 text-blue-400" />
+              <FileAudio className="w-8 h-8 text-blue-400" />
             </div>
             <div>
               <p className="text-lg font-medium text-white/90">{currentFile.name}</p>
@@ -272,7 +272,7 @@ const AppleSettingsPanel = ({
             {['light', 'medium', 'strong', 'extreme'].map((level) => (
               <button
                 key={level}
-                onClick={() => onSettingsChange({ ...settings, noise_reduction: level })}
+                onClick={() => onSettingsChange({ ...settings, noise_reduction: level as ProcessingSettings['noise_reduction'] })}
                 disabled={disabled}
                 className={`px-3 py-2.5 text-sm rounded-xl transition-all font-medium capitalize ${
                   settings.noise_reduction === level
@@ -299,16 +299,16 @@ const AppleSettingsPanel = ({
               <div className="relative">
                 <input
                   type="checkbox"
-                  checked={settings[key]}
+                  checked={settings[key as keyof ProcessingSettings] as boolean}
                   onChange={(e) => onSettingsChange({ ...settings, [key]: e.target.checked })}
                   disabled={disabled}
                   className="sr-only"
                 />
                 <div className={`w-11 h-6 rounded-full transition-all ${
-                  settings[key] ? 'bg-blue-500' : 'bg-white/20'
+                  settings[key as keyof ProcessingSettings] ? 'bg-blue-500' : 'bg-white/20'
                 }`}>
                   <div className={`w-5 h-5 rounded-full bg-white transition-all duration-200 ease-out ${
-                    settings[key] ? 'translate-x-5' : 'translate-x-0.5'
+                    settings[key as keyof ProcessingSettings] ? 'translate-x-5' : 'translate-x-0.5'
                   } mt-0.5 shadow-lg`} />
                 </div>
               </div>
@@ -324,7 +324,7 @@ const AppleSettingsPanel = ({
           <div className="relative">
             <select
               value={settings.output_format}
-              onChange={(e) => onSettingsChange({ ...settings, output_format: e.target.value })}
+              onChange={(e) => onSettingsChange({ ...settings, output_format: e.target.value as ProcessingSettings['output_format'] })}
               disabled={disabled}
               className="w-full bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white/90 focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none backdrop-blur-sm"
             >
@@ -349,7 +349,7 @@ const AppleSettingsPanel = ({
             {['standard', 'high', 'pro'].map((quality) => (
               <button
                 key={quality}
-                onClick={() => onSettingsChange({ ...settings, quality })}
+                onClick={() => onSettingsChange({ ...settings, quality: quality as ProcessingSettings['quality'] })}
                 disabled={disabled}
                 className={`px-3 py-2.5 text-sm rounded-xl transition-all font-medium capitalize ${
                   settings.quality === quality
@@ -369,13 +369,13 @@ const AppleSettingsPanel = ({
 
 // Main Apple-style App
 export default function HarmonyRestorer() {
-  const [file, setFile] = useState(null);
-  const [status, setStatus] = useState({
+  const [file, setFile] = useState<File | null>(null);
+  const [status, setStatus] = useState<ProcessingStatus>({
     status: 'idle',
     progress: 0,
     message: 'Ready to enhance your audio',
   });
-  const [settings, setSettings] = useState({
+  const [settings, setSettings] = useState<ProcessingSettings>({
     noise_reduction: 'medium',
     enhance_speech: true,
     remove_reverb: false,
@@ -460,7 +460,7 @@ export default function HarmonyRestorer() {
     setIsProcessing(false);
   }, [file]);
 
-  const handleFileSelect = (selectedFile) => {
+  const handleFileSelect = (selectedFile: File) => {
     setFile(selectedFile);
     setStatus({
       status: 'idle',
@@ -498,6 +498,7 @@ export default function HarmonyRestorer() {
             <h1 className="text-4xl font-bold bg-gradient-to-r from-white to-white/80 bg-clip-text text-transparent">
               HarmonyRestorer
             </h1>
+            <Sparkles className="w-5 h-5 text-blue-400 ml-2" />
           </div>
           <p className="text-xl text-white/70 max-w-2xl mx-auto font-medium leading-relaxed">
             Professional audio restoration powered by advanced AI. 
