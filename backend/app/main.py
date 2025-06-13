@@ -4,21 +4,17 @@ HarmonyRestorer v1 - World-Class Audio Processing Platform
 FastAPI Backend with 1D Operational GANs + Latest AI Models
 """
 
-import asyncio
-import os
 import uuid
-import tempfile
 from pathlib import Path
 from typing import Dict, List, Optional, Any
 import logging
 from datetime import datetime
 import json
-import io
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
+from fastapi.responses import JSONResponse, FileResponse, StreamingResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import uvicorn
@@ -26,7 +22,6 @@ import uvicorn
 # Audio processing imports
 import torch
 import torchaudio
-import numpy as np
 
 # Setup logging
 logging.basicConfig(
@@ -71,6 +66,21 @@ app.add_middleware(
 )
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+# Frontend static files (add this section)
+FRONTEND_DIST = Path("../frontend/dist")
+
+if FRONTEND_DIST.exists():
+    # Mount assets folder (Vite creates 'assets', not 'static')
+    if (FRONTEND_DIST / "assets").exists():
+        app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="assets")
+    
+    @app.get("/", response_class=HTMLResponse)
+    async def serve_frontend():
+        index_file = FRONTEND_DIST / "index.html"
+        if index_file.exists():
+            return HTMLResponse(content=index_file.read_text(), status_code=200)
+        return {"message": "HarmonyRestorer v1 API", "docs": "/api/docs"}
+
 # Directory setup
 BASE_DIR = Path(__file__).parent.parent
 UPLOAD_DIR = BASE_DIR / "uploads"
@@ -89,6 +99,7 @@ logger.info(f"🚀 HarmonyRestorer v1 initializing on device: {DEVICE}")
 # DATA MODELS
 # ========================
 
+
 class ProcessingSettings(BaseModel):
     """Audio processing configuration"""
     noise_reduction: str = "medium"  # none, light, medium, strong, extreme
@@ -99,6 +110,7 @@ class ProcessingSettings(BaseModel):
     output_format: str = "wav"  # wav, mp3, flac
     quality: str = "high"  # standard, high, ultra
     preserve_dynamics: bool = True
+
 
 class JobStatus(BaseModel):
     """Processing job status"""
@@ -111,6 +123,7 @@ class JobStatus(BaseModel):
     download_url: Optional[str] = None
     processing_time: Optional[float] = None
     file_info: Optional[Dict[str, Any]] = None
+
 
 class AudioInfo(BaseModel):
     """Audio file information"""
@@ -126,6 +139,7 @@ class AudioInfo(BaseModel):
 # ========================
 # WEBSOCKET MANAGER
 # ========================
+
 
 class ConnectionManager:
     """Manages WebSocket connections for real-time updates"""
@@ -164,11 +178,13 @@ class ConnectionManager:
         for client_id in disconnected:
             self.disconnect(client_id)
 
+
 manager = ConnectionManager()
 
 # ========================
 # AUDIO PROCESSOR
 # ========================
+
 
 class HarmonyAI:
     """
@@ -451,6 +467,7 @@ class HarmonyAI:
             enhancements.append("Clarity Boost")
         return enhancements
 
+
 # Initialize AI processor
 harmony_ai = HarmonyAI()
 
@@ -460,6 +477,7 @@ harmony_ai = HarmonyAI()
 
 # In-memory job storage (use Redis/database in production)
 active_jobs: Dict[str, JobStatus] = {}
+
 
 async def update_job_progress(job_id: str, progress: int, message: str):
     """Update job progress and send WebSocket notification"""
@@ -489,6 +507,7 @@ async def update_job_progress(job_id: str, progress: int, message: str):
 # API ENDPOINTS
 # ========================
 
+
 @app.get("/", tags=["health"])
 async def root():
     """Welcome endpoint with platform information"""
@@ -514,6 +533,7 @@ async def root():
         "docs": "/api/docs"
     }
 
+
 @app.get("/health", tags=["health"])
 async def health_check():
     """System health check"""
@@ -525,6 +545,7 @@ async def health_check():
         "device": str(DEVICE),
         "memory_usage": f"{torch.cuda.memory_allocated() / 1024**2:.1f}MB" if DEVICE.type == "cuda" else "N/A"
     }
+
 
 @app.post("/api/v1/process", tags=["audio"])
 async def process_audio(
@@ -602,6 +623,7 @@ async def process_audio(
         "websocket_url": f"/ws/{job_id}"
     }
 
+
 async def process_audio_background(
     job_id: str,
     input_path: Path,
@@ -641,6 +663,7 @@ async def process_audio_background(
         # Cleanup input file
         input_path.unlink(missing_ok=True)
 
+
 @app.get("/api/v1/status/{job_id}", tags=["audio"])
 async def get_job_status(job_id: str):
     """Get processing job status"""
@@ -648,6 +671,7 @@ async def get_job_status(job_id: str):
         raise HTTPException(status_code=404, detail="Job not found")
     
     return active_jobs[job_id]
+
 
 @app.get("/api/v1/download/{job_id}", tags=["audio"])
 async def download_processed_audio(job_id: str):
@@ -676,6 +700,7 @@ async def download_processed_audio(job_id: str):
 # WEBSOCKET
 # ========================
 
+
 @app.websocket("/ws/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, client_id: str):
     """WebSocket for real-time processing updates"""
@@ -696,6 +721,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
 # STARTUP/SHUTDOWN
 # ========================
 
+
 @app.on_event("startup")
 async def startup_event():
     logger.info("🎵 HarmonyRestorer v1 starting up...")
@@ -703,6 +729,7 @@ async def startup_event():
     logger.info(f"📁 Processed directory: {PROCESSED_DIR}")
     logger.info(f"🤖 AI models loaded: {harmony_ai.models_loaded}")
     logger.info("🚀 Ready to restore audio!")
+
 
 @app.on_event("shutdown") 
 async def shutdown_event():
