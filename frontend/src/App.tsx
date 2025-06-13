@@ -69,17 +69,17 @@ const AppleUploadArea = ({
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef(null);
 
-  const handleDragOver = (e) => {
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragging(true);
   };
 
-  const handleDragLeave = (e) => {
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragging(false);
   };
 
-  const handleDrop = (e) => {
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragging(false);
     const files = e.dataTransfer.files;
@@ -88,8 +88,8 @@ const AppleUploadArea = ({
     }
   };
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
     if (file && file.type.startsWith('audio/')) {
       onFileSelect(file);
     }
