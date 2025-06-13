@@ -1,352 +1,227 @@
 # 🎵 HarmonyRestorer v1
 
-**World-class AI audio restoration platform with state-of-the-art neural networks**
+**AI-powered audio restoration platform with cutting-edge research foundation**
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
 ![React](https://img.shields.io/badge/react-18.2+-blue.svg)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.104+-green.svg)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.7+-red.svg)
+![Status](https://img.shields.io/badge/status-in%20development-yellow.svg)
 
-## ✨ Features
+## 🚧 Project Status
 
-- 🤖 **1D Operational GANs** - Blind audio restoration with cutting-edge AI research
-- 🎵 **Real-time Processing** - Live progress tracking via WebSocket connections
-- 🎤 **Professional Audio Enhancement** - Multi-level noise reduction and speech enhancement
-- 👤 **Voice Isolation** - Advanced source separation using Demucs-style models
-- 🏠 **Reverberation Removal** - AI-powered dereverberation for studio-quality results
-- 📱 **Modern UI** - Beautiful, responsive React interface with glassmorphism design
-- ⚡ **Lightning Fast** - FastAPI backend with async processing and GPU acceleration
-- 🌍 **Multiple Formats** - Support for WAV, MP3, FLAC, OGG, M4A, AAC
+**Current Phase**: Full-stack foundation complete, AI implementation in progress
+
+### ✅ **What's Working Now**
+- **Professional FastAPI backend** with async processing and WebSocket support
+- **Beautiful Apple-style React frontend** with glassmorphism design
+- **Complete project architecture** ready for AI model integration
+- **Production deployment setup** (Docker, Railway-ready)
+- **Comprehensive API documentation** with Swagger/OpenAPI
+
+### 🔬 **What's Coming Next**
+- **1D Operational GANs implementation** based on cutting-edge research
+- **Real audio processing pipeline** with professional-grade enhancement
+- **Integration with latest 2025 AI models** (Demucs v4, SpeechT5, AudioSR)
+
+## 🎯 **Vision & Research Foundation**
+
+This project implements **"Blind Restoration of Real-World Audio by 1D Operational GANs"** - a breakthrough 2022 research paper achieving:
+- **7.2 dB SDR improvement** on speech restoration
+- **4.9 dB improvement** on music restoration  
+- **First-ever blind restoration** (no prior assumptions about corruption types)
+
+Combined with **latest 2025 AI models**:
+- **Meta Demucs v4**: Advanced source separation
+- **Microsoft SpeechT5**: Speech enhancement
+- **AudioSR**: Diffusion-based super-resolution
+- **NVIDIA Studio Voice NIM**: Sub-5ms latency processing
+
+## ✨ **Planned Features**
+
+### Core AI Capabilities
+- 🤖 **1D Operational GANs** - Blind audio restoration with Self-ONNs
+- 🎵 **Real-time Processing** - Live progress tracking via WebSocket
+- 🎤 **Speech Enhancement** - Optimized voice clarity and intelligibility  
+- 👤 **Voice Isolation** - Advanced source separation using Demucs v4
+- 🏠 **Reverberation Removal** - AI-powered dereverberation
+- 📈 **Audio Super-Resolution** - Upscaling with AudioSR diffusion models
+
+### Technical Features  
+- ⚡ **GPU Acceleration** - CUDA optimization for real-time processing
+- 🌍 **Multiple Formats** - WAV, FLAC, MP3, AIFF support
 - 🔄 **Batch Processing** - Handle multiple files simultaneously
-- 📊 **Real-time Visualization** - Live waveform display and progress tracking
-- 🌐 **API-First** - RESTful API with comprehensive documentation
-- 📱 **PWA Ready** - Progressive Web App capabilities for mobile devices
+- 📊 **Quality Metrics** - SDR, STOI, PESQ measurement and reporting
+- 🌐 **RESTful API** - Professional API with comprehensive documentation
+- 📱 **Progressive Web App** - Mobile-optimized interface
 
-## 🎯 Demo
+## 🎯 **Quick Demo**
 
 ```bash
-# Quick test of the API
+# Health check (currently working)
 curl -X GET "http://localhost:8000/health"
 
-# Upload and process audio
+# Audio processing (coming soon)
 curl -X POST "http://localhost:8000/api/v1/process" \
   -F "file=@your_audio.wav" \
   -F "settings={\"noise_reduction\":\"medium\",\"enhance_speech\":true}"
 ```
 
-## 🏗️ Architecture
+## 🏗️ **Architecture**
 
-### Backend (FastAPI)
-- **Framework**: FastAPI with async support and automatic OpenAPI documentation
-- **AI Processing**: PyTorch + 1D Operational GANs based on latest research
-- **Real-time Updates**: WebSocket connections for live progress tracking
-- **Audio Processing**: TorchAudio + LibROSA for professional-grade signal processing
-- **Database**: SQLModel for type-safe database operations (ready for PostgreSQL)
-- **Background Tasks**: Celery + Redis for distributed processing
-- **Security**: JWT authentication, rate limiting, CORS protection
+### Backend (FastAPI) - ✅ **Complete**
+- **Framework**: FastAPI with async support and automatic OpenAPI docs
+- **Real-time Updates**: WebSocket connections for live progress tracking  
+- **Audio Pipeline**: Ready for PyTorch + TorchAudio integration
+- **Database**: SQLModel for type-safe operations (PostgreSQL ready)
+- **Background Tasks**: Async task processing with progress tracking
+- **Security**: CORS, rate limiting, error handling
 
-### Frontend (React + TypeScript)
-- **Framework**: React 18 with TypeScript for type safety
-- **Styling**: TailwindCSS + custom glassmorphism design system
-- **Animations**: Framer Motion for smooth, professional animations
-- **State Management**: Zustand for lightweight, efficient state handling
-- **API Client**: Axios with React Query for caching and synchronization
-- **Audio Visualization**: Custom waveform components with Web Audio API
-- **Build Tool**: Vite for lightning-fast development and optimized builds
+### Frontend (React + TypeScript) - ✅ **Complete**  
+- **Framework**: React 18 with TypeScript for full type safety
+- **Styling**: TailwindCSS with custom Apple-inspired glassmorphism
+- **State Management**: React hooks with TypeScript interfaces
+- **API Integration**: Axios client ready for backend connection
+- **Audio Visualization**: Waveform components with Web Audio API
+- **Build Tool**: Vite for lightning-fast development
 
-### AI Models
-- **1D Operational GANs**: Blind audio restoration (7.2 dB SDR improvement)
-- **Self-Organized Operational Neural Networks**: More efficient than CNNs
-- **Demucs v4**: State-of-the-art source separation for voice isolation
-- **SpeechT5**: Microsoft's speech enhancement models
-- **AudioCraft**: Meta's generative audio models for enhancement
+### AI Models - 🔬 **In Development**
+- **1D Operational GANs**: Self-ONNs implementation from research paper
+- **Integration Layer**: Ready for Demucs v4, SpeechT5, AudioSR
+- **Processing Pipeline**: Audio preprocessing and postprocessing
+- **Performance Optimization**: GPU memory management and batching
 
-## 🚀 Quick Start
+## 🚀 **Quick Start**
 
 ### Prerequisites
 - Python 3.11+
-- Node.js 18+
-- Conda (recommended) or virtualenv
+- Node.js 18+  
+- Conda (recommended)
 - Git
 
 ### Backend Setup
-
 ```bash
-# Clone the repository
-git clone https://github.com/YOUR_USERNAME/HarmonyRestorer-v1.git
+# Clone and setup
+git clone https://github.com/jacob7choi-xyz/harmonyrestorer-v1.git
 cd HarmonyRestorer-v1/backend
 
-# Create conda environment
+# Create environment
 conda create -n harmonyrestorer-v1 python=3.11 -y
 conda activate harmonyrestorer-v1
-
-# Install PyTorch with CUDA support (optional)
-conda install pytorch torchaudio -c pytorch -y
 
 # Install dependencies
 pip install fastapi "uvicorn[standard]" python-multipart websockets soundfile pydantic python-dotenv
 
-# Run the server
+# Run development server
 python app/main.py
 ```
 
-The API will be available at:
-- **Main API**: http://localhost:8000
-- **Interactive Docs**: http://localhost:8000/api/docs
-- **Health Check**: http://localhost:8000/health
+**Available at**: http://localhost:8000 (API docs at `/api/docs`)
 
 ### Frontend Setup
-
 ```bash
-# Navigate to frontend directory
+# Navigate and install
 cd ../frontend
-
-# Install dependencies
 npm install
 
-# Start development server
+# Start development server  
 npm run dev
 ```
 
-The frontend will be available at http://localhost:3000
+**Available at**: http://localhost:3000
 
-## 📊 Performance Benchmarks
+## 🔬 **Research Implementation Plan**
 
-### Audio Processing Performance
-- **M1/M2 MacBook**: 3-5x real-time processing speed
-- **NVIDIA RTX 3080**: 8-10x real-time processing speed
-- **CPU (Intel i7)**: 1-2x real-time processing speed
-
-### API Performance
-- **Throughput**: 1000+ requests/second
-- **Latency**: <100ms for file upload
-- **Processing**: Sub-second for files <10MB
-- **Memory**: Efficient GPU memory usage with automatic cleanup
-
-### Quality Metrics
-- **SDR Improvement**: 7.2 dB average (speech), 4.9 dB (music)
-- **STOI Score**: 82.44% average speech intelligibility
-- **Processing Quality**: Professional studio-grade results
-
-## 🔬 Technology Stack
-
-### Core Technologies
-| Component | Technology | Version |
-|-----------|------------|---------|
-| **Backend Framework** | FastAPI | 0.104+ |
-| **AI/ML** | PyTorch | 2.7+ |
-| **Audio Processing** | TorchAudio | 2.7+ |
-| **Frontend Framework** | React | 18.2+ |
-| **Type Safety** | TypeScript | 5.2+ |
-| **Styling** | TailwindCSS | 3.3+ |
-| **Build Tool** | Vite | 4.5+ |
-| **Database ORM** | SQLModel | 0.0.14+ |
-| **Task Queue** | Celery | 5.3+ |
-| **Cache** | Redis | 5.0+ |
-
-### AI Research Foundation
-- **1D Operational GANs**: Based on "Blind Restoration of Real-World Audio by 1D Operational GANs" (2022)
-- **Self-ONNs**: Self-Organized Operational Neural Networks for superior efficiency
-- **Spectral Gating**: Advanced frequency-domain noise reduction
-- **Real-time Processing**: Optimized for low-latency applications
-
-## 📝 API Documentation
-
-### Core Endpoints
-
-#### Process Audio
-```http
-POST /api/v1/process
-Content-Type: multipart/form-data
-
-file: audio_file.wav
-settings: {
-  "noise_reduction": "medium",
-  "enhance_speech": true,
-  "remove_reverb": false,
-  "isolate_voice": false,
-  "output_format": "wav"
-}
+### Phase 1: Foundation Models (Current)
+```python
+# Integrate existing state-of-the-art models
+- Meta Demucs v4 for source separation
+- Microsoft SpeechT5 for speech enhancement  
+- Basic noise reduction and audio processing
 ```
 
-#### Get Job Status
-```http
-GET /api/v1/status/{job_id}
+### Phase 2: 1D Op-GANs Implementation  
+```python
+# Implement research paper architecture
+class SelfONN(nn.Module):
+    # Self-Organized Operational Neural Networks
+    # Equations 1-7 from research paper
+    
+class OpGANGenerator(nn.Module):
+    # 10-layer architecture from Figure 4
+    # Temporal + spectral loss functions
 ```
 
-#### Download Processed Audio
-```http
-GET /api/v1/download/{job_id}
+### Phase 3: Advanced Integration
+```python
+# Combine multiple state-of-the-art approaches
+Audio → 1D Op-GANs → Demucs v4 → AudioSR → Enhanced Output
 ```
 
-#### WebSocket Updates
-```javascript
-const ws = new WebSocket('ws://localhost:8000/ws/your-job-id');
-ws.onmessage = (event) => {
-  const update = JSON.parse(event.data);
-  console.log(`Progress: ${update.progress}%`);
-};
-```
+## 📊 **Target Performance Benchmarks**
 
-For complete API documentation, visit `/api/docs` when running the backend.
+### Quality Metrics (Research Goals)
+- **SDR Improvement**: 7+ dB (speech), 5+ dB (music)
+- **STOI Score**: 80%+ speech intelligibility  
+- **Processing Speed**: 3-5x real-time on M2 MacBook
 
-## 🎛️ Processing Options
+### Technical Performance  
+- **API Latency**: <100ms for upload/status
+- **Memory Efficiency**: Optimized GPU usage with cleanup
+- **Throughput**: 100+ concurrent processing jobs
 
-### Noise Reduction Levels
-- **Light**: Minimal noise reduction, preserves audio character
-- **Medium**: Balanced noise reduction for most use cases
-- **Strong**: Aggressive noise reduction for heavily corrupted audio
-- **Extreme**: Maximum noise reduction for severe cases
+## 🛠️ **Development Roadmap**
 
-### Enhancement Features
-- **Speech Enhancement**: Optimizes voice clarity and intelligibility
-- **Reverberation Removal**: Reduces echo and room acoustics
-- **Voice Isolation**: Separates vocals from background music
-- **Clarity Boost**: Enhances high-frequency content for better definition
+### v0.1 (Current) - ✅ **Complete**
+- [x] FastAPI backend with WebSocket support
+- [x] React frontend with Apple-style design
+- [x] Project structure and deployment setup
+- [x] API documentation and type safety
 
-### Output Formats
-- **WAV**: Uncompressed, highest quality
-- **MP3**: Compressed, good quality, smaller file size
-- **FLAC**: Lossless compression, archival quality
+### v0.2 (Next 2-4 weeks) - 🔬 **In Progress**
+- [ ] Basic audio processing with existing models
+- [ ] File upload and download functionality  
+- [ ] Real progress tracking implementation
+- [ ] Integration with Demucs or SpeechT5
 
-## 🔧 Development
-
-### Project Structure
-```
-HarmonyRestorer-v1/
-├── backend/               # FastAPI backend
-│   ├── app/              # Main application
-│   │   ├── api/          # API endpoints
-│   │   ├── core/         # Configuration and utilities
-│   │   ├── models/       # Database models
-│   │   ├── services/     # Business logic
-│   │   └── main.py       # Application entry point
-│   ├── tests/            # Backend tests
-│   └── requirements.txt  # Python dependencies
-├── frontend/             # React frontend
-│   ├── src/              # Source code
-│   │   ├── components/   # React components
-│   │   ├── hooks/        # Custom hooks
-│   │   ├── services/     # API services
-│   │   └── App.tsx       # Main component
-│   └── package.json      # Node.js dependencies
-├── docs/                 # Documentation
-└── README.md            # This file
-```
-
-### Running Tests
-```bash
-# Backend tests
-cd backend
-pytest
-
-# Frontend tests
-cd frontend
-npm test
-```
-
-### Environment Variables
-```bash
-# Backend (.env)
-DATABASE_URL=postgresql://user:pass@localhost/harmony_db
-REDIS_URL=redis://localhost:6379
-SECRET_KEY=your-secret-key
-DEBUG=true
-
-# Frontend (.env)
-VITE_API_URL=http://localhost:8000
-VITE_WS_URL=ws://localhost:8000
-```
-
-## 🚀 Deployment
-
-### Docker Deployment
-```bash
-# Build and run with Docker Compose
-docker-compose up --build
-```
-
-### Railway Deployment
-```bash
-# Install Railway CLI
-npm install -g @railway/cli
-
-# Deploy to Railway
-railway login
-railway init
-railway deploy
-```
-
-### Manual Deployment
-1. Set up PostgreSQL and Redis instances
-2. Configure environment variables
-3. Build frontend: `npm run build`
-4. Deploy backend with gunicorn: `gunicorn app.main:app`
-5. Serve frontend with nginx or similar
-
-## 🎯 Roadmap
-
-### v1.0 (Current)
-- [x] Core FastAPI backend with async processing
-- [x] 1D Operational GAN implementation
-- [x] Real-time WebSocket updates
-- [x] Professional API documentation
-- [x] Multi-format audio support
-- [ ] Complete React frontend
-- [ ] User authentication system
-- [ ] File upload interface
-
-### v1.1 (Next Release)
-- [ ] Advanced AI model integration (Demucs v4, SpeechT5)
-- [ ] Batch processing interface
-- [ ] Audio visualization components
-- [ ] Mobile PWA support
-- [ ] User dashboard and history
-- [ ] Advanced processing presets
+### v1.0 (Target: 2-3 months)
+- [ ] 1D Operational GANs implementation
+- [ ] Multi-model processing pipeline
+- [ ] Performance optimization and benchmarking
+- [ ] Production deployment and monitoring
 
 ### v2.0 (Future)
-- [ ] Plugin ecosystem for custom models
-- [ ] Enterprise features and scaling
-- [ ] Advanced analytics and monitoring
 - [ ] Custom model training interface
-- [ ] API rate limiting and quotas
-- [ ] Multi-language support
+- [ ] Advanced preprocessing and postprocessing
+- [ ] Enterprise features and API management
+- [ ] Mobile app and offline capabilities
 
-## 🤝 Contributing
+## 🤝 **Contributing**
 
-We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
+This project implements cutting-edge research and welcomes contributions:
 
-### Development Setup
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature-name`
-3. Make your changes and add tests
-4. Ensure all tests pass: `npm test` and `pytest`
-5. Submit a pull request
+1. **AI/ML**: Help implement research papers and optimize models
+2. **Backend**: Improve async processing and API performance  
+3. **Frontend**: Enhance user experience and visualization
+4. **Research**: Stay current with latest audio AI developments
 
-### Code Style
-- **Python**: Black formatter, isort for imports
-- **TypeScript**: ESLint + Prettier
-- **Commits**: Conventional commits format
+## 📚 **Research References**
 
-## 📄 License
+- **[1D Op-GANs Paper]**: "Blind Restoration of Real-World Audio by 1D Operational GANs" (2022)
+- **[Meta Demucs v4]**: github.com/facebookresearch/demucs
+- **[Microsoft SpeechT5]**: github.com/microsoft/SpeechT5  
+- **[AudioSR]**: Diffusion-based audio super-resolution (2024)
+- **[NVIDIA Studio Voice]**: Real-time speech enhancement
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+## 📞 **Connect**
 
-## 🙏 Acknowledgments
-
-- **Research**: Based on "Blind Restoration of Real-World Audio by 1D Operational GANs" by Ince et al.
-- **AI Models**: Inspired by Meta's Demucs, Microsoft's SpeechT5, and latest audio research
-- **Design**: Modern glassmorphism UI inspired by contemporary audio software
-
-## 📞 Support
-
-- **Documentation**: Visit `/api/docs` for API documentation
-- **Issues**: Create an issue on GitHub for bug reports
-- **Discussions**: Use GitHub Discussions for questions and ideas
+- **GitHub**: Issues for bugs, discussions for questions
+- **API Docs**: `/api/docs` when running locally
+- **Research**: Following latest audio AI developments
 
 ---
 
-Built with ❤️ using cutting-edge AI research and modern web technologies.
+**Building the future of audio restoration with cutting-edge AI research** 🎵
 
-**HarmonyRestorer v1** - Rediscover the Beauty of Sound 🎵
+*Current focus: Implementing breakthrough 1D Operational GANs for blind audio restoration*
