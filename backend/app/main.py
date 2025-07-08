@@ -100,6 +100,8 @@ logger.info(f"🚀 HarmonyRestorer v1 initializing on device: {DEVICE}")
 # ========================
 
 
+
+
 class ProcessingSettings(BaseModel):
     """Audio processing configuration"""
     noise_reduction: str = "medium"  # none, light, medium, strong, extreme
