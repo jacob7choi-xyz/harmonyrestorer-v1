@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from .self_onn import SelfONN, Conv1DSelfONN  # Import our Self-ONN implementation
+from .self_onn import OptimizedSelfONN as SelfONN, OptimizedConv1DSelfONN as Conv1DSelfONN
 
 class OpGANGenerator(nn.Module):
     """
