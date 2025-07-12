@@ -14,17 +14,19 @@ class OptimizedSelfONN(nn.Module):
     - Operator pruning during inference
     - Reduced memory allocations
     - CUDA-optimized operations
+    - Gradient stability improvements
     """
     
     def __init__(self, input_size, output_size, q=5, bias=True, 
-                 prune_threshold=0.01, use_checkpointing=False):
+                 prune_threshold=0.01, use_checkpointing=False, gradient_clip_value=1.0):
         super(OptimizedSelfONN, self).__init__()
         self.input_size = input_size
         self.output_size = output_size
         self.q = q
         self.prune_threshold = prune_threshold
         self.use_checkpointing = use_checkpointing
-        
+        self.gradient_clip_value = gradient_clip_value
+
         # Weights: [output_size, input_size, q] - optimized layout for memory access
         self.weights = nn.Parameter(torch.empty(output_size, input_size, q))
         
@@ -40,10 +42,10 @@ class OptimizedSelfONN(nn.Module):
         # Cache for operator masks (pruning)
         self.register_buffer('operator_mask', torch.ones(output_size, q, dtype=torch.bool))
         
-        self._initialize_weights()
+        self._initialize_weights_stable()
     
     def _initialize_weights(self):
-        """Optimized weight initialization"""
+        """Original weight initialization (kept for compatibility)"""
         # Xavier initialization with optimal variance
         std = math.sqrt(2.0 / (self.input_size + self.output_size))
         nn.init.normal_(self.weights, 0, std)
@@ -52,10 +54,21 @@ class OptimizedSelfONN(nn.Module):
         with torch.no_grad():
             self.operator_probs[:, 0] = 2.0  # Multiplication
             self.operator_probs[:, 1:] = 0.5  # Others
+
+    def _initialize_weights_stable(self):
+        """Enhanced initialization for gradient stability"""
+        # Use smaller variance for better stability
+        std = math.sqrt(1.0 / self.input_size)  # Reduced from sqrt(2.0 / (in + out))
+        nn.init.normal_(self.weights, 0, std * 0.5)  # Additional 0.5 factor
+        
+        # Initialize operator probs with smaller values
+        with torch.no_grad():
+            self.operator_probs.fill_(0.1)  # Start with small, uniform probabilities
+            self.operator_probs[:, 0] = 0.5  # Slight preference for multiplication
     
     def _vectorized_operators(self, x, w):
         """
-        Vectorized operator computation for maximum efficiency
+        Enhanced vectorized operator computation with numerical stability
         
         Args:
             x: [batch, input_size]
@@ -63,23 +76,27 @@ class OptimizedSelfONN(nn.Module):
         Returns:
             [batch, output_size, q]
         """
-        # Efficient tensor contraction: [batch, input] @ [output, input, q] -> [batch, output, q]
+        # Clamp input to prevent extreme values
+        x = torch.clamp(x, -5.0, 5.0)
+        
+        # Efficient tensor contraction with clamping
         wx = torch.einsum('bi,oiq->boq', x, w)
+        wx = torch.clamp(wx, -10.0, 10.0)  # Prevent extreme values
         
         # Pre-allocate output tensor
         batch_size = x.size(0)
         outputs = torch.empty(batch_size, self.output_size, self.q, 
                              device=x.device, dtype=x.dtype)
         
-        # Vectorized operator applications - no loops!
+        # Stable operator applications
         outputs[:, :, 0] = wx[:, :, 0]  # Multiplication
         outputs[:, :, 1] = torch.sin(wx[:, :, 1])  # Sine
         outputs[:, :, 2] = torch.cos(wx[:, :, 2])  # Cosine
-        outputs[:, :, 3] = torch.tanh(wx[:, :, 3])  # Tanh
+        outputs[:, :, 3] = torch.tanh(wx[:, :, 3])  # Tanh (already bounded)
         
         if self.q > 4:
-            # Clamped exponential for numerical stability
-            outputs[:, :, 4] = torch.exp(torch.clamp(wx[:, :, 4], -10, 10))
+            # More conservative exponential
+            outputs[:, :, 4] = torch.exp(torch.clamp(wx[:, :, 4], -5, 5))
         
         return outputs
     
@@ -117,8 +134,16 @@ class OptimizedSelfONN(nn.Module):
         # Add bias efficiently
         if self.bias is not None:
             output.add_(self.bias)
+        
+        # Clamp output to prevent extreme values
+        output = torch.clamp(output, -10.0, 10.0)
             
         return output
+    
+    def clip_gradients(self):
+        """Clip gradients to prevent explosion"""
+        torch.nn.utils.clip_grad_norm_(self.parameters(), self.gradient_clip_value)
+        return self
     
     def prune_operators(self, threshold=None):
         """Prune operators with low importance for inference speedup"""
@@ -165,10 +190,11 @@ class OptimizedConv1DSelfONN(nn.Module):
     - Minimal memory allocation
     - CUDA kernel optimization
     - Batch-efficient processing
+    - Gradient stability improvements
     """
     
     def __init__(self, in_channels, out_channels, kernel_size, stride=1, 
-                 padding=0, q=5, groups=1, use_fast_math=True):
+                 padding=0, q=5, groups=1, use_fast_math=True, gradient_clip_value=1.0):
         super(OptimizedConv1DSelfONN, self).__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -178,6 +204,7 @@ class OptimizedConv1DSelfONN(nn.Module):
         self.q = q
         self.groups = groups
         self.use_fast_math = use_fast_math
+        self.gradient_clip_value = gradient_clip_value
         
         # Optimized weight layout: [out_channels, in_channels // groups, kernel_size, q]
         self.conv_weights = nn.Parameter(
@@ -191,10 +218,10 @@ class OptimizedConv1DSelfONN(nn.Module):
         self.register_buffer('_operator_weights_cache', None)
         self.register_buffer('_cache_valid', torch.tensor(False))
         
-        self._initialize_weights()
+        self._initialize_weights_stable()
     
     def _initialize_weights(self):
-        """Optimized initialization"""
+        """Original initialization (kept for compatibility)"""
         # He initialization for better convergence
         fan_in = self.in_channels * self.kernel_size
         std = math.sqrt(2.0 / fan_in)
@@ -204,6 +231,18 @@ class OptimizedConv1DSelfONN(nn.Module):
         with torch.no_grad():
             self.operator_probs[:, 0] = 1.5  # Favor multiplication initially
             self.operator_probs[:, 1:] = 0.25
+
+    def _initialize_weights_stable(self):
+        """Stable initialization for conv layers"""
+        # More conservative initialization
+        fan_in = self.in_channels * self.kernel_size
+        std = math.sqrt(1.0 / fan_in)  # Reduced variance
+        nn.init.normal_(self.conv_weights, 0, std * 0.3)
+        
+        # Smaller operator probabilities
+        with torch.no_grad():
+            self.operator_probs.fill_(0.1)
+            self.operator_probs[:, 0] = 0.3  # Prefer multiplication
     
     def _get_operator_weights(self):
         """Cached operator weight computation"""
@@ -219,44 +258,44 @@ class OptimizedConv1DSelfONN(nn.Module):
         return weights
     
     def forward(self, x):
-        """Optimized forward pass with fused operations"""
+        """Enhanced forward pass with stability checks"""
+        # Input validation and clamping
+        x = torch.clamp(x, -3.0, 3.0)
+        
         batch_size, in_channels, length = x.size()
         
         # Calculate output dimensions
         out_length = (length + 2 * self.padding - self.kernel_size) // self.stride + 1
         
-        # Pre-allocate output tensor
+        # Pre-allocate output tensor with zeros for stability
         device = x.device
         dtype = x.dtype
-        outputs = torch.empty(batch_size, self.out_channels, out_length, self.q,
+        outputs = torch.zeros(batch_size, self.out_channels, out_length, self.q,
                              device=device, dtype=dtype)
         
         # Apply padding once
         if self.padding > 0:
             x = F.pad(x, (self.padding, self.padding))
         
-        # Fused convolution + operator application
+        # Fused convolution + operator application with stability
         for q_idx in range(self.q):
             conv_out = F.conv1d(x, self.conv_weights[:, :, :, q_idx], 
                                stride=self.stride, groups=self.groups)
+            
+            # Clamp conv output to prevent instability
+            conv_out = torch.clamp(conv_out, -8.0, 8.0)
             
             # Apply operators with optimized paths
             if q_idx == 0:  # Multiplication (identity)
                 outputs[:, :, :, q_idx] = conv_out
             elif q_idx == 1:  # Sine
-                if self.use_fast_math:
-                    outputs[:, :, :, q_idx] = torch.sin(conv_out)
-                else:
-                    outputs[:, :, :, q_idx] = torch.sin(conv_out)
+                outputs[:, :, :, q_idx] = torch.sin(conv_out)
             elif q_idx == 2:  # Cosine
-                if self.use_fast_math:
-                    outputs[:, :, :, q_idx] = torch.cos(conv_out)
-                else:
-                    outputs[:, :, :, q_idx] = torch.cos(conv_out)
-            elif q_idx == 3:  # Tanh
+                outputs[:, :, :, q_idx] = torch.cos(conv_out)
+            elif q_idx == 3:  # Tanh (most stable)
                 outputs[:, :, :, q_idx] = torch.tanh(conv_out)
             elif q_idx == 4:  # Exponential
-                outputs[:, :, :, q_idx] = torch.exp(torch.clamp(conv_out, -8, 8))
+                outputs[:, :, :, q_idx] = torch.exp(torch.clamp(conv_out, -5, 5))
         
         # Efficient weighted combination
         operator_weights = self._get_operator_weights()  # [out_channels, q]
@@ -264,7 +303,15 @@ class OptimizedConv1DSelfONN(nn.Module):
         # Optimized einsum operation
         final_output = torch.einsum('bcto,co->bct', outputs, operator_weights)
         
+        # Final output clamping
+        final_output = torch.clamp(final_output, -5.0, 5.0)
+        
         return final_output
+    
+    def clip_gradients(self):
+        """Clip gradients for this layer"""
+        torch.nn.utils.clip_grad_norm_(self.parameters(), self.gradient_clip_value)
+        return self
     
     def invalidate_cache(self):
         """Invalidate operator weights cache (call during training)"""
@@ -277,6 +324,149 @@ class OptimizedConv1DSelfONN(nn.Module):
         if mode:
             self.invalidate_cache()
         return self
+
+
+class GradientHealthMonitor:
+    """Monitor and manage gradient health in Self-ONN networks"""
+    
+    def __init__(self, max_grad_norm=1.0, log_frequency=10):
+        self.max_grad_norm = max_grad_norm
+        self.log_frequency = log_frequency
+        self.step_count = 0
+        self.gradient_history = []
+    
+    def check_and_clip_gradients(self, model, loss_name=""):
+        """Check gradient health and apply clipping"""
+        self.step_count += 1
+        
+        # Compute gradient norm before clipping
+        total_norm = 0
+        param_count = 0
+        max_grad = 0
+        
+        for name, param in model.named_parameters():
+            if param.grad is not None:
+                param_norm = param.grad.data.norm(2)
+                total_norm += param_norm.item() ** 2
+                max_grad = max(max_grad, param_norm.item())
+                param_count += 1
+        
+        total_norm = total_norm ** (1. / 2)
+        
+        # Log gradient statistics
+        if self.step_count % self.log_frequency == 0:
+            print(f"Step {self.step_count} {loss_name}: Grad norm={total_norm:.2e}, Max={max_grad:.2e}")
+        
+        # Store for analysis
+        self.gradient_history.append({
+            'step': self.step_count,
+            'total_norm': total_norm,
+            'max_grad': max_grad,
+            'param_count': param_count
+        })
+        
+        # Clip gradients if needed
+        if total_norm > self.max_grad_norm:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), self.max_grad_norm)
+            if self.step_count % self.log_frequency == 0:
+                print(f"  🔧 Gradients clipped from {total_norm:.2e} to {self.max_grad_norm}")
+        
+        # Check for gradient pathologies
+        if total_norm > 1000:
+            print(f"  ⚠️ Very large gradients detected: {total_norm:.2e}")
+        elif total_norm < 1e-8:
+            print(f"  ⚠️ Very small gradients detected: {total_norm:.2e}")
+        
+        return total_norm
+    
+    def get_gradient_stats(self):
+        """Get gradient statistics summary"""
+        if not self.gradient_history:
+            return {}
+        
+        norms = [h['total_norm'] for h in self.gradient_history]
+        return {
+            'mean_norm': sum(norms) / len(norms),
+            'max_norm': max(norms),
+            'min_norm': min(norms),
+            'recent_norm': norms[-1] if norms else 0
+        }
+
+
+class SelfONNOptimizer:
+    """Utilities for optimizing Self-ONN performance"""
+    
+    @staticmethod
+    def optimize_model_for_inference(model):
+        """Optimize model for faster inference"""
+        model.eval()
+        
+        # Apply operator pruning to all Self-ONN layers
+        for module in model.modules():
+            if isinstance(module, (OptimizedSelfONN, OptimizedConv1DSelfONN)):
+                if hasattr(module, 'prune_operators'):
+                    module.prune_operators(threshold=0.1)  # Aggressive pruning
+        
+        # Try JIT compilation for supported operations
+        try:
+            return torch.jit.script(model)
+        except:
+            print("JIT compilation failed, returning original model")
+            return model
+    
+    @staticmethod
+    def reduce_model_complexity(model, target_params=None):
+        """Reduce model complexity while maintaining performance"""
+        total_params = sum(p.numel() for p in model.parameters())
+        
+        if target_params and total_params > target_params:
+            reduction_factor = target_params / total_params
+            print(f"Model has {total_params:,} params, target is {target_params:,}")
+            print(f"Consider reducing q or layer sizes by factor {reduction_factor:.2f}")
+        
+        return model
+    
+    @staticmethod
+    def benchmark_model_performance(model, input_shape, device='cpu', num_runs=50):
+        """Comprehensive performance benchmark"""
+        import time
+        
+        model = model.to(device)
+        model.eval()
+        
+        # Create test input
+        test_input = torch.randn(*input_shape, device=device)
+        
+        # Warmup
+        with torch.no_grad():
+            for _ in range(10):
+                _ = model(test_input)
+        
+        # Sync for accurate timing
+        if device == 'cuda':
+            torch.cuda.synchronize()
+        
+        # Benchmark
+        times = []
+        with torch.no_grad():
+            for _ in range(num_runs):
+                start = time.perf_counter()
+                output = model(test_input)
+                if device == 'cuda':
+                    torch.cuda.synchronize()
+                end = time.perf_counter()
+                times.append((end - start) * 1000)  # Convert to ms
+        
+        avg_time = sum(times) / len(times)
+        std_time = (sum((t - avg_time) ** 2 for t in times) / len(times)) ** 0.5
+        
+        return {
+            'avg_time_ms': avg_time,
+            'std_time_ms': std_time,
+            'min_time_ms': min(times),
+            'max_time_ms': max(times),
+            'throughput_fps': 1000 / avg_time if avg_time > 0 else 0
+        }
 
 
 # Performance comparison utilities
@@ -338,20 +528,49 @@ class PerformanceProfiler:
         return peak_memory - baseline_memory
 
 
+def test_gradient_stability():
+    """Test gradient stability of improved Self-ONN"""
+    print("🧪 Testing Gradient Stability...")
+    
+    # Create model with stability improvements
+    model = OptimizedSelfONN(512, 256, q=3, gradient_clip_value=1.0)
+    
+    # Setup gradient monitor
+    monitor = GradientHealthMonitor(max_grad_norm=1.0)
+    
+    # Simulate training step
+    x = torch.randn(4, 512, requires_grad=True)
+    target = torch.randn(4, 256)
+    
+    output = model(x)
+    loss = F.mse_loss(output, target)
+    loss.backward()
+    
+    # Check gradients
+    grad_norm = monitor.check_and_clip_gradients(model, "test")
+    
+    stats = monitor.get_gradient_stats()
+    print(f"✅ Gradient norm: {grad_norm:.2e}")
+    print(f"✅ Model parameters: {sum(p.numel() for p in model.parameters()):,}")
+    
+    return grad_norm < 10.0  # Should be much smaller now
+
+
 # Test optimized implementations
 if __name__ == "__main__":
-    print("🚀 Testing Optimized Self-ONN Performance...")
+    print("🚀 Testing Enhanced Self-ONN Performance...")
     
     # Test parameters
     batch_size = 8
     input_size = 1024
     output_size = 512
-    q = 5
+    q = 3  # Reduced for stability
     
     # Create models
     standard_model = OptimizedSelfONN(input_size, output_size, q)
     optimized_model = OptimizedSelfONN(input_size, output_size, q, 
-                                      prune_threshold=0.05, use_checkpointing=True)
+                                      prune_threshold=0.05, use_checkpointing=True,
+                                      gradient_clip_value=1.0)
     
     # Test input
     test_input = torch.randn(batch_size, input_size)
@@ -377,4 +596,8 @@ if __name__ == "__main__":
     stats = optimized_model.get_efficiency_stats()
     print(f"Efficiency stats: {stats}")
     
-    print("✅ Optimization tests complete!")
+    # Test gradient stability
+    success = test_gradient_stability()
+    print(f"Gradient stability test: {'✅ PASSED' if success else '❌ FAILED'}")
+    
+    print("✅ Enhanced optimization tests complete!")
