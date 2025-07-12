@@ -10,7 +10,7 @@ Based on the research paper:
 "Blind Restoration of Real-World Audio by 1D Operational GANs"
 """
 
-from .self_onn import SelfONN, Conv1DSelfONN
+from .self_onn import OptimizedSelfONN as SelfONN, OptimizedConv1DSelfONN as Conv1DSelfONN
 
 # Version info
 __version__ = "1.0.0"
