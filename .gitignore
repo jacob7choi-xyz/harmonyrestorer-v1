@@ -1,42 +1,65 @@
-# Dependencies
+# Enterprise Standards - Dependencies
 node_modules/
-venv/
 __pycache__/
 *.pyc
 *.pyo
+.venv/
+.conda/
+env/
 
-# Environment
-.env
-.env.local
-.env.production
-
-# Build outputs
+# Enterprise Standards - Build Artifacts
 dist/
 build/
 *.egg-info/
+.coverage
+.pytest_cache/
+.tox/
 
-# Uploads and processed files
-backend/uploads/
-backend/processed/
-backend/model_checkpoints/*.pth
-backend/model_checkpoints/*.pt
+# Enterprise Standards - Environment & Secrets
+.env*
+!.env.example
+config.local.*
+secrets/
 
-# Logs
-*.log
-logs/
-
-# IDE
+# Enterprise Standards - IDE/OS
 .vscode/
 .idea/
+.DS_Store
 *.swp
 *.swo
-
-# OS
-.DS_Store
 Thumbs.db
 
-# Package managers
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
+# Enterprise Standards - Temporary & Logs
+*.log
+*.tmp
+*.temp
+.cache/
+.sass-cache/
+
+# Enterprise Standards - AI/ML Artifacts
+*.pkl
+*.joblib
+wandb/
+mlruns/
+.neptune/
+
+# Enterprise Standards - Audio Processing
+*.wav
+*.mp3
+*.flac
+*.m4a
+uploads/
+processed/
+temp/
+
+# Frontend Specific
+frontend/dist/
+frontend/build/
+frontend/.next/
+frontend/.nuxt/
+
+# Backend Specific  
+backend/uploads/
+backend/processed/
+backend/logs/
+backend/venv/
