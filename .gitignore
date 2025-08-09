@@ -63,3 +63,23 @@ backend/uploads/
 backend/processed/
 backend/logs/
 backend/venv/
+
+# PyTorch / TensorFlow / ONNX Models
+*.pt
+*.pth
+*.ckpt
+*.safetensors
+*.onnx
+*.pb
+*.h5
+*.tflite
+
+# Hugging Face cache
+.huggingface/
+transformers_cache/
+datasets_cache/
+
+# Checkpoint directories
+checkpoints/
+weights/
+models/

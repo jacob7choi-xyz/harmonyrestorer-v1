@@ -11,6 +11,7 @@ Architecture:
 
 from .separation import UVRSeparationService
 from .restoration import AudioRestorationPipeline
+from .opgan_restorer import OpGANRestorer # Import OpGANRestorer for restoration
 
 # Public API exports
 __all__ = [
