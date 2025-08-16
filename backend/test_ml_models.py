@@ -67,7 +67,7 @@ class MLModelValidator:
     """Enterprise-grade ML model validation with performance analytics"""
     
     def __init__(self, targets: PerformanceTarget = None):
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device("mps" if torch.backends.mps.is_available() else 'cpu')
         self.process = psutil.Process(os.getpid())
         self.targets = targets or PerformanceTarget()
         self.models_loaded = False
@@ -96,12 +96,12 @@ class MLModelValidator:
     @contextmanager
     def _measure_execution(self):
         """Precise execution time measurement with GPU synchronization"""
-        if self.device.type == 'cuda':
-            torch.cuda.synchronize()
+        if self.device.type == 'mps':
+            torch.mps.synchronize()
         start = time.perf_counter()
         yield
-        if self.device.type == 'cuda':
-            torch.cuda.synchronize()
+        if self.device.type == 'mps':
+            torch.mps.synchronize()
         end = time.perf_counter()
         self.last_execution_time = (end - start) * 1000  # milliseconds
         
@@ -109,15 +109,22 @@ class MLModelValidator:
     def _measure_memory(self):
         """Memory usage tracking with cleanup"""
         gc.collect()
-        if self.device.type == 'cuda':
+        if self.device.type == 'mps':
+            start_gpu = 0
+        elif self.device.type == 'cuda':
             torch.cuda.empty_cache()
             start_gpu = torch.cuda.memory_allocated()
+        else:
+            start_gpu = 0
         start_cpu = self.process.memory_info().rss / (1024 * 1024)  # MB
         
         yield
         
         gc.collect()
-        if self.device.type == 'cuda':
+        if self.device.type == 'mps':
+            end_gpu = 0
+            self.last_gpu_memory = 0  # Can't measure MPS memory
+        elif self.device.type == 'cuda':
             torch.cuda.empty_cache()
             end_gpu = torch.cuda.memory_allocated()
             self.last_gpu_memory = (end_gpu - start_gpu) / (1024 * 1024)

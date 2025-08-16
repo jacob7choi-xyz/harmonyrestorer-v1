@@ -104,7 +104,12 @@ class OpGANRestorer:
         try:
             self.device = next(self.g.parameters()).device
         except StopIteration:
-            self.device = torch.device("cpu")
+            if torch.backends.mps.is_available():
+                self.device = torch.device("mps")
+            elif torch.cuda.is_available():
+                self.device = torch.device("cuda")
+            else:
+                self.device = torch.device("cpu")
 
         # Guard: generator must accept [B, 1, frame_len]
         self._check_generator_signature()
@@ -196,6 +201,8 @@ class OpGANRestorer:
         x_ch: [1, Tm] at model_sr
         Returns: [1, Tm] restored
         """
+        x_ch = x_ch.to(self.device) # Ensure on correct device
+
         _, T = x_ch.shape
         N, hop = self._num_frames_and_hop(T)
         # Pad so we cover last frame fully
