@@ -4,13 +4,19 @@ HarmonyRestorer v1 - Enterprise Audio Processing Platform
 CTO-approved architecture with proper separation of concerns
 """
 
+# ========================
+# STANDARD LIBRARY IMPORTS
+# ========================
 import uuid
 import logging
 from pathlib import Path
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Literal
 from datetime import datetime
 from contextlib import asynccontextmanager
 
+# ========================
+# THIRD-PARTY IMPORTS  
+# ========================
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -18,6 +24,12 @@ from fastapi.responses import FileResponse, HTMLResponse
 from pydantic import BaseModel
 import uvicorn
 import torch
+
+# ========================
+# LOCAL/CUSTOM IMPORTS
+# ========================
+from app.services.opgan_restorer import OpGANRestorer
+from app.ml_models.op_gan import OpGANGenerator
 
 # ========================
 # CONFIGURATION & SETUP
@@ -46,29 +58,18 @@ DEVICE = torch.device(
 # Create directories
 for directory in [UPLOAD_DIR, PROCESSED_DIR, MODEL_DIR]:
     directory.mkdir(exist_ok=True)
-
-# ========================
-# IMPORT SERVICES (Use existing code!)
-# ========================
-
-# Import your existing services instead of rewriting them
-from app.services.opgan_restorer import OpGANRestorer
-from app.ml_models.op_gan import OpGANGenerator
+    
 
 # ========================
 # DATA MODELS (Keep these - they're good)
 # ========================
 
 class ProcessingSettings(BaseModel):
-    """Audio processing configuration"""
-    noise_reduction: str = "medium"
-    enhance_speech: bool = True
-    remove_reverb: bool = False
-    isolate_voice: bool = False
-    boost_clarity: bool = True
-    output_format: str = "wav"
-    quality: str = "high"
-    preserve_dynamics: bool = True
+    """Audio processing configuration with type-safe enums"""
+    intensity: Literal["light", "medium", "strong"] = "medium"
+    output_format: Literal["wav", "mp3", "flac", "ogg"] = "wav"
+    quality: Literal["low", "medium", "high", "ultra"] = "high"
+
 
 class JobStatus(BaseModel):
     """Processing job status"""
@@ -82,6 +83,7 @@ class JobStatus(BaseModel):
     processing_time: Optional[float] = None
     file_info: Optional[Dict[str, Any]] = None
 
+
 class AudioInfo(BaseModel):
     """Audio file information"""
     duration: float
@@ -92,6 +94,7 @@ class AudioInfo(BaseModel):
     bitrate: Optional[int] = None
     peak_db: Optional[float] = None
     rms_db: Optional[float] = None
+
 
 # ========================
 # CORE SERVICES (Simplified)
@@ -189,6 +192,7 @@ class AudioProcessor:
                 await progress_callback(-1, f"❌ Error: {str(e)}")
             raise
 
+
 # Initialize processor
 audio_processor = AudioProcessor()
 
@@ -197,6 +201,7 @@ audio_processor = AudioProcessor()
 # ========================
 
 active_jobs: Dict[str, JobStatus] = {}
+
 
 async def update_job_progress(job_id: str, progress: int, message: str):
     """Update job progress"""
@@ -211,6 +216,7 @@ async def update_job_progress(job_id: str, progress: int, message: str):
         elif progress == -1:
             job.status = "failed"
             job.completed_at = datetime.now()
+
 
 # ========================
 # LIFESPAN MANAGEMENT
@@ -254,6 +260,7 @@ app.add_middleware(
 )
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+
 # ========================
 # API ENDPOINTS (Simplified)
 # ========================
@@ -271,6 +278,7 @@ async def root():
         "supported_formats": list(audio_processor.supported_formats)
     }
 
+
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
@@ -279,6 +287,7 @@ async def health_check():
         "timestamp": datetime.now().isoformat(),
         "device": str(DEVICE)
     }
+
 
 @app.post("/api/v1/process")
 async def process_audio(
@@ -343,6 +352,7 @@ async def process_audio(
         "message": "🎵 Audio uploaded and queued for processing"
     }
 
+
 async def process_audio_background(
     job_id: str,
     input_path: Path,
@@ -378,12 +388,14 @@ async def process_audio_background(
     finally:
         input_path.unlink(missing_ok=True)
 
+
 @app.get("/api/v1/status/{job_id}")
 async def get_job_status(job_id: str):
     """Get job status"""
     if job_id not in active_jobs:
         raise HTTPException(status_code=404, detail="Job not found")
     return active_jobs[job_id]
+
 
 @app.get("/api/v1/download/{job_id}")
 async def download_processed_audio(job_id: str):
