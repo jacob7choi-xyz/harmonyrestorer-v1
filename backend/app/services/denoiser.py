@@ -10,9 +10,9 @@ logger = logging.getLogger(__name__)
 
 
 class DenoiserService:
-    """Simple audio denoising using UVR-DeNoise-Lite"""
+    """Audio denoising using UVR-DeNoise"""
     
-    def __init__(self, output_dir: Path, model_name: str = "UVR-DeNoise-Lite.pth"):
+    def __init__(self, output_dir: Path, model_name: str = "UVR-DeNoise.pth"):
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.model_name = model_name
@@ -31,25 +31,14 @@ class DenoiserService:
         return self._separator
     
     def denoise(self, input_path: Path) -> Path:
-        """
-        Denoise an audio file.
-        
-        Args:
-            input_path: Path to noisy audio file
-            
-        Returns:
-            Path to denoised audio file
-        """
         separator = self._get_separator()
         
         logger.info(f"Denoising: {input_path}")
         outputs = separator.separate(str(input_path))
         
-        # Find the "No Noise" output
         clean_file = None
         for output in outputs:
             if "No Noise" in output:
-                # Output is relative to output_dir
                 clean_file = self.output_dir / Path(output).name
                 break
         
