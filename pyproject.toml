@@ -55,6 +55,7 @@ dependencies = [
     
     # Matchering (audio matching)
     "matchering>=2.0.6",
+    "audio-separator[cpu]>=0.41.0",
 ]
 
 [project.optional-dependencies]
