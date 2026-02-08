@@ -1,0 +1,56 @@
+# Git
+.git
+.gitmodules
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+.venv
+.conda
+*.egg-info
+
+# Node
+node_modules
+frontend/node_modules
+frontend/dist
+
+# IDE / OS
+.vscode
+.idea
+.DS_Store
+*.swp
+
+# Data
+*.wav
+*.mp3
+*.flac
+*.m4a
+uploads/
+processed/
+backend/uploads/
+backend/processed/
+
+# Models
+*.pt
+*.pth
+*.ckpt
+*.onnx
+checkpoints/
+weights/
+
+# External tools (not needed — we use audio-separator pip package)
+external_tools/
+
+# Archive
+backend/app/_archive/
+
+# Misc
+wandb/
+mlruns/
+.pytest_cache
+.coverage
+docs/
+research/
+scripts/
+CLAUDE.md

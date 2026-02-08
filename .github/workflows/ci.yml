@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: .
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install system dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsndfile1 ffmpeg
+
+      - name: Install PyTorch CPU
+        run: pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install project dependencies
+        run: pip install ".[dev]"
+
+      - name: Format check (black)
+        run: black --check backend/app/
+
+      - name: Import sort check (isort)
+        run: isort --check backend/app/
+
+      - name: Lint (ruff)
+        run: ruff check backend/app/
+
+      - name: Type check (mypy)
+        run: mypy backend/app/
+
+      - name: Tests
+        run: pytest backend/tests/ -v --tb=short
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 18
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run type-check
+
+      - name: Build
+        run: npm run build

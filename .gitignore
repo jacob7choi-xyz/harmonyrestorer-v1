@@ -25,6 +25,7 @@ secrets/
 .vscode/
 .idea/
 .DS_Store
+CLAUDE.md
 *.swp
 *.swo
 Thumbs.db

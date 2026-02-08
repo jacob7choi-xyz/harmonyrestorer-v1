@@ -141,6 +141,7 @@ exclude = '''
     | \.venv
     | __pycache__
     | external_tools
+    | _archive
     | \.pytest_cache
 )/
 '''
@@ -153,6 +154,7 @@ exclude = [
     ".venv",
     "__pycache__",
     "external_tools",
+    "_archive",
     ".pytest_cache",
 ]
 
@@ -174,17 +176,20 @@ ignore = [
 [tool.isort]
 profile = "black"
 line_length = 100
-skip = ["external_tools", ".venv"]
+skip = ["external_tools", "_archive", ".venv"]
 
 [tool.mypy]
 python_version = "3.11"
 warn_return_any = true
 warn_unused_ignores = true
 ignore_missing_imports = true
-exclude = ["external_tools", "tests"]
+explicit_package_bases = true
+mypy_path = "backend"
+exclude = ["external_tools", "_archive", "tests"]
 
 [tool.pytest.ini_options]
-testpaths = ["backend/tests", "backend"]
+testpaths = ["backend/tests"]
+pythonpath = ["backend"]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
