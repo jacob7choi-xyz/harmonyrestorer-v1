@@ -27,7 +27,11 @@ class Settings:
         self.max_upload_bytes = int(os.getenv("MAX_UPLOAD_BYTES", str(50 * 1024 * 1024)))
         self.rate_limit_max_requests = int(os.getenv("RATE_LIMIT_MAX_REQUESTS", "10"))
         self.rate_limit_window_seconds = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
-        self.cors_origins: list[str] = os.getenv("CORS_ORIGINS", "*").split(",")
+        self.cors_origins: list[str] = [
+            o.strip()
+            for o in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
+            if o.strip()
+        ]
 
         # Job lifecycle
         self.job_ttl_seconds = int(os.getenv("JOB_TTL_SECONDS", str(60 * 60)))  # 1 hour

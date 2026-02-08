@@ -1,13 +1,12 @@
 """Shared test fixtures."""
 
-import pytest
 from unittest.mock import MagicMock
 
-from fastapi.testclient import TestClient
-
+import pytest
 from app.config import settings
 from app.main import app
 from app.services.jobs import job_manager
+from fastapi.testclient import TestClient
 
 
 @pytest.fixture()
