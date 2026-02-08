@@ -33,6 +33,11 @@ class Settings:
             if o.strip()
         ]
 
+        # Health
+        self.min_disk_bytes: int = int(
+            os.getenv("MIN_DISK_BYTES", str(100 * 1024 * 1024))  # 100 MB
+        )
+
         # Job lifecycle
         self.job_ttl_seconds = int(os.getenv("JOB_TTL_SECONDS", str(60 * 60)))  # 1 hour
         self.cleanup_interval_seconds = int(os.getenv("CLEANUP_INTERVAL_SECONDS", str(5 * 60)))

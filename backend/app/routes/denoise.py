@@ -5,6 +5,7 @@ import uuid
 from pathlib import Path
 
 from app.config import settings
+from app.schemas import JobStatusEnum
 from app.services.jobs import job_manager
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
@@ -88,7 +89,7 @@ async def download_audio(job_id: str):
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
-    if job.status != "completed":
+    if job.status != JobStatusEnum.COMPLETED:
         raise HTTPException(status_code=400, detail="Processing not completed")
 
     output_path = settings.processed_dir / f"{job_id}_denoised.wav"

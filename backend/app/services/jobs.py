@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 from app.config import settings
-from app.schemas import JobStatus
+from app.schemas import JobStatus, JobStatusEnum
 from app.services.denoiser import DenoiserService
 
 logger = logging.getLogger(__name__)
@@ -43,7 +43,7 @@ class JobManager:
         """Register a new processing job."""
         job = JobStatus(
             job_id=job_id,
-            status="queued",
+            status=JobStatusEnum.QUEUED,
             progress=0,
             message="Audio uploaded, queued for processing",
             created_at=datetime.now(),
@@ -65,7 +65,7 @@ class JobManager:
 
         try:
             with self._lock:
-                job.status = "processing"
+                job.status = JobStatusEnum.PROCESSING
                 job.progress = 10
                 job.message = "Denoising audio..."
 
@@ -77,7 +77,7 @@ class JobManager:
 
             processing_time = (datetime.now() - start_time).total_seconds()
             with self._lock:
-                job.status = "completed"
+                job.status = JobStatusEnum.COMPLETED
                 job.progress = 100
                 job.message = "Denoising complete"
                 job.completed_at = datetime.now()
@@ -89,7 +89,7 @@ class JobManager:
         except Exception as e:
             logger.error("Job %s failed: %s", job_id, e, exc_info=True)
             with self._lock:
-                job.status = "failed"
+                job.status = JobStatusEnum.FAILED
                 job.progress = -1
                 job.message = "Processing failed"
                 job.completed_at = datetime.now()
@@ -103,7 +103,7 @@ class JobManager:
             expired_ids = [
                 job_id
                 for job_id, job in self._jobs.items()
-                if job.status in ("completed", "failed")
+                if job.status in (JobStatusEnum.COMPLETED, JobStatusEnum.FAILED)
                 and job.completed_at
                 and (now - job.completed_at).total_seconds() > settings.job_ttl_seconds
             ]

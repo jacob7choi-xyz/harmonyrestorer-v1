@@ -9,11 +9,9 @@ from fastapi import APIRouter
 
 router = APIRouter(tags=["health"])
 
-MIN_DISK_BYTES = 100 * 1024 * 1024  # 100 MB
-
 
 @router.get("/")
-async def root():
+async def root() -> dict:
     """API root endpoint."""
     return {
         "platform": "HarmonyRestorer v1",
@@ -26,11 +24,11 @@ async def root():
 
 
 @router.get("/health")
-async def health_check():
+async def health_check() -> dict:
     """Health check with real system verification."""
     disk = shutil.disk_usage(settings.processed_dir)
     disk_free_mb = disk.free // (1024 * 1024)
-    disk_ok = disk.free > MIN_DISK_BYTES
+    disk_ok = disk.free > settings.min_disk_bytes
 
     dirs_ok = settings.upload_dir.is_dir() and settings.processed_dir.is_dir()
 

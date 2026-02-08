@@ -2,6 +2,7 @@
 
 from unittest.mock import patch
 
+import pytest
 from app.config import settings
 
 SMALL_WAV = b"RIFF" + b"\x00" * 40
@@ -42,6 +43,17 @@ def test_upload_rejects_oversized_file(client):
 def test_upload_rejects_missing_file(client):
     r = client.post("/api/v1/denoise")
     assert r.status_code == 422  # FastAPI validation error
+
+
+@pytest.mark.parametrize("ext", [".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac"])
+def test_upload_accepts_all_supported_formats(client, mock_denoiser, ext):
+    """Every format listed in settings.supported_formats should be accepted."""
+    r = client.post(
+        "/api/v1/denoise",
+        files={"file": (f"audio{ext}", SMALL_WAV, "audio/octet-stream")},
+    )
+    assert r.status_code == 200
+    assert r.json()["status"] == "queued"
 
 
 # --- Status ---
@@ -90,13 +102,13 @@ def test_download_completed_job(client, mock_denoiser):
 def test_download_not_completed(client):
     from datetime import datetime
 
-    from app.schemas import JobStatus
+    from app.schemas import JobStatus, JobStatusEnum
     from app.services.jobs import job_manager
 
     job_id = "00000000-0000-0000-0000-000000000001"
     job_manager._jobs[job_id] = JobStatus(
         job_id=job_id,
-        status="processing",
+        status=JobStatusEnum.PROCESSING,
         progress=50,
         message="Working...",
         created_at=datetime.now(),

@@ -2,7 +2,7 @@
 
 from datetime import datetime, timedelta
 
-from app.schemas import JobStatus
+from app.schemas import JobStatus, JobStatusEnum
 from app.services.jobs import JobManager
 
 
@@ -12,7 +12,7 @@ def _make_manager_with_jobs() -> JobManager:
 
     mgr._jobs["old"] = JobStatus(
         job_id="old",
-        status="completed",
+        status=JobStatusEnum.COMPLETED,
         progress=100,
         message="done",
         created_at=datetime.now() - timedelta(hours=2),
@@ -20,7 +20,7 @@ def _make_manager_with_jobs() -> JobManager:
     )
     mgr._jobs["new"] = JobStatus(
         job_id="new",
-        status="completed",
+        status=JobStatusEnum.COMPLETED,
         progress=100,
         message="done",
         created_at=datetime.now(),
@@ -28,7 +28,7 @@ def _make_manager_with_jobs() -> JobManager:
     )
     mgr._jobs["active"] = JobStatus(
         job_id="active",
-        status="processing",
+        status=JobStatusEnum.PROCESSING,
         progress=50,
         message="working",
         created_at=datetime.now() - timedelta(hours=2),
@@ -94,7 +94,7 @@ def test_cleanup_returns_zero_when_nothing_expired():
 def test_job_counts():
     mgr = _make_manager_with_jobs()
     counts = mgr.job_counts
-    assert counts == {"completed": 2, "processing": 1}
+    assert counts == {JobStatusEnum.COMPLETED: 2, JobStatusEnum.PROCESSING: 1}
 
 
 def test_job_counts_empty():
