@@ -72,6 +72,7 @@ def download_item(
     output_dir: Path,
     max_files: int | None = None,
     formats: set[str] | None = None,
+    exclude_keywords: list[str] | None = None,
 ) -> int:
     """Download audio files from a single Internet Archive item.
 
@@ -80,6 +81,9 @@ def download_item(
         output_dir: Directory to save downloaded files.
         max_files: Maximum number of files to download (None = all).
         formats: File extensions to download (default: all audio).
+        exclude_keywords: Skip files whose name contains any of these
+            (case-insensitive). Filtering happens before download to
+            avoid wasting bandwidth.
 
     Returns:
         Number of files successfully downloaded.
@@ -95,11 +99,23 @@ def download_item(
         logger.error("Failed to fetch item %s: %s", identifier, e)
         return 0
 
-    # Filter to audio files only
+    # Filter to audio files only, then exclude keywords -- all before downloading
+    exclude_lower = [kw.lower() for kw in (exclude_keywords or [])]
     audio_files = [
         f for f in item.files
         if Path(f.get("name", "")).suffix.lower() in formats
+        and not any(kw in f.get("name", "").lower() for kw in exclude_lower)
     ]
+
+    if exclude_lower:
+        total_audio = sum(
+            1 for f in item.files
+            if Path(f.get("name", "")).suffix.lower() in formats
+        )
+        logger.info(
+            "Excluded %d files matching keywords %s",
+            total_audio - len(audio_files), exclude_keywords,
+        )
 
     if not audio_files:
         logger.warning("No audio files found in %s", identifier)
@@ -312,8 +328,20 @@ def main() -> None:
         "--manifest", type=Path, default=None,
         help="Path to JSON manifest with custom download URLs",
     )
+    parser.add_argument(
+        "--formats", type=str, default=None,
+        help="Comma-separated extensions to download (e.g. '.flac' or '.flac,.wav')",
+    )
+    parser.add_argument(
+        "--exclude", type=str, nargs="+", default=None,
+        help="Keywords to exclude from filenames (case-insensitive, e.g. --exclude goldberg bach)",
+    )
 
     args = parser.parse_args()
+
+    formats = None
+    if args.formats:
+        formats = {ext.strip() for ext in args.formats.split(",")}
 
     logging.basicConfig(
         level=logging.INFO,
@@ -323,7 +351,11 @@ def main() -> None:
     if args.manifest:
         acquire_from_manifest(args.manifest, args.output)
     elif args.collection:
-        download_item(args.collection, args.output, max_files=args.max_tracks)
+        download_item(
+            args.collection, args.output,
+            max_files=args.max_tracks, formats=formats,
+            exclude_keywords=args.exclude,
+        )
     elif args.search:
         search_and_download(args.search, args.output, max_tracks=args.max_tracks)
     else:
