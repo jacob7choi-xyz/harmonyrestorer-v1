@@ -176,6 +176,8 @@ def search_and_download(
     query: str,
     output_dir: Path,
     max_tracks: int = 50,
+    formats: set[str] | None = None,
+    exclude_keywords: list[str] | None = None,
 ) -> int:
     """Search Internet Archive and download matching audio files.
 
@@ -183,6 +185,9 @@ def search_and_download(
         query: Archive.org search query (e.g. 'collection:musopen').
         output_dir: Directory to save downloaded files.
         max_tracks: Maximum total files to download.
+        formats: File extensions to download (default: all audio).
+        exclude_keywords: Skip files whose name contains any of these
+            (case-insensitive).
 
     Returns:
         Number of files successfully downloaded.
@@ -206,7 +211,10 @@ def search_and_download(
 
         identifier = result.get("identifier", "")
         remaining = max_tracks - downloaded
-        downloaded += download_item(identifier, output_dir, max_files=remaining)
+        downloaded += download_item(
+            identifier, output_dir, max_files=remaining,
+            formats=formats, exclude_keywords=exclude_keywords,
+        )
 
     logger.info("Total downloaded: %d tracks", downloaded)
     return downloaded
@@ -216,6 +224,8 @@ def acquire_from_collections(
     output_dir: Path,
     collections: list[str] | None = None,
     max_tracks: int = 50,
+    formats: set[str] | None = None,
+    exclude_keywords: list[str] | None = None,
 ) -> int:
     """Download from curated Musopen collections.
 
@@ -223,6 +233,9 @@ def acquire_from_collections(
         output_dir: Directory to save downloaded files.
         collections: List of IA item identifiers (default: Musopen collections).
         max_tracks: Maximum total files to download.
+        formats: File extensions to download (default: all audio).
+        exclude_keywords: Skip files whose name contains any of these
+            (case-insensitive).
 
     Returns:
         Number of files successfully downloaded.
@@ -236,7 +249,10 @@ def acquire_from_collections(
             break
 
         remaining = max_tracks - downloaded
-        downloaded += download_item(identifier, output_dir, max_files=remaining)
+        downloaded += download_item(
+            identifier, output_dir, max_files=remaining,
+            formats=formats, exclude_keywords=exclude_keywords,
+        )
 
     logger.info("Total: %d tracks from %d collections", downloaded, len(collections))
     return downloaded
@@ -357,9 +373,15 @@ def main() -> None:
             exclude_keywords=args.exclude,
         )
     elif args.search:
-        search_and_download(args.search, args.output, max_tracks=args.max_tracks)
+        search_and_download(
+            args.search, args.output, max_tracks=args.max_tracks,
+            formats=formats, exclude_keywords=args.exclude,
+        )
     else:
-        acquire_from_collections(args.output, max_tracks=args.max_tracks)
+        acquire_from_collections(
+            args.output, max_tracks=args.max_tracks,
+            formats=formats, exclude_keywords=args.exclude,
+        )
 
 
 if __name__ == "__main__":
