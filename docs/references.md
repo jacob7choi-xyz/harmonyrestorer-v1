@@ -1,6 +1,6 @@
 # References
 
-Research papers relevant to HarmonyRestorer's audio restoration approach, organized by topic.
+Research papers relevant to HarmonyRestorer's audio restoration approach, organized by topic. HarmonyRestorer is a blind, time-domain 1D Op-GAN model inspired by Kiranyaz et al. (2022) and grounded in Self-ONN theory (Ince et al. 2020).
 
 ## Core Music Restoration and Historical Recordings
 
@@ -36,12 +36,12 @@ Research papers relevant to HarmonyRestorer's audio restoration approach, organi
 8. **Kuleshov et al.** -- "Adversarial Audio Super-Resolution with Unsupervised Feature Losses"
    Canonical GAN-based audio super-resolution. Maps low-bandwidth audio to wideband with feature losses from a pre-trained network.
 
-9. **AudioSR** -- "AudioSR: Versatile Audio Super-resolution at Scale"
+9. **AudioSR** -- "AudioSR: Versatile Audio Super-resolution at Scale" (2023)
    Diffusion-based super-resolution for music, speech, and SFX. Upsamples 2-16 kHz bandwidth to 24 kHz / 48 kHz sampling rate.
-   [Project page](https://audioldm.github.io/audiosr/)
+   [arXiv:2309.07314](https://arxiv.org/abs/2309.07314) | [Project page](https://audioldm.github.io/audiosr/)
 
-10. **FlashSR** -- "FlashSR: One-step Versatile Audio Super-resolution via Diffusion"
-    Single-step diffusion for audio SR. Low-step, high-quality generation relevant for latency-sensitive restoration.
+10. **FlashSR** -- "FlashSR: One-step Versatile Audio Super-resolution via Diffusion" (2025)
+    Single-step diffusion for audio SR via diffusion distillation and a specialized SR vocoder. Approx. 22x faster than AudioSR while maintaining quality.
     [arXiv:2501.10807](https://arxiv.org/abs/2501.10807)
 
 11. **"Audio Super-Resolution with Latent Bridge Models"** (OpenReview 2026)
@@ -72,13 +72,13 @@ For HarmonyRestorer specifically:
 2. Ince 2020 (Self-ONN theory behind our model)
 3. Moliner & Valimaki 2022 (closest competitor to benchmark against)
 4. Fonseca 2020 (synthetic noise recipe similar to ours)
-5. AudioSR (alternative approach if OpGAN underperforms)
+5. AudioSR (diffusion-based SR baseline and potential fallback if Op-GAN underperforms on bandwidth restoration)
 
 ## Evaluation Metrics
 
 Papers above commonly use these metrics for benchmarking:
 
-- **SDR** (Signal-to-Distortion Ratio) -- overall signal quality improvement
-- **PESQ** (Perceptual Evaluation of Speech Quality) -- perceptual quality score
-- **STOI** (Short-Time Objective Intelligibility) -- intelligibility measure
-- **SI-SNR** (Scale-Invariant Signal-to-Noise Ratio) -- source separation quality
+- **SDR / SI-SDR** -- signal-level improvement; good for source-oriented evaluation
+- **PESQ** -- perceptual quality; widely used even for non-speech when no better perceptual reference exists
+- **STOI** -- intelligibility; more relevant for speech but sometimes reported for vocals
+- **SI-SNR** -- scale-invariant SNR; standard in source separation literature
