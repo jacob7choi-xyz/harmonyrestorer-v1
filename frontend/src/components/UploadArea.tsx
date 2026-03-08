@@ -23,8 +23,19 @@ export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAr
       const url = URL.createObjectURL(file);
       audio.src = url;
 
-      audio.addEventListener('loadedmetadata', () => {
+      const cleanup = (): void => {
         URL.revokeObjectURL(url);
+        clearTimeout(timeoutId);
+      };
+
+      // Timeout after 5s if audio metadata never loads
+      const timeoutId = setTimeout(() => {
+        cleanup();
+        resolve(true); // Let backend validate
+      }, 5000);
+
+      audio.addEventListener('loadedmetadata', () => {
+        cleanup();
         if (audio.duration > MAX_DURATION_SECONDS) {
           setError(
             `Audio too long (${Math.ceil(audio.duration / 60)} min). Max ${MAX_DURATION_MINUTES} minutes.`
@@ -36,7 +47,7 @@ export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAr
       });
 
       audio.addEventListener('error', () => {
-        URL.revokeObjectURL(url);
+        cleanup();
         // Can't read duration -- let the backend validate
         resolve(true);
       });
@@ -65,7 +76,10 @@ export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAr
 
   const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
-    setIsDragging(false);
+    // Only clear drag state when leaving the component itself, not nested children
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      setIsDragging(false);
+    }
   };
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {

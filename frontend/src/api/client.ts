@@ -66,12 +66,20 @@ export async function pollUntilDone(
 
     const cleanup = (): void => {
       clearTimeout(timeoutId);
+      if (signal) signal.removeEventListener('abort', onAbort);
     };
 
-    signal?.addEventListener('abort', () => {
+    const onAbort = (): void => {
       cleanup();
       reject(new DOMException('Polling aborted', 'AbortError'));
-    });
+    };
+
+    if (signal?.aborted) {
+      reject(new DOMException('Polling aborted', 'AbortError'));
+      return;
+    }
+
+    signal?.addEventListener('abort', onAbort);
 
     const poll = async (): Promise<void> => {
       if (signal?.aborted) return;
@@ -81,13 +89,16 @@ export async function pollUntilDone(
         onUpdate(status);
 
         if (status.status === 'completed') {
+          cleanup();
           resolve(status);
         } else if (status.status === 'failed') {
+          cleanup();
           reject(new Error(status.message || 'Processing failed'));
         } else {
           timeoutId = setTimeout(poll, intervalMs);
         }
       } catch (err) {
+        cleanup();
         if (err instanceof DOMException && err.name === 'AbortError') return;
         reject(err);
       }

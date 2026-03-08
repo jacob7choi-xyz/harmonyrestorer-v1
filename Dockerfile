@@ -24,7 +24,7 @@ RUN mkdir -p backend/app && \
 COPY backend/app/ backend/app/
 
 # Non-root user + writable directories
-RUN useradd --create-home appuser && \
+RUN useradd --create-home --shell /sbin/nologin appuser && \
     mkdir -p backend/uploads backend/processed && \
     chown -R appuser:appuser backend
 USER appuser

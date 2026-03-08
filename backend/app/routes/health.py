@@ -1,7 +1,7 @@
 """Health and info endpoints."""
 
 import shutil
-from datetime import datetime
+from datetime import UTC, datetime
 
 from app.config import settings
 from app.services.jobs import job_manager
@@ -37,7 +37,7 @@ async def health_check() -> dict:
 
     return {
         "status": status,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "checks": {
             "disk_space": {"ok": disk_ok, "free_mb": disk_free_mb},
             "directories": {"ok": dirs_ok},

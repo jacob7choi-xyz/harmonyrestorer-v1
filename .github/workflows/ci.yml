@@ -31,13 +31,13 @@ jobs:
         run: pip install ".[dev]"
 
       - name: Format check (black)
-        run: black --check backend/app/
+        run: black --check backend/app/ backend/tests/
 
       - name: Import sort check (isort)
-        run: isort --check backend/app/
+        run: isort --check backend/app/ backend/tests/
 
       - name: Lint (ruff)
-        run: ruff check backend/app/
+        run: ruff check backend/app/ backend/tests/
 
       - name: Type check (mypy)
         run: mypy backend/app/
@@ -49,7 +49,7 @@ jobs:
         run: pip-audit
 
       - name: Tests with coverage
-        run: pytest backend/tests/ -v --tb=short --cov=app --cov-fail-under=80
+        run: pytest backend/tests/ -v --tb=short --cov=backend/app --cov-fail-under=80
 
   frontend:
     runs-on: ubuntu-latest

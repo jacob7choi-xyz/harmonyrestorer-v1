@@ -1,8 +1,9 @@
 """Job management service."""
 
 import logging
+import shutil
 import threading
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 
 from app.config import settings
@@ -47,7 +48,7 @@ class JobManager:
             status=JobStatusEnum.QUEUED,
             progress=0,
             message="Audio uploaded, queued for processing",
-            created_at=datetime.now(),
+            created_at=datetime.now(UTC),
         )
         with self._lock:
             self._jobs[job_id] = job
@@ -73,7 +74,7 @@ class JobManager:
 
     def process(self, job_id: str, input_path: Path) -> None:
         """Run denoising. Called as a background task."""
-        start_time = datetime.now()
+        start_time = datetime.now(UTC)
         with self._lock:
             job = self._jobs.get(job_id)
             if job is None:
@@ -93,9 +94,9 @@ class JobManager:
             output_path = denoiser.denoise(input_path)
 
             final_path = settings.processed_dir / f"{job_id}_denoised.wav"
-            output_path.rename(final_path)
+            shutil.move(str(output_path), str(final_path))
 
-            processing_time = (datetime.now() - start_time).total_seconds()
+            processing_time = (datetime.now(UTC) - start_time).total_seconds()
             with self._lock:
                 if job_id not in self._jobs:
                     logger.error("Job %s removed during processing", job_id)
@@ -103,7 +104,7 @@ class JobManager:
                 job.status = JobStatusEnum.COMPLETED
                 job.progress = 100
                 job.message = "Denoising complete"
-                job.completed_at = datetime.now()
+                job.completed_at = datetime.now(UTC)
                 job.download_url = f"/api/v1/download/{job_id}"
                 job.processing_time = processing_time
 
@@ -116,7 +117,7 @@ class JobManager:
                     job.status = JobStatusEnum.FAILED
                     job.progress = -1
                     job.message = "Processing failed"
-                    job.completed_at = datetime.now()
+                    job.completed_at = datetime.now(UTC)
         finally:
             input_path.unlink(missing_ok=True)
 
@@ -126,7 +127,7 @@ class JobManager:
         Skips jobs that are actively being downloaded or still processing
         to prevent race conditions with concurrent downloads and background tasks.
         """
-        now = datetime.now()
+        now = datetime.now(UTC)
         with self._lock:
             expired_ids = [
                 job_id

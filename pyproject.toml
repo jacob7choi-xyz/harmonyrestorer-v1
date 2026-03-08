@@ -27,11 +27,11 @@ dependencies = [
 [project.optional-dependencies]
 dataset = [
     # Dataset pipeline for OpGAN training
-    "internetarchive>=4.0.0",
-    "numpy>=1.24.0",
-    "soundfile>=0.12.0",
-    "scipy>=1.10.0",
-    "torch>=2.0.0",
+    "internetarchive~=4.0.0",
+    "numpy~=1.24.0",
+    "soundfile~=0.12.0",
+    "scipy~=1.10.0",
+    "torch~=2.0.0",
 ]
 dev = [
     # Testing

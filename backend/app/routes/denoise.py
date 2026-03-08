@@ -140,7 +140,7 @@ async def get_job_status(job_id: str) -> JobStatus:
 
 
 @router.get("/download/{job_id}")
-async def download_audio(job_id: str):
+async def download_audio(job_id: str) -> FileResponse:
     """Download denoised audio."""
     _validate_job_id(job_id)
     job = job_manager.get_job(job_id)

@@ -1,6 +1,6 @@
 """Tests for JobManager business logic."""
 
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 from app.schemas import JobStatus, JobStatusEnum
@@ -16,23 +16,23 @@ def _make_manager_with_jobs() -> JobManager:
         status=JobStatusEnum.COMPLETED,
         progress=100,
         message="done",
-        created_at=datetime.now() - timedelta(hours=2),
-        completed_at=datetime.now() - timedelta(hours=2),
+        created_at=datetime.now(UTC) - timedelta(hours=2),
+        completed_at=datetime.now(UTC) - timedelta(hours=2),
     )
     mgr._jobs["new"] = JobStatus(
         job_id="new",
         status=JobStatusEnum.COMPLETED,
         progress=100,
         message="done",
-        created_at=datetime.now(),
-        completed_at=datetime.now(),
+        created_at=datetime.now(UTC),
+        completed_at=datetime.now(UTC),
     )
     mgr._jobs["active"] = JobStatus(
         job_id="active",
         status=JobStatusEnum.PROCESSING,
         progress=50,
         message="working",
-        created_at=datetime.now() - timedelta(hours=2),
+        created_at=datetime.now(UTC) - timedelta(hours=2),
     )
     return mgr
 
@@ -150,8 +150,8 @@ def test_cleanup_skips_downloading_jobs():
         status=JobStatusEnum.COMPLETED,
         progress=100,
         message="done",
-        created_at=datetime.now() - timedelta(hours=2),
-        completed_at=datetime.now() - timedelta(hours=2),
+        created_at=datetime.now(UTC) - timedelta(hours=2),
+        completed_at=datetime.now(UTC) - timedelta(hours=2),
     )
 
     mgr.mark_downloading("dl-job")
