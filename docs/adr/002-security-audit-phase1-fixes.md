@@ -2,7 +2,7 @@
 
 **Date:** 2026-03-07
 
-**Status:** proposed
+**Status:** accepted
 
 ---
 
@@ -98,6 +98,19 @@ Fix the 6 critical and most impactful high-severity issues in a focused Phase 1 
 - Nginx changes only affect Docker/production deployments, not local dev
 - Dependency pinning deferred to Phase 2 (requires choosing between pip-tools, Poetry, or uv)
 - Frontend fixes (AbortController, file size validation) deferred to Phase 2
+
+## Completed
+
+All 6 fixes implemented and committed as `fc79835` on 2026-03-07:
+
+1. **Race conditions** (`jobs.py`, `denoise.py`) — Added `_downloading` guard set to prevent cleanup during active downloads. `process()` now verifies job existence before each locked state update. `cleanup_expired()` skips guarded jobs.
+2. **Magic byte validation** (`denoise.py`) — Added `_validate_audio_magic()` checking signatures for all 6 formats (RIFF, ID3/MPEG, fLaC, OggS, ftyp, ADTS). Rejects mismatched content with 400.
+3. **Rate limiter memory leak** (`middleware.py`) — Empty IP entries now deleted after timestamp pruning. One-line fix prevents unbounded dict growth.
+4. **CORS headers** (`main.py`) — `allow_headers=["*"]` replaced with `["Content-Type", "Accept"]`.
+5. **Nginx hardening** (`nginx.conf`) — Added `Strict-Transport-Security` header and `X-Forwarded-Proto` proxy header.
+6. **CI security scanning** (`ci.yml`) — Added `bandit`, `pip-audit`, `npm audit --audit-level=high`, and `pytest --cov-fail-under=80`.
+
+Tests updated: `test_denoise.py` now uses format-specific magic bytes per extension. All 30 tests pass. Full quality gate green.
 
 ## Alternatives Considered
 

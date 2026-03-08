@@ -1,6 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { Upload, FileAudio } from 'lucide-react';
 
+const MAX_FILE_SIZE_MB = 50;
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+
 interface UploadAreaProps {
   onFileSelect: (file: File) => void;
   isProcessing: boolean;
@@ -9,7 +12,21 @@ interface UploadAreaProps {
 
 export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAreaProps) {
   const [isDragging, setIsDragging] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const validateAndSelect = (file: File): void => {
+    setError(null);
+    if (!file.type.startsWith('audio/')) {
+      setError('Please select an audio file (WAV, MP3, FLAC, OGG, M4A, AAC)');
+      return;
+    }
+    if (file.size > MAX_FILE_SIZE_BYTES) {
+      setError(`File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Max ${MAX_FILE_SIZE_MB} MB.`);
+      return;
+    }
+    onFileSelect(file);
+  };
 
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -25,15 +42,15 @@ export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAr
     e.preventDefault();
     setIsDragging(false);
     const files = e.dataTransfer.files;
-    if (files.length > 0 && files[0].type.startsWith('audio/')) {
-      onFileSelect(files[0]);
+    if (files.length > 0) {
+      validateAndSelect(files[0]);
     }
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file && file.type.startsWith('audio/')) {
-      onFileSelect(file);
+    if (file) {
+      validateAndSelect(file);
     }
   };
 
@@ -86,6 +103,10 @@ export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAr
               <p className="text-sm text-white/60">or tap to browse — WAV, FLAC, MP3, OGG, M4A, AAC</p>
             </div>
           </>
+        )}
+
+        {error && (
+          <p className="text-sm text-red-400 mt-2">{error}</p>
         )}
       </div>
     </div>

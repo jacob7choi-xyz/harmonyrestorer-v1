@@ -1,4 +1,4 @@
-const API_BASE = '/api/v1';
+const API_BASE = import.meta.env.VITE_API_URL ?? '/api/v1';
 
 interface UploadResponse {
   job_id: string;
@@ -16,13 +16,17 @@ interface JobStatusResponse {
   processing_time: number | null;
 }
 
-export async function uploadAudio(file: File): Promise<UploadResponse> {
+export async function uploadAudio(
+  file: File,
+  signal?: AbortSignal,
+): Promise<UploadResponse> {
   const formData = new FormData();
   formData.append('file', file);
 
   const res = await fetch(`${API_BASE}/denoise`, {
     method: 'POST',
     body: formData,
+    signal,
   });
 
   if (!res.ok) {
@@ -33,8 +37,11 @@ export async function uploadAudio(file: File): Promise<UploadResponse> {
   return res.json();
 }
 
-export async function getJobStatus(jobId: string): Promise<JobStatusResponse> {
-  const res = await fetch(`${API_BASE}/status/${jobId}`);
+export async function getJobStatus(
+  jobId: string,
+  signal?: AbortSignal,
+): Promise<JobStatusResponse> {
+  const res = await fetch(`${API_BASE}/status/${jobId}`, { signal });
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: 'Status check failed' }));
@@ -51,12 +58,26 @@ export function getDownloadUrl(jobId: string): string {
 export async function pollUntilDone(
   jobId: string,
   onUpdate: (status: JobStatusResponse) => void,
+  signal?: AbortSignal,
   intervalMs = 1500,
 ): Promise<JobStatusResponse> {
   return new Promise((resolve, reject) => {
-    const poll = async () => {
+    let timeoutId: ReturnType<typeof setTimeout>;
+
+    const cleanup = (): void => {
+      clearTimeout(timeoutId);
+    };
+
+    signal?.addEventListener('abort', () => {
+      cleanup();
+      reject(new DOMException('Polling aborted', 'AbortError'));
+    });
+
+    const poll = async (): Promise<void> => {
+      if (signal?.aborted) return;
+
       try {
-        const status = await getJobStatus(jobId);
+        const status = await getJobStatus(jobId, signal);
         onUpdate(status);
 
         if (status.status === 'completed') {
@@ -64,9 +85,10 @@ export async function pollUntilDone(
         } else if (status.status === 'failed') {
           reject(new Error(status.message || 'Processing failed'));
         } else {
-          setTimeout(poll, intervalMs);
+          timeoutId = setTimeout(poll, intervalMs);
         }
       } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
         reject(err);
       }
     };

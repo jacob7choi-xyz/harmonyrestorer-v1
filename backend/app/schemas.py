@@ -26,3 +26,11 @@ class JobStatus(BaseModel):
     completed_at: datetime | None = None
     download_url: str | None = None
     processing_time: float | None = None
+
+
+class DenoiseUploadResponse(BaseModel):
+    """Response returned when an audio file is uploaded for denoising."""
+
+    job_id: str
+    status: JobStatusEnum
+    message: str

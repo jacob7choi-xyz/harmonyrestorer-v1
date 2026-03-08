@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { Download, Loader2, RotateCcw, Brain, Crown, Sparkles, BarChart3 } from 'lucide-react';
 import { uploadAudio, pollUntilDone, getDownloadUrl } from './api/client';
 import { UploadArea } from './components/UploadArea';
@@ -29,15 +29,27 @@ export default function HarmonyRestorer() {
   const [status, setStatus] = useState<ProcessingStatus>(INITIAL_STATUS);
   const [settings, setSettings] = useState<ProcessingSettings>(INITIAL_SETTINGS);
   const [isProcessing, setIsProcessing] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+
+  // Cancel in-flight requests on unmount
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
 
   const processAudio = useCallback(async () => {
     if (!file) return;
+
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     setIsProcessing(true);
     setStatus({ status: 'uploading', progress: 0, message: 'Uploading audio file...' });
 
     try {
-      const { job_id } = await uploadAudio(file);
+      const { job_id } = await uploadAudio(file, controller.signal);
       setStatus({ status: 'queued', progress: 10, message: 'Queued for processing...', jobId: job_id });
 
       const result = await pollUntilDone(job_id, (update) => {
@@ -49,7 +61,7 @@ export default function HarmonyRestorer() {
           downloadUrl: update.download_url ?? undefined,
           processingTime: update.processing_time ?? undefined,
         });
-      });
+      }, controller.signal);
 
       setStatus({
         status: 'completed',
@@ -60,6 +72,7 @@ export default function HarmonyRestorer() {
         processingTime: result.processing_time ?? undefined,
       });
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       setStatus({
         status: 'failed',
         progress: 0,
