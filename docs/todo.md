@@ -2,7 +2,7 @@
 
 ## Research Reading
 
-- [ ] Read Kiranyaz 2022 cover-to-cover -- check if our training hyperparameters and loss functions match their recommendations
+- [ ] Re-read Kiranyaz 2022 cover-to-cover -- check if our training hyperparameters and loss functions match their recommendations
 - [ ] Read Fonseca 2020 noise generation section -- check if we're missing degradation types (wow/flutter, speed drift)
 - [ ] Skim Moliner & Valimaki 2022 -- closest competitor, benchmark to beat, two-stage refinement idea
 - [ ] Skim HiFi-GAN loss design -- multi-scale discriminator + feature matching loss if our audio quality needs sharpening
