@@ -1,16 +1,14 @@
 # HarmonyRestorer v1
 
-AI-powered audio denoising API.
+AI-powered audio denoising. Upload noisy audio, get clean audio back.
 
-## What it does
-
-Upload noisy audio → Get clean audio back.
-
-- **Model**: UVR-DeNoise-Lite
-- **Speed**: ~2 seconds for 5 seconds of audio (M4 Mac)
-- **Formats**: WAV, MP3, FLAC, OGG, M4A, AAC
+- **Model**: UVR-DeNoise via [audio-separator](https://github.com/karaokenerds/python-audio-separator)
+- **Formats**: WAV, MP3, FLAC, OGG, M4A, AAC (max 50 MB, 10 minutes)
+- **Stack**: FastAPI + React/TypeScript, Docker-ready
+- **Tests**: 39 passing (0.2s)
 
 ## Quick Start
+
 ```bash
 git clone https://github.com/jacob7choi-xyz/harmonyrestorer-v1.git
 cd harmonyrestorer-v1
@@ -18,71 +16,89 @@ cd harmonyrestorer-v1
 conda env create -f environment.yml
 conda activate harmonyrestorer-v1
 
-cd backend
-uvicorn app.main:app --reload --port 8000
+# Backend
+cd backend && uvicorn app.main:app --reload --port 8000
+
+# Frontend (separate terminal)
+cd frontend && npm ci && npm run dev
 ```
 
 ## API
+
 ```bash
-# Denoise
-curl -X POST "http://localhost:8000/api/v1/denoise" -F "file=@audio.wav"
+# Upload and denoise
+curl -X POST http://localhost:8000/api/v1/denoise -F "file=@audio.wav"
 
 # Check status
 curl http://localhost:8000/api/v1/status/{job_id}
 
-# Download
+# Download result
 curl -O http://localhost:8000/api/v1/download/{job_id}
 ```
 
-Docs: http://localhost:8000/api/docs
+Interactive docs: http://localhost:8000/api/docs
 
 ## Architecture
+
 ```
 backend/app/
-├── main.py              # FastAPI app
+├── main.py              # App factory, middleware, lifespan
+├── config.py            # Settings (env vars)
+├── schemas.py           # Pydantic models, JobStatusEnum
+├── exceptions.py        # Error handlers (no stack traces to users)
+├── middleware.py         # Per-IP rate limiting
+├── routes/
+│   ├── health.py        # GET /, GET /health
+│   └── denoise.py       # Upload, status, download
 ├── services/
-│   └── denoiser.py      # UVR wrapper
-└── _archive/            # OpGAN implementation
-    ├── op_gan.py        # Generator/Discriminator
-    ├── self_onn.py      # Self-ONN layers
-    └── opgan_restorer.py # Inference pipeline
+│   ├── denoiser.py      # UVR wrapper, lazy model loading
+│   └── jobs.py          # JobManager, background processing
+└── _archive/            # OpGAN research code (see below)
+
+frontend/src/
+├── App.tsx              # Main component
+├── types.ts             # Shared types
+├── api/client.ts        # Backend API calls + polling
+└── components/          # UploadArea, ProgressCard, Waveform, ErrorBoundary
 ```
 
-## OpGAN Implementation (Archived)
+## Security
 
-The `_archive/` folder contains a from-scratch implementation of **1D Operational GANs** based on [Kiranyaz et al. 2022](https://arxiv.org/abs/2110.10149).
+- File size limit (50 MB) and audio duration limit (10 min)
+- Magic byte validation (content must match declared format)
+- UUID-based file storage (client filenames never trusted)
+- Rate limiting (10 req/min per IP on upload)
+- CORS restricted to configured origins
+- Error sanitization (no stack traces in responses)
+- Nginx: HSTS, CSP, X-Frame-Options, health endpoint restricted to private IPs
 
-### What's implemented
+## Docker
 
-- **Self-ONN layers**: Learnable nonlinear operators (sin, cos, tanh, exp) with softmax-weighted combinations per neuron
-- **U-Net Generator**: 10-layer encoder-decoder with skip connections
-- **Inference pipeline**: Chunked processing with overlap-add, automatic resampling, stereo support
+```bash
+docker compose up --build    # Start full stack
+docker compose down          # Stop
+```
 
-### Stability engineering
+Backend and frontend have independent Dockerfiles with non-root users, health checks, and resource limits.
 
-The original Self-ONN architecture is prone to gradient explosion. Fixes implemented:
+## Quality Gate
 
-- Gradient clipping at 1.0
-- Reduced operator count (q=3 vs q=5 in paper)
-- Conservative weight initialization
-- GroupNorm in bottleneck layer
-- Output clamping to [-1, 1]
+```bash
+cd backend
+black --check . && isort --check . && ruff check . && mypy . && pytest -v
+```
 
-These changes allow the model to train without NaN/Inf gradients.
+## OpGAN (Archived)
 
-### Current status
-
-Architecture is **complete and trainable**, but **not yet trained**. Requires:
-
-1. Paired noisy/clean audio dataset
-2. Training script
-3. GPU compute time
-
-The production API uses pretrained UVR models while OpGAN training is in progress.
+The `_archive/` folder contains a from-scratch implementation of **1D Operational GANs** based on [Kiranyaz et al. 2022](https://arxiv.org/abs/2110.10149). Architecture is complete and trainable but not yet trained. The production API uses pretrained UVR models.
 
 ## Roadmap
 
 - [x] Working denoising API (UVR)
+- [x] Security hardening (3 phases)
+- [x] React frontend with real API integration
+- [x] Docker + CI/CD
+
 - [ ] Build/acquire paired training dataset
 - [ ] Train OpGAN
 - [ ] Benchmark OpGAN vs UVR (SDR, PESQ, STOI)
