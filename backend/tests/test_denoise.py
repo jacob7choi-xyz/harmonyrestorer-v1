@@ -5,7 +5,17 @@ from unittest.mock import patch
 import pytest
 from app.config import settings
 
-SMALL_WAV = b"RIFF" + b"\x00" * 40
+SMALL_WAV = b"RIFF" + b"\x00" * 4 + b"WAVE" + b"\x00" * 32
+
+# Valid magic bytes per format for content-type validation tests
+SAMPLE_BYTES: dict[str, bytes] = {
+    ".wav": SMALL_WAV,
+    ".mp3": b"ID3" + b"\x00" * 40,
+    ".flac": b"fLaC" + b"\x00" * 40,
+    ".ogg": b"OggS" + b"\x00" * 40,
+    ".m4a": b"\x00" * 4 + b"ftyp" + b"\x00" * 36,
+    ".aac": b"\xff\xf1" + b"\x00" * 40,
+}
 
 
 # --- Upload ---
@@ -48,9 +58,10 @@ def test_upload_rejects_missing_file(client):
 @pytest.mark.parametrize("ext", [".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac"])
 def test_upload_accepts_all_supported_formats(client, mock_denoiser, ext):
     """Every format listed in settings.supported_formats should be accepted."""
+    content = SAMPLE_BYTES[ext]
     r = client.post(
         "/api/v1/denoise",
-        files={"file": (f"audio{ext}", SMALL_WAV, "audio/octet-stream")},
+        files={"file": (f"audio{ext}", content, "audio/octet-stream")},
     )
     assert r.status_code == 200
     assert r.json()["status"] == "queued"

@@ -42,8 +42,14 @@ jobs:
       - name: Type check (mypy)
         run: mypy backend/app/
 
-      - name: Tests
-        run: pytest backend/tests/ -v --tb=short
+      - name: Security scan (bandit)
+        run: bandit -r backend/app/ -x backend/app/_archive/ -q
+
+      - name: Dependency audit (pip-audit)
+        run: pip-audit
+
+      - name: Tests with coverage
+        run: pytest backend/tests/ -v --tb=short --cov=app --cov-fail-under=80
 
   frontend:
     runs-on: ubuntu-latest
@@ -67,6 +73,9 @@ jobs:
 
       - name: Type check
         run: npm run type-check
+
+      - name: Dependency audit (npm)
+        run: npm audit --audit-level=high
 
       - name: Build
         run: npm run build

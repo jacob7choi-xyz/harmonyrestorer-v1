@@ -9,12 +9,43 @@ from app.schemas import JobStatusEnum
 from app.services.jobs import job_manager
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["denoise"])
 
 _MAX_MB = settings.max_upload_bytes / (1024 * 1024)
+
+# Magic byte signatures for supported audio formats
+_MAGIC_BYTES: dict[str, list[tuple[int, bytes]]] = {
+    ".wav": [(0, b"RIFF")],
+    ".mp3": [(0, b"\xff\xfb"), (0, b"\xff\xf3"), (0, b"\xff\xf2"), (0, b"ID3")],
+    ".flac": [(0, b"fLaC")],
+    ".ogg": [(0, b"OggS")],
+    ".m4a": [(4, b"ftyp")],
+    ".aac": [(0, b"\xff\xf1"), (0, b"\xff\xf9"), (4, b"ftyp")],
+}
+
+
+def _validate_audio_magic(content: bytes, extension: str) -> bool:
+    """Check that file content matches expected magic bytes for the extension.
+
+    Args:
+        content: Raw file bytes (at least first 12 bytes needed).
+        extension: Lowercase file extension including dot (e.g. ".wav").
+
+    Returns:
+        True if any known signature matches, False otherwise.
+    """
+    signatures = _MAGIC_BYTES.get(extension)
+    if signatures is None:
+        return False
+    for offset, magic in signatures:
+        end = offset + len(magic)
+        if len(content) >= end and content[offset:end] == magic:
+            return True
+    return False
 
 
 def _validate_job_id(job_id: str) -> None:
@@ -48,6 +79,13 @@ async def denoise_audio(
         raise HTTPException(
             status_code=413,
             detail=f"File too large (max {_MAX_MB:.0f} MB)",
+        )
+
+    # Validate file content matches declared format
+    if not _validate_audio_magic(content, file_ext):
+        raise HTTPException(
+            status_code=400,
+            detail=f"File content does not match {file_ext} format",
         )
 
     job_id = str(uuid.uuid4())
@@ -92,12 +130,21 @@ async def download_audio(job_id: str):
     if job.status != JobStatusEnum.COMPLETED:
         raise HTTPException(status_code=400, detail="Processing not completed")
 
-    output_path = settings.processed_dir / f"{job_id}_denoised.wav"
-    if not output_path.exists():
-        raise HTTPException(status_code=404, detail="File not found")
+    # Guard against cleanup deleting the file mid-transfer
+    if not job_manager.mark_downloading(job_id):
+        raise HTTPException(status_code=404, detail="Job not found")
 
-    return FileResponse(
-        path=str(output_path),
-        filename="denoised_audio.wav",
-        media_type="audio/wav",
-    )
+    try:
+        output_path = settings.processed_dir / f"{job_id}_denoised.wav"
+        if not output_path.exists():
+            raise HTTPException(status_code=404, detail="File not found")
+
+        return FileResponse(
+            path=output_path,
+            filename="denoised_audio.wav",
+            media_type="audio/wav",
+            background=BackgroundTask(job_manager.unmark_downloading, job_id),
+        )
+    except Exception:
+        job_manager.unmark_downloading(job_id)
+        raise

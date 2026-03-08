@@ -19,6 +19,7 @@ class JobManager:
         self._jobs: dict[str, JobStatus] = {}
         self._denoiser: DenoiserService | None = None
         self._lock = threading.Lock()
+        self._downloading: set[str] = set()
 
     def _get_denoiser(self) -> DenoiserService:
         """Lazy-load the denoiser singleton."""
@@ -57,14 +58,33 @@ class JobManager:
         with self._lock:
             return self._jobs.get(job_id)
 
+    def mark_downloading(self, job_id: str) -> bool:
+        """Mark a job as actively being downloaded. Returns False if job gone."""
+        with self._lock:
+            if job_id not in self._jobs:
+                return False
+            self._downloading.add(job_id)
+            return True
+
+    def unmark_downloading(self, job_id: str) -> None:
+        """Remove download guard from a job."""
+        with self._lock:
+            self._downloading.discard(job_id)
+
     def process(self, job_id: str, input_path: Path) -> None:
         """Run denoising. Called as a background task."""
         start_time = datetime.now()
         with self._lock:
-            job = self._jobs[job_id]
+            job = self._jobs.get(job_id)
+            if job is None:
+                logger.error("Job %s vanished before processing started", job_id)
+                return
 
         try:
             with self._lock:
+                if job_id not in self._jobs:
+                    logger.error("Job %s removed during processing", job_id)
+                    return
                 job.status = JobStatusEnum.PROCESSING
                 job.progress = 10
                 job.message = "Denoising audio..."
@@ -77,6 +97,9 @@ class JobManager:
 
             processing_time = (datetime.now() - start_time).total_seconds()
             with self._lock:
+                if job_id not in self._jobs:
+                    logger.error("Job %s removed during processing", job_id)
+                    return
                 job.status = JobStatusEnum.COMPLETED
                 job.progress = 100
                 job.message = "Denoising complete"
@@ -89,25 +112,30 @@ class JobManager:
         except Exception as e:
             logger.error("Job %s failed: %s", job_id, e, exc_info=True)
             with self._lock:
-                job.status = JobStatusEnum.FAILED
-                job.progress = -1
-                job.message = "Processing failed"
-                job.completed_at = datetime.now()
+                if job_id in self._jobs:
+                    job.status = JobStatusEnum.FAILED
+                    job.progress = -1
+                    job.message = "Processing failed"
+                    job.completed_at = datetime.now()
         finally:
             input_path.unlink(missing_ok=True)
 
     def cleanup_expired(self) -> int:
-        """Remove finished jobs older than TTL and delete their output files."""
+        """Remove finished jobs older than TTL and delete their output files.
+
+        Skips jobs that are actively being downloaded or still processing
+        to prevent race conditions with concurrent downloads and background tasks.
+        """
         now = datetime.now()
         with self._lock:
             expired_ids = [
                 job_id
                 for job_id, job in self._jobs.items()
-                if job.status in (JobStatusEnum.COMPLETED, JobStatusEnum.FAILED)
+                if job_id not in self._downloading
+                and job.status in (JobStatusEnum.COMPLETED, JobStatusEnum.FAILED)
                 and job.completed_at
                 and (now - job.completed_at).total_seconds() > settings.job_ttl_seconds
             ]
-            # Remove from dict first so no new downloads can start
             for job_id in expired_ids:
                 del self._jobs[job_id]
 

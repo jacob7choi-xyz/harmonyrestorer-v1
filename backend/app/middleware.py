@@ -25,10 +25,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             now = time.time()
             cutoff = now - self.window_seconds
 
-            # Evict expired timestamps
-            self._requests[client_ip] = [t for t in self._requests[client_ip] if t > cutoff]
+            # Evict expired timestamps and clean up empty entries
+            active = [t for t in self._requests[client_ip] if t > cutoff]
+            if not active:
+                del self._requests[client_ip]
+                active = []
+            else:
+                self._requests[client_ip] = active
 
-            if len(self._requests[client_ip]) >= self.max_requests:
+            if len(active) >= self.max_requests:
                 return JSONResponse(
                     status_code=429,
                     content={"detail": "Too many requests. Try again later."},
