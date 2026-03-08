@@ -45,6 +45,7 @@ _DEFAULT_LR_DISC = 2e-4
 _DEFAULT_VAL_SPLIT = 0.1
 _DEFAULT_CHECKPOINT_DIR = Path("checkpoints")
 _DEFAULT_LOG_INTERVAL = 10
+_MAX_GRAD_NORM = 1.0
 
 
 def _select_device() -> torch.device:
@@ -159,11 +160,11 @@ def train_epoch(
         if scaler:
             scaler.scale(d_loss).backward()
             scaler.unscale_(optimizer_d)
-            grad_monitor.check_and_clip_gradients(discriminator, "disc")
+            torch.nn.utils.clip_grad_norm_(discriminator.parameters(), _MAX_GRAD_NORM)
             scaler.step(optimizer_d)
         else:
             d_loss.backward()
-            grad_monitor.check_and_clip_gradients(discriminator, "disc")
+            torch.nn.utils.clip_grad_norm_(discriminator.parameters(), _MAX_GRAD_NORM)
             optimizer_d.step()
 
         # --- Generator step ---
@@ -330,7 +331,7 @@ def train(
         )
 
     # --- Training ---
-    grad_monitor = GradientHealthMonitor(max_grad_norm=1.0, log_frequency=100)
+    grad_monitor = GradientHealthMonitor(max_grad_norm=_MAX_GRAD_NORM, log_frequency=100)
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
 
     # Mixed precision: only on CUDA (MPS doesn't support float16 autocast)
