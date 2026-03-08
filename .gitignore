@@ -86,3 +86,6 @@ datasets_cache/
 checkpoints/
 weights/
 models/
+
+# Training data (downloaded/generated audio)
+data/
