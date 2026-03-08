@@ -96,20 +96,23 @@ The `dataset/` package builds training data for the OpGAN from public domain cla
 pip install -e ".[dataset]"
 
 # Download from Internet Archive (Musopen collection)
-python -m dataset.acquire --collection MusopenCollectionAsFlac --output data/raw --formats .flac
+python -m dataset.acquire --output data/raw/ --max-tracks 200 --formats .flac
 
 # Preprocess to 16kHz mono, 2-second frames
-python -m dataset.preprocess data/raw/ --output data/clean_frames/
+python -m dataset.preprocess data/raw/ --output data/frames/
 
-# Generate noisy/clean training pairs (5 variants per frame)
-python -m dataset.generate_pairs data/clean_frames/ --output data/pairs/ --variants 5
+# Generate noisy/clean training pairs (5 variants per frame, seeded for reproducibility)
+python -m dataset.generate_pairs data/frames/ --output data/pairs/ --seed 42
+
+# Train OpGAN (CUDA GPU recommended, ~5-10 min/epoch on T4)
+python -m dataset.train --pairs data/pairs/ --epochs 100 --batch-size 16
 ```
 
 Current dataset: 145 tracks from 14 composers, 29,240 clean frames, 146,200 training pairs. Source audio is CC/public domain; noise is synthetically generated (tape hiss, vinyl crackle, mains hum, HF rolloff, tape saturation).
 
-## OpGAN (Archived)
+## OpGAN
 
-The `_archive/` folder contains a from-scratch implementation of **1D Operational GANs** based on [Kiranyaz et al. 2022](https://arxiv.org/abs/2110.10149). Architecture is complete and trainable but not yet trained. The production API uses pretrained UVR models.
+The `_archive/` folder contains a from-scratch implementation of **1D Operational GANs** based on [Kiranyaz et al. 2022](https://arxiv.org/abs/2110.10149). Training script at `dataset/train.py` supports CUDA mixed precision, checkpoint resume, and gradient health monitoring. The production API currently uses pretrained UVR models.
 
 ## Roadmap
 
