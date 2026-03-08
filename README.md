@@ -112,7 +112,7 @@ Current dataset: 145 tracks from 14 composers, 29,240 clean frames, 146,200 trai
 
 ## OpGAN
 
-The `_archive/` folder contains a from-scratch implementation of **1D Operational GANs** based on [Kiranyaz et al. 2022](https://arxiv.org/abs/2110.10149). Training script at `dataset/train.py` supports CUDA mixed precision, checkpoint resume, and gradient health monitoring. The production API currently uses pretrained UVR models.
+The `_archive/` folder contains a from-scratch implementation of **1D Operational GANs** based on [Kiranyaz et al. 2022](https://arxiv.org/abs/2212.14618). Training script at `dataset/train.py` supports CUDA mixed precision, checkpoint resume, and gradient health monitoring. The production API currently uses pretrained UVR models.
 
 ## Roadmap
 
