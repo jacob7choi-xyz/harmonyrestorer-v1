@@ -15,7 +15,6 @@ import json
 import logging
 from pathlib import Path
 
-import numpy as np
 import soundfile as sf
 
 from dataset.noise import DegradationParams, random_degradation
@@ -29,6 +28,7 @@ def generate_pairs(
     variants_per_frame: int = 5,
     snr_range: tuple[float, float] = (5.0, 30.0),
     sr: int = 16_000,
+    base_seed: int | None = None,
 ) -> int:
     """Generate noisy/clean paired training data.
 
@@ -47,6 +47,8 @@ def generate_pairs(
         variants_per_frame: Number of noisy variants per clean frame.
         snr_range: Min/max SNR in dB for tape hiss.
         sr: Expected sample rate of clean frames.
+        base_seed: Base seed for reproducible noise generation. Each
+            variant gets seed = base_seed + pair_index. None = random.
 
     Returns:
         Total number of pairs generated.
@@ -67,7 +69,9 @@ def generate_pairs(
 
     logger.info(
         "Generating %d variants for %d clean frames (= %d pairs)",
-        variants_per_frame, len(clean_files), variants_per_frame * len(clean_files),
+        variants_per_frame,
+        len(clean_files),
+        variants_per_frame * len(clean_files),
     )
 
     total_pairs = 0
@@ -81,7 +85,10 @@ def generate_pairs(
 
         if file_sr != sr:
             logger.warning(
-                "Skipping %s: expected %d Hz, got %d Hz", clean_path.name, sr, file_sr,
+                "Skipping %s: expected %d Hz, got %d Hz",
+                clean_path.name,
+                sr,
+                file_sr,
             )
             continue
 
@@ -94,8 +101,13 @@ def generate_pairs(
 
         # Generate noisy variants
         for v in range(variants_per_frame):
+            variant_seed = (base_seed + total_pairs) if base_seed is not None else None
+
             noisy_audio, params = random_degradation(
-                clean_audio, sr, snr_range=snr_range,
+                clean_audio,
+                sr,
+                snr_range=snr_range,
+                seed=variant_seed,
             )
 
             variant_name = f"{stem}__v{v:02d}"
@@ -108,15 +120,19 @@ def generate_pairs(
             meta = {
                 "clean_frame": clean_path.name,
                 "variant": v,
+                "seed": variant_seed,
                 "params": _params_to_dict(params),
             }
-            with open(meta_path, "w") as f:
-                json.dump(meta, f, indent=2)
+            try:
+                with open(meta_path, "w") as f:
+                    json.dump(meta, f, indent=2)
+            except OSError as e:
+                logger.error("Failed to write metadata %s: %s", meta_path, e)
 
             total_pairs += 1
 
-        if total_pairs % 100 == 0 and total_pairs > 0:
-            logger.info("Generated %d pairs so far...", total_pairs)
+            if total_pairs % 500 == 0:
+                logger.info("Generated %d pairs so far...", total_pairs)
 
     logger.info("Done: %d total pairs in %s", total_pairs, output_dir)
     return total_pairs
@@ -143,32 +159,47 @@ def _params_to_dict(params: DegradationParams) -> dict:
 
 def main() -> None:
     """CLI entry point."""
-    parser = argparse.ArgumentParser(
-        description="Generate paired noisy/clean training data."
-    )
+    parser = argparse.ArgumentParser(description="Generate paired noisy/clean training data.")
     parser.add_argument(
-        "clean_dir", type=Path,
+        "clean_dir",
+        type=Path,
         help="Directory containing clean .wav frames",
     )
     parser.add_argument(
-        "--output", type=Path, default=Path("data/pairs"),
+        "--output",
+        type=Path,
+        default=Path("data/pairs"),
         help="Output directory for paired data (default: data/pairs/)",
     )
     parser.add_argument(
-        "--variants", type=int, default=5,
+        "--variants",
+        type=int,
+        default=5,
         help="Number of noisy variants per clean frame (default: 5)",
     )
     parser.add_argument(
-        "--snr-min", type=float, default=5.0,
+        "--snr-min",
+        type=float,
+        default=5.0,
         help="Minimum SNR in dB (default: 5.0 = heavy noise)",
     )
     parser.add_argument(
-        "--snr-max", type=float, default=30.0,
+        "--snr-max",
+        type=float,
+        default=30.0,
         help="Maximum SNR in dB (default: 30.0 = mild noise)",
     )
     parser.add_argument(
-        "--sr", type=int, default=16_000,
+        "--sr",
+        type=int,
+        default=16_000,
         help="Expected sample rate (default: 16000)",
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Base seed for reproducible noise generation (default: random)",
     )
 
     args = parser.parse_args()
@@ -184,6 +215,7 @@ def main() -> None:
         variants_per_frame=args.variants,
         snr_range=(args.snr_min, args.snr_max),
         sr=args.sr,
+        base_seed=args.seed,
     )
 
 

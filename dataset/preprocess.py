@@ -17,6 +17,7 @@ from pathlib import Path
 
 import numpy as np
 import soundfile as sf
+from scipy.signal import resample as scipy_resample
 
 logger = logging.getLogger(__name__)
 
@@ -51,15 +52,10 @@ def load_and_resample(
     else:
         audio = audio[:, 0]
 
-    # Resample if needed (simple linear interpolation for now)
+    # Resample with anti-aliased Fourier method (avoids aliasing from linear interp)
     if sr != target_sr:
-        duration = len(audio) / sr
-        target_len = int(duration * target_sr)
-        audio = np.interp(
-            np.linspace(0, len(audio) - 1, target_len),
-            np.arange(len(audio)),
-            audio,
-        ).astype(np.float32)
+        target_len = int(len(audio) * target_sr / sr)
+        audio = scipy_resample(audio, target_len).astype(np.float32)
         sr = target_sr
 
     return audio, sr
@@ -106,7 +102,7 @@ def slice_frames(
         frame = signal[start : start + frame_len]
 
         # Skip near-silent frames
-        rms = np.sqrt(np.mean(frame ** 2))
+        rms = np.sqrt(np.mean(frame**2))
         if rms < min_rms:
             continue
 
@@ -137,8 +133,7 @@ def preprocess_directory(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     audio_files = [
-        f for f in sorted(input_dir.rglob("*"))
-        if f.suffix.lower() in _SUPPORTED_EXTENSIONS
+        f for f in sorted(input_dir.rglob("*")) if f.suffix.lower() in _SUPPORTED_EXTENSIONS
     ]
 
     if not audio_files:
@@ -159,7 +154,12 @@ def preprocess_directory(
         frames = slice_frames(audio, frame_len, hop_len)
 
         if not frames:
-            logger.debug("No valid frames from %s", file_path.name)
+            logger.info(
+                "Skipping %s: too short for frame_len=%d (%.1fs audio)",
+                file_path.name,
+                frame_len,
+                len(audio) / sr,
+            )
             continue
 
         # Save each frame as a separate .wav file
@@ -171,7 +171,9 @@ def preprocess_directory(
         total_frames += len(frames)
         logger.info(
             "Processed %s: %d frames (%.1fs audio)",
-            file_path.name, len(frames), len(audio) / sr,
+            file_path.name,
+            len(frames),
+            len(audio) / sr,
         )
 
     logger.info("Total: %d frames from %d files", total_frames, len(audio_files))
@@ -184,23 +186,32 @@ def main() -> None:
         description="Preprocess raw audio into fixed-length training frames."
     )
     parser.add_argument(
-        "input_dir", type=Path,
+        "input_dir",
+        type=Path,
         help="Directory containing raw audio files",
     )
     parser.add_argument(
-        "--output", type=Path, default=Path("data/clean_frames"),
+        "--output",
+        type=Path,
+        default=Path("data/clean_frames"),
         help="Output directory for frame files (default: data/clean_frames/)",
     )
     parser.add_argument(
-        "--sr", type=int, default=16_000,
+        "--sr",
+        type=int,
+        default=16_000,
         help="Target sample rate in Hz (default: 16000)",
     )
     parser.add_argument(
-        "--frame-len", type=int, default=32_000,
+        "--frame-len",
+        type=int,
+        default=32_000,
         help="Frame length in samples (default: 32000 = 2s at 16kHz)",
     )
     parser.add_argument(
-        "--hop-len", type=int, default=None,
+        "--hop-len",
+        type=int,
+        default=None,
         help="Hop length between frames (default: same as frame-len)",
     )
 

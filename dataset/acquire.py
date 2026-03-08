@@ -59,10 +59,12 @@ def list_audio_files(identifier: str) -> list[dict[str, str]]:
     for f in item.files:
         name = f.get("name", "")
         if Path(name).suffix.lower() in _AUDIO_EXTENSIONS:
-            audio_files.append({
-                "name": name,
-                "size": f.get("size", "0"),
-            })
+            audio_files.append(
+                {
+                    "name": name,
+                    "size": f.get("size", "0"),
+                }
+            )
 
     return audio_files
 
@@ -102,19 +104,20 @@ def download_item(
     # Filter to audio files only, then exclude keywords -- all before downloading
     exclude_lower = [kw.lower() for kw in (exclude_keywords or [])]
     audio_files = [
-        f for f in item.files
+        f
+        for f in item.files
         if Path(f.get("name", "")).suffix.lower() in formats
         and not any(kw in f.get("name", "").lower() for kw in exclude_lower)
     ]
 
     if exclude_lower:
         total_audio = sum(
-            1 for f in item.files
-            if Path(f.get("name", "")).suffix.lower() in formats
+            1 for f in item.files if Path(f.get("name", "")).suffix.lower() in formats
         )
         logger.info(
             "Excluded %d files matching keywords %s",
-            total_audio - len(audio_files), exclude_keywords,
+            total_audio - len(audio_files),
+            exclude_keywords,
         )
 
     if not audio_files:
@@ -126,7 +129,9 @@ def download_item(
 
     logger.info(
         "Downloading %d audio files from %s (%s)",
-        len(audio_files), identifier, item.metadata.get("title", identifier),
+        len(audio_files),
+        identifier,
+        item.metadata.get("title", identifier),
     )
 
     downloaded = 0
@@ -212,8 +217,11 @@ def search_and_download(
         identifier = result.get("identifier", "")
         remaining = max_tracks - downloaded
         downloaded += download_item(
-            identifier, output_dir, max_files=remaining,
-            formats=formats, exclude_keywords=exclude_keywords,
+            identifier,
+            output_dir,
+            max_files=remaining,
+            formats=formats,
+            exclude_keywords=exclude_keywords,
         )
 
     logger.info("Total downloaded: %d tracks", downloaded)
@@ -250,8 +258,11 @@ def acquire_from_collections(
 
         remaining = max_tracks - downloaded
         downloaded += download_item(
-            identifier, output_dir, max_files=remaining,
-            formats=formats, exclude_keywords=exclude_keywords,
+            identifier,
+            output_dir,
+            max_files=remaining,
+            formats=formats,
+            exclude_keywords=exclude_keywords,
         )
 
     logger.info("Total: %d tracks from %d collections", downloaded, len(collections))
@@ -261,6 +272,8 @@ def acquire_from_collections(
 def acquire_from_manifest(
     manifest_path: Path,
     output_dir: Path,
+    formats: set[str] | None = None,
+    exclude_keywords: list[str] | None = None,
 ) -> int:
     """Download files from a JSON manifest.
 
@@ -273,6 +286,9 @@ def acquire_from_manifest(
     Args:
         manifest_path: Path to JSON manifest file.
         output_dir: Directory to save downloaded files.
+        formats: File extensions to download (default: all).
+        exclude_keywords: Skip files whose name contains any of these
+            (case-insensitive).
 
     Returns:
         Number of files successfully downloaded.
@@ -282,13 +298,36 @@ def acquire_from_manifest(
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    with open(manifest_path) as f:
-        entries = json.load(f)
+    try:
+        with open(manifest_path) as f:
+            entries = json.load(f)
+    except (OSError, json.JSONDecodeError) as e:
+        logger.error("Failed to read manifest %s: %s", manifest_path, e)
+        return 0
 
+    if not isinstance(entries, list):
+        logger.error("Manifest must be a JSON array, got %s", type(entries).__name__)
+        return 0
+
+    exclude_lower = [kw.lower() for kw in (exclude_keywords or [])]
     downloaded = 0
+
     for entry in entries:
+        if not isinstance(entry, dict) or "url" not in entry:
+            logger.warning("Skipping invalid manifest entry: %s", entry)
+            continue
+
         url = entry["url"]
         filename = entry.get("filename", Path(url).name)
+
+        # Apply format filter
+        if formats and Path(filename).suffix.lower() not in formats:
+            continue
+
+        # Apply exclude filter
+        if any(kw in filename.lower() for kw in exclude_lower):
+            continue
+
         output_path = output_dir / filename
 
         if output_path.exists():
@@ -325,31 +364,46 @@ def main() -> None:
         description="Download public domain classical recordings for training data."
     )
     parser.add_argument(
-        "--output", type=Path, default=Path("data/raw"),
+        "--output",
+        type=Path,
+        default=Path("data/raw"),
         help="Output directory for downloaded files (default: data/raw/)",
     )
     parser.add_argument(
-        "--max-tracks", type=int, default=50,
+        "--max-tracks",
+        type=int,
+        default=50,
         help="Maximum number of tracks to download (default: 50)",
     )
     parser.add_argument(
-        "--collection", type=str, default=None,
+        "--collection",
+        type=str,
+        default=None,
         help="Specific IA item identifier to download from",
     )
     parser.add_argument(
-        "--search", type=str, default=None,
+        "--search",
+        type=str,
+        default=None,
         help="IA search query (e.g. 'collection:musopen')",
     )
     parser.add_argument(
-        "--manifest", type=Path, default=None,
+        "--manifest",
+        type=Path,
+        default=None,
         help="Path to JSON manifest with custom download URLs",
     )
     parser.add_argument(
-        "--formats", type=str, default=None,
+        "--formats",
+        type=str,
+        default=None,
         help="Comma-separated extensions to download (e.g. '.flac' or '.flac,.wav')",
     )
     parser.add_argument(
-        "--exclude", type=str, nargs="+", default=None,
+        "--exclude",
+        type=str,
+        nargs="+",
+        default=None,
         help="Keywords to exclude from filenames (case-insensitive, e.g. --exclude goldberg bach)",
     )
 
@@ -365,22 +419,34 @@ def main() -> None:
     )
 
     if args.manifest:
-        acquire_from_manifest(args.manifest, args.output)
+        acquire_from_manifest(
+            args.manifest,
+            args.output,
+            formats=formats,
+            exclude_keywords=args.exclude,
+        )
     elif args.collection:
         download_item(
-            args.collection, args.output,
-            max_files=args.max_tracks, formats=formats,
+            args.collection,
+            args.output,
+            max_files=args.max_tracks,
+            formats=formats,
             exclude_keywords=args.exclude,
         )
     elif args.search:
         search_and_download(
-            args.search, args.output, max_tracks=args.max_tracks,
-            formats=formats, exclude_keywords=args.exclude,
+            args.search,
+            args.output,
+            max_tracks=args.max_tracks,
+            formats=formats,
+            exclude_keywords=args.exclude,
         )
     else:
         acquire_from_collections(
-            args.output, max_tracks=args.max_tracks,
-            formats=formats, exclude_keywords=args.exclude,
+            args.output,
+            max_tracks=args.max_tracks,
+            formats=formats,
+            exclude_keywords=args.exclude,
         )
 
 

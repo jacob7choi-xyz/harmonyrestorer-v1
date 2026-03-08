@@ -48,15 +48,19 @@ class AnalogAudioDataset(Dataset):
         transform: Optional transform applied to both noisy and clean tensors.
     """
 
+    _EXPECTED_SR = 16_000
+
     def __init__(
         self,
         pairs_dir: Path,
         transform: torch.nn.Module | None = None,
+        expected_sr: int = _EXPECTED_SR,
     ) -> None:
         self.pairs_dir = Path(pairs_dir)
         self.clean_dir = self.pairs_dir / "clean"
         self.noisy_dir = self.pairs_dir / "noisy"
         self.transform = transform
+        self._expected_sr = expected_sr
 
         if not self.clean_dir.exists():
             raise FileNotFoundError(f"Clean directory not found: {self.clean_dir}")
@@ -73,7 +77,7 @@ class AnalogAudioDataset(Dataset):
             "Loaded %d pairs from %s (%d clean frames)",
             len(self._pairs),
             pairs_dir,
-            len(set(p[1] for p in self._pairs)),
+            len({p[1] for p in self._pairs}),
         )
 
     def _build_index(self) -> list[tuple[Path, Path]]:
@@ -96,7 +100,8 @@ class AnalogAudioDataset(Dataset):
             if clean_stem not in clean_files:
                 logger.warning(
                     "Clean file not found for %s (expected %s.wav)",
-                    noisy_path.name, clean_stem,
+                    noisy_path.name,
+                    clean_stem,
                 )
                 continue
 
@@ -128,15 +133,32 @@ class AnalogAudioDataset(Dataset):
 
         return noisy, clean
 
-    @staticmethod
-    def _load_wav(path: Path) -> np.ndarray:
-        """Load a .wav file as float32 numpy array."""
-        audio, _ = sf.read(path, dtype="float32")
+    def _load_wav(self, path: Path) -> np.ndarray:
+        """Load a .wav file as float32 numpy array.
+
+        Validates sample rate matches expected value to catch
+        mismatched files early rather than training on corrupt data.
+
+        Args:
+            path: Path to .wav file.
+
+        Returns:
+            Audio samples as float32 array.
+
+        Raises:
+            ValueError: If sample rate does not match expected_sr.
+        """
+        audio, sr = sf.read(path, dtype="float32")
+        if sr != self._expected_sr:
+            raise ValueError(
+                f"Sample rate mismatch in {path.name}: "
+                f"expected {self._expected_sr} Hz, got {sr} Hz"
+            )
         return audio
 
     def get_clean_frame_count(self) -> int:
         """Return number of unique clean frames in the dataset."""
-        return len(set(p[1] for p in self._pairs))
+        return len({p[1] for p in self._pairs})
 
     def get_stats(self) -> dict[str, int | float]:
         """Return dataset statistics."""

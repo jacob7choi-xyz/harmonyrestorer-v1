@@ -266,27 +266,40 @@ def train(
     stats = dataset.get_stats()
     logger.info(
         "Dataset: %d pairs, %d clean frames, %.1f variants/frame",
-        stats["total_pairs"], stats["clean_frames"], stats["variants_per_frame"],
+        stats["total_pairs"],
+        stats["clean_frames"],
+        stats["variants_per_frame"],
     )
 
     val_size = int(len(dataset) * val_split)
     train_size = len(dataset) - val_size
     train_dataset, val_dataset = random_split(
-        dataset, [train_size, val_size], generator=torch.Generator().manual_seed(42),
+        dataset,
+        [train_size, val_size],
+        generator=torch.Generator().manual_seed(42),
     )
 
     # pin_memory only works on CUDA, not MPS or CPU
     use_pin_memory = device.type == "cuda"
     train_loader = DataLoader(
-        train_dataset, batch_size=batch_size, shuffle=True,
-        num_workers=2, pin_memory=use_pin_memory, drop_last=True,
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=2,
+        pin_memory=use_pin_memory,
+        drop_last=True,
     )
     val_loader = DataLoader(
-        val_dataset, batch_size=batch_size, shuffle=False,
-        num_workers=2, pin_memory=use_pin_memory,
+        val_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=2,
+        pin_memory=use_pin_memory,
     )
 
-    logger.info("Train: %d pairs (%d batches), Val: %d pairs", train_size, len(train_loader), val_size)
+    logger.info(
+        "Train: %d pairs (%d batches), Val: %d pairs", train_size, len(train_loader), val_size
+    )
 
     # --- Models ---
     generator = OpGANGenerator(input_length=32000, q=3).to(device)
@@ -295,7 +308,9 @@ def train(
 
     gen_params = sum(p.numel() for p in generator.parameters())
     disc_params = sum(p.numel() for p in discriminator.parameters())
-    logger.info("Generator: %s params, Discriminator: %s params", f"{gen_params:,}", f"{disc_params:,}")
+    logger.info(
+        "Generator: %s params, Discriminator: %s params", f"{gen_params:,}", f"{disc_params:,}"
+    )
 
     # --- Optimizers ---
     optimizer_g = torch.optim.AdamW(generator.parameters(), lr=lr_gen, betas=(0.5, 0.999))
@@ -306,7 +321,12 @@ def train(
     best_val_loss = float("inf")
     if resume_path and resume_path.exists():
         start_epoch, best_val_loss = _load_checkpoint(
-            resume_path, generator, discriminator, optimizer_g, optimizer_d, device,
+            resume_path,
+            generator,
+            discriminator,
+            optimizer_g,
+            optimizer_d,
+            device,
         )
 
     # --- Training ---
@@ -344,13 +364,23 @@ def train(
         epoch_start = time.time()
 
         train_losses = train_epoch(
-            generator, discriminator, criterion,
-            optimizer_g, optimizer_d, train_loader,
-            device, grad_monitor, scaler,
+            generator,
+            discriminator,
+            criterion,
+            optimizer_g,
+            optimizer_d,
+            train_loader,
+            device,
+            grad_monitor,
+            scaler,
         )
 
         val_losses = validate(
-            generator, discriminator, criterion, val_loader, device,
+            generator,
+            discriminator,
+            criterion,
+            val_loader,
+            device,
         )
 
         epoch_time = time.time() - epoch_start
@@ -361,11 +391,16 @@ def train(
                 "Epoch %d/%d (%.1fs) -- "
                 "Train: G=%.4f (adv=%.4f, temp=%.4f, spec=%.4f) D=%.4f -- "
                 "Val: G=%.4f D=%.4f",
-                epoch + 1, epochs, epoch_time,
-                train_losses["g_total"], train_losses["g_adv"],
-                train_losses["g_temp"], train_losses["g_spec"],
+                epoch + 1,
+                epochs,
+                epoch_time,
+                train_losses["g_total"],
+                train_losses["g_adv"],
+                train_losses["g_temp"],
+                train_losses["g_spec"],
                 train_losses["d_loss"],
-                val_losses["g_total"], val_losses["d_loss"],
+                val_losses["g_total"],
+                val_losses["d_loss"],
             )
 
         # Save best model
@@ -373,23 +408,35 @@ def train(
             best_val_loss = val_losses["g_total"]
             _save_checkpoint(
                 checkpoint_dir / "best.pt",
-                generator, discriminator, optimizer_g, optimizer_d,
-                epoch + 1, best_val_loss,
+                generator,
+                discriminator,
+                optimizer_g,
+                optimizer_d,
+                epoch + 1,
+                best_val_loss,
             )
 
         # Periodic checkpoint every 10 epochs
         if (epoch + 1) % 10 == 0:
             _save_checkpoint(
                 checkpoint_dir / f"epoch_{epoch + 1:04d}.pt",
-                generator, discriminator, optimizer_g, optimizer_d,
-                epoch + 1, best_val_loss,
+                generator,
+                discriminator,
+                optimizer_g,
+                optimizer_d,
+                epoch + 1,
+                best_val_loss,
             )
 
     # Final save
     _save_checkpoint(
         checkpoint_dir / "final.pt",
-        generator, discriminator, optimizer_g, optimizer_d,
-        epochs, best_val_loss,
+        generator,
+        discriminator,
+        optimizer_g,
+        optimizer_d,
+        epochs,
+        best_val_loss,
     )
 
     # Log gradient stats
@@ -397,7 +444,9 @@ def train(
     if grad_stats:
         logger.info(
             "Gradient stats: mean=%.2e, max=%.2e, min=%.2e",
-            grad_stats["mean_norm"], grad_stats["max_norm"], grad_stats["min_norm"],
+            grad_stats["mean_norm"],
+            grad_stats["max_norm"],
+            grad_stats["min_norm"],
         )
 
     logger.info("Training complete. Best val loss: %.4f", best_val_loss)
@@ -409,39 +458,57 @@ def main() -> None:
         description="Train the OpGAN denoiser on paired audio data.",
     )
     parser.add_argument(
-        "--pairs", type=Path, default=Path("data/pairs"),
+        "--pairs",
+        type=Path,
+        default=Path("data/pairs"),
         help="Directory containing clean/ and noisy/ subdirs (default: data/pairs/)",
     )
     parser.add_argument(
-        "--epochs", type=int, default=_DEFAULT_EPOCHS,
+        "--epochs",
+        type=int,
+        default=_DEFAULT_EPOCHS,
         help=f"Number of training epochs (default: {_DEFAULT_EPOCHS})",
     )
     parser.add_argument(
-        "--batch-size", type=int, default=_DEFAULT_BATCH_SIZE,
+        "--batch-size",
+        type=int,
+        default=_DEFAULT_BATCH_SIZE,
         help=f"Batch size (default: {_DEFAULT_BATCH_SIZE})",
     )
     parser.add_argument(
-        "--lr-gen", type=float, default=_DEFAULT_LR_GEN,
+        "--lr-gen",
+        type=float,
+        default=_DEFAULT_LR_GEN,
         help=f"Generator learning rate (default: {_DEFAULT_LR_GEN})",
     )
     parser.add_argument(
-        "--lr-disc", type=float, default=_DEFAULT_LR_DISC,
+        "--lr-disc",
+        type=float,
+        default=_DEFAULT_LR_DISC,
         help=f"Discriminator learning rate (default: {_DEFAULT_LR_DISC})",
     )
     parser.add_argument(
-        "--val-split", type=float, default=_DEFAULT_VAL_SPLIT,
+        "--val-split",
+        type=float,
+        default=_DEFAULT_VAL_SPLIT,
         help=f"Validation split fraction (default: {_DEFAULT_VAL_SPLIT})",
     )
     parser.add_argument(
-        "--checkpoint-dir", type=Path, default=_DEFAULT_CHECKPOINT_DIR,
+        "--checkpoint-dir",
+        type=Path,
+        default=_DEFAULT_CHECKPOINT_DIR,
         help=f"Checkpoint directory (default: {_DEFAULT_CHECKPOINT_DIR})",
     )
     parser.add_argument(
-        "--resume", type=Path, default=None,
+        "--resume",
+        type=Path,
+        default=None,
         help="Resume from checkpoint file",
     )
     parser.add_argument(
-        "--log-interval", type=int, default=_DEFAULT_LOG_INTERVAL,
+        "--log-interval",
+        type=int,
+        default=_DEFAULT_LOG_INTERVAL,
         help=f"Log every N epochs (default: {_DEFAULT_LOG_INTERVAL})",
     )
 

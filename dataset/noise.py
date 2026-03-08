@@ -8,7 +8,7 @@ Each effect is independently controllable and combinable.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import numpy as np
 from scipy.signal import butter, lfilter
@@ -20,7 +20,12 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 
-def tape_hiss(length: int, sr: int, color: str = "pink") -> np.ndarray:
+def tape_hiss(
+    length: int,
+    sr: int,
+    color: str = "pink",
+    rng: np.random.Generator | None = None,
+) -> np.ndarray:
     """Generate frequency-shaped noise resembling analog tape hiss.
 
     Real tape hiss is not white noise -- it rolls off at low frequencies
@@ -30,25 +35,32 @@ def tape_hiss(length: int, sr: int, color: str = "pink") -> np.ndarray:
         length: Number of samples.
         sr: Sample rate.
         color: Noise color ("pink" or "brown"). Pink is typical tape hiss.
+        rng: NumPy random generator for reproducibility.
 
     Returns:
         Noise signal normalized to unit peak.
     """
-    white = np.random.randn(length).astype(np.float32)
+    if rng is None:
+        rng = np.random.default_rng()
+
+    white = rng.standard_normal(length).astype(np.float32)
 
     if color == "pink":
         # Voss-McCartney approximation: -3 dB/octave rolloff
         # Apply via FFT shaping: multiply spectrum by 1/sqrt(f)
         spectrum = np.fft.rfft(white)
         freqs = np.fft.rfftfreq(length, d=1.0 / sr)
-        freqs[0] = 1.0  # avoid division by zero
+        freqs = np.maximum(freqs, 1.0)  # avoid division by zero across all bins
         spectrum *= 1.0 / np.sqrt(freqs)
         noise = np.fft.irfft(spectrum, n=length).astype(np.float32)
     elif color == "brown":
         # -6 dB/octave rolloff (cumulative sum of white noise)
         noise = np.cumsum(white).astype(np.float32)
-        # Remove DC drift
+        # Remove DC drift and normalize to prevent float32 overflow on long signals
         noise -= np.mean(noise)
+        std = np.std(noise)
+        if std > 0:
+            noise /= std
     else:
         noise = white
 
@@ -60,7 +72,12 @@ def tape_hiss(length: int, sr: int, color: str = "pink") -> np.ndarray:
     return noise
 
 
-def vinyl_crackle(length: int, sr: int, density: float = 0.001) -> np.ndarray:
+def vinyl_crackle(
+    length: int,
+    sr: int,
+    density: float = 0.001,
+    rng: np.random.Generator | None = None,
+) -> np.ndarray:
     """Generate vinyl-style impulse noise (clicks and pops).
 
     Models the random impulse artifacts from vinyl playback caused by
@@ -70,21 +87,25 @@ def vinyl_crackle(length: int, sr: int, density: float = 0.001) -> np.ndarray:
         length: Number of samples.
         sr: Sample rate.
         density: Probability of a click at each sample (0.001 = ~1 click/ms).
+        rng: NumPy random generator for reproducibility.
 
     Returns:
         Crackle signal normalized to unit peak.
     """
+    if rng is None:
+        rng = np.random.default_rng()
+
     crackle = np.zeros(length, dtype=np.float32)
 
     # Random impulse positions
-    click_mask = np.random.random(length) < density
+    click_mask = rng.random(length) < density
     num_clicks = int(click_mask.sum())
 
     if num_clicks == 0:
         return crackle
 
     # Random amplitudes (bipolar, varying intensity)
-    crackle[click_mask] = np.random.randn(num_clicks).astype(np.float32)
+    crackle[click_mask] = rng.standard_normal(num_clicks).astype(np.float32)
 
     # Convolve with a short decay kernel to make clicks more realistic
     decay_len = int(sr * 0.001)  # 1ms decay
@@ -99,7 +120,13 @@ def vinyl_crackle(length: int, sr: int, density: float = 0.001) -> np.ndarray:
     return crackle
 
 
-def mains_hum(length: int, sr: int, freq: float = 60.0, n_harmonics: int = 4) -> np.ndarray:
+def mains_hum(
+    length: int,
+    sr: int,
+    freq: float = 60.0,
+    n_harmonics: int = 4,
+    rng: np.random.Generator | None = None,
+) -> np.ndarray:
     """Generate mains hum with harmonics.
 
     Models electrical interference from AC power lines. Includes the
@@ -110,18 +137,21 @@ def mains_hum(length: int, sr: int, freq: float = 60.0, n_harmonics: int = 4) ->
         sr: Sample rate.
         freq: Fundamental frequency (60 Hz in US/Japan, 50 Hz in Europe).
         n_harmonics: Number of harmonics to include.
+        rng: NumPy random generator for reproducibility.
 
     Returns:
         Hum signal normalized to unit peak.
     """
+    if rng is None:
+        rng = np.random.default_rng()
+
     t = np.arange(length, dtype=np.float32) / sr
     hum = np.zeros(length, dtype=np.float32)
 
     for h in range(1, n_harmonics + 1):
         # Each harmonic is 6 dB quieter than the previous
-        amplitude = 1.0 / (h ** 1.5)
-        # Random phase offset per harmonic
-        phase = np.random.uniform(0, 2 * np.pi)
+        amplitude = 1.0 / (h**1.5)
+        phase = rng.uniform(0, 2 * np.pi)
         hum += amplitude * np.sin(2 * np.pi * freq * h * t + phase)
 
     peak = np.max(np.abs(hum))
@@ -147,6 +177,7 @@ def high_freq_rolloff(signal: np.ndarray, sr: int, cutoff_hz: float = 6000.0) ->
     """
     nyquist = sr / 2.0
     if cutoff_hz >= nyquist:
+        logger.debug("Rolloff skipped: cutoff %.0f Hz >= nyquist %.0f Hz", cutoff_hz, nyquist)
         return signal
 
     normalized_cutoff = cutoff_hz / nyquist
@@ -216,6 +247,7 @@ def apply_degradation(
     signal: np.ndarray,
     sr: int,
     params: DegradationParams,
+    rng: np.random.Generator | None = None,
 ) -> np.ndarray:
     """Apply a combination of analog degradation effects to a clean signal.
 
@@ -223,10 +255,14 @@ def apply_degradation(
         signal: Clean audio signal (float32, normalized to [-1, 1]).
         sr: Sample rate.
         params: Degradation parameters controlling each effect.
+        rng: NumPy random generator for reproducibility.
 
     Returns:
         Degraded signal (same length as input).
     """
+    if rng is None:
+        rng = np.random.default_rng()
+
     degraded = signal.copy()
     length = len(signal)
 
@@ -240,9 +276,9 @@ def apply_degradation(
 
     # Additive noise: tape hiss
     if params.enable_hiss:
-        hiss = tape_hiss(length, sr, color=params.hiss_color)
+        hiss = tape_hiss(length, sr, color=params.hiss_color, rng=rng)
         # Scale hiss to target SNR
-        signal_power = np.mean(degraded ** 2)
+        signal_power = np.mean(degraded**2)
         if signal_power > 0:
             snr_linear = 10 ** (params.hiss_snr_db / 10)
             noise_power = signal_power / snr_linear
@@ -251,12 +287,12 @@ def apply_degradation(
 
     # Additive noise: vinyl crackle
     if params.enable_crackle and params.crackle_amplitude > 0:
-        crackle = vinyl_crackle(length, sr, density=params.crackle_density)
+        crackle = vinyl_crackle(length, sr, density=params.crackle_density, rng=rng)
         degraded += crackle * params.crackle_amplitude
 
     # Additive noise: mains hum
     if params.enable_hum and params.hum_amplitude > 0:
-        hum = mains_hum(length, sr, freq=params.hum_freq)
+        hum = mains_hum(length, sr, freq=params.hum_freq, rng=rng)
         degraded += hum * params.hum_amplitude
 
     # Clip to valid range
@@ -271,6 +307,7 @@ def random_degradation(
     include_crackle: bool = True,
     include_hum: bool = True,
     include_saturation: bool = True,
+    seed: int | None = None,
 ) -> tuple[np.ndarray, DegradationParams]:
     """Apply randomized analog degradation for data augmentation.
 
@@ -284,11 +321,12 @@ def random_degradation(
         include_crackle: Whether crackle can be randomly enabled.
         include_hum: Whether hum can be randomly enabled.
         include_saturation: Whether saturation can be randomly enabled.
+        seed: Random seed for reproducibility (None = non-deterministic).
 
     Returns:
         Tuple of (degraded_signal, params_used).
     """
-    rng = np.random.default_rng()
+    rng = np.random.default_rng(seed)
 
     params = DegradationParams(
         # Always-on effects
@@ -308,5 +346,5 @@ def random_degradation(
         saturation_drive=rng.uniform(0.1, 0.6),
     )
 
-    degraded = apply_degradation(signal, sr, params)
+    degraded = apply_degradation(signal, sr, params, rng=rng)
     return degraded, params
