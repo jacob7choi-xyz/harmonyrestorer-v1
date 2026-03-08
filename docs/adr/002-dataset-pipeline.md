@@ -16,7 +16,7 @@ Training the OpGAN requires paired data: clean audio and synthetically degraded 
 
 Build a modular dataset pipeline in `dataset/` that handles four stages:
 
-1. **Acquisition** (`acquire.py`) -- Download CC/public domain classical recordings from Internet Archive (Musopen collection). Also supports custom manifest files for additional sources.
+1. **Acquisition** (`acquire.py`) -- Download CC/public domain classical recordings from Internet Archive (Musopen collection) using the `internetarchive` Python library. Supports `--formats` (e.g. `.flac`), `--exclude` (skip by keyword), and `--manifest` for custom sources.
 
 2. **Preprocessing** (`preprocess.py`) -- Resample to 16kHz mono, peak-normalize, slice into 2-second frames (32,000 samples matching the generator's `input_length`). Discard near-silent frames automatically.
 
@@ -42,7 +42,17 @@ Build a modular dataset pipeline in `dataset/` that handles four stages:
 | Randomized multi-effect combinations | Forces the model to generalize, not overfit to one noise type |
 | Metadata JSON per pair | Enables analysis of which noise types the model handles well/poorly |
 | Internet Archive as primary source | No API key needed, direct downloads, public domain, reliable |
+| `internetarchive` Python lib | Official IA client, handles retries/auth/metadata natively |
+| `--exclude` keyword filter | Filters before download to avoid wasting bandwidth |
 | scipy for filters | Standard DSP library, already a transitive dependency via audio-separator |
+
+## Results (2026-03-07)
+
+First full run of the pipeline:
+- **Source**: MusopenCollectionAsFlac -- 145 FLAC files, 7.2 GB, 14 composers (Bach, Beethoven, Borodin, Brahms, Dvorak, Grieg, Haydn, Mendelssohn, Mozart, Rimsky-Korsakov, Schubert, Smetana, Suk, Tchaikovsky)
+- **Clean frames**: 29,240 (2s each at 16kHz mono)
+- **Training pairs**: 146,200 (5 noisy variants per frame)
+- **Total disk**: 33 GB (gitignored under `data/`)
 
 ## Consequences
 
