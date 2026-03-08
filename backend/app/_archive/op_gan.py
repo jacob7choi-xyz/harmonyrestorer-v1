@@ -110,37 +110,48 @@ class OpGANGenerator(nn.Module):
         # Decoder: upsample + skip connections
         dec1_out = F.interpolate(
             self.leaky_relu(self.dec1(bottleneck_out)),
-            scale_factor=2, mode="linear", align_corners=False,
+            scale_factor=2,
+            mode="linear",
+            align_corners=False,
         )
         dec1_out = self.dropout(dec1_out)
 
         skip4 = torch.cat([dec1_out, enc4_out], dim=1)
         dec2_out = F.interpolate(
             self.leaky_relu(self.dec2(skip4)),
-            scale_factor=2, mode="linear", align_corners=False,
+            scale_factor=2,
+            mode="linear",
+            align_corners=False,
         )
         dec2_out = self.dropout(dec2_out)
 
         skip3 = torch.cat([dec2_out, enc3_out], dim=1)
         dec3_out = F.interpolate(
             self.leaky_relu(self.dec3(skip3)),
-            scale_factor=2, mode="linear", align_corners=False,
+            scale_factor=2,
+            mode="linear",
+            align_corners=False,
         )
         dec3_out = self.dropout(dec3_out)
 
         skip2 = torch.cat([dec3_out, enc2_out], dim=1)
         dec4_out = F.interpolate(
             self.leaky_relu(self.dec4(skip2)),
-            scale_factor=2, mode="linear", align_corners=False,
+            scale_factor=2,
+            mode="linear",
+            align_corners=False,
         )
 
         skip1 = torch.cat([dec4_out, enc1_out], dim=1)
         final_input = F.interpolate(
-            skip1, scale_factor=2, mode="linear", align_corners=False,
+            skip1,
+            scale_factor=2,
+            mode="linear",
+            align_corners=False,
         )
 
         restored = self.final_conv(final_input)
-        return torch.clamp(restored, -1.0, 1.0)
+        return restored  # final_conv ends with Tanh, already in [-1, 1]
 
     def clip_gradients(self) -> None:
         """Clip gradients for all parameters and Self-ONN sublayers."""
@@ -332,9 +343,7 @@ class OpGANLoss(nn.Module):
         spectral = self.spectral_loss(generated, target)
 
         total_loss = (
-            adversarial_loss
-            + self.lambda_temporal * temporal
-            + self.lambda_spectral * spectral
+            adversarial_loss + self.lambda_temporal * temporal + self.lambda_spectral * spectral
         )
 
         return total_loss, {
@@ -412,14 +421,19 @@ class GradientHealthMonitor:
         if self.step_count % self.log_frequency == 0:
             logger.info(
                 "Step %d %s: grad_norm=%.2e, max_grad=%.2e",
-                self.step_count, model_name, total_norm, max_grad,
+                self.step_count,
+                model_name,
+                total_norm,
+                max_grad,
             )
 
         if total_norm > self.max_grad_norm:
             torch.nn.utils.clip_grad_norm_(model.parameters(), self.max_grad_norm)
             if self.step_count % self.log_frequency == 0:
                 logger.info(
-                    "  Gradients clipped from %.2e to %.1f", total_norm, self.max_grad_norm,
+                    "  Gradients clipped from %.2e to %.1f",
+                    total_norm,
+                    self.max_grad_norm,
                 )
 
         if total_norm > 1000:
@@ -427,12 +441,14 @@ class GradientHealthMonitor:
         elif total_norm < 1e-8 and param_count > 0:
             logger.warning("Very small gradients detected: %.2e", total_norm)
 
-        self.gradient_history.append({
-            "step": self.step_count,
-            "total_norm": total_norm,
-            "max_grad": max_grad,
-            "param_count": param_count,
-        })
+        self.gradient_history.append(
+            {
+                "step": self.step_count,
+                "total_norm": total_norm,
+                "max_grad": max_grad,
+                "param_count": param_count,
+            }
+        )
 
         return total_norm
 

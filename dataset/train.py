@@ -149,7 +149,7 @@ def train_epoch(
         clean = clean.to(device)
 
         # --- Discriminator step ---
-        with torch.amp.autocast("cuda", enabled=use_amp):
+        with torch.amp.autocast(device.type, enabled=use_amp):
             generated = generator(noisy)
             disc_real = discriminator(clean)
             disc_fake = discriminator(generated.detach())
@@ -167,7 +167,7 @@ def train_epoch(
             optimizer_d.step()
 
         # --- Generator step ---
-        with torch.amp.autocast("cuda", enabled=use_amp):
+        with torch.amp.autocast(device.type, enabled=use_amp):
             disc_fake_for_gen = discriminator(generated)
             g_loss, breakdown = criterion.generator_loss(disc_fake_for_gen, generated, clean)
 
