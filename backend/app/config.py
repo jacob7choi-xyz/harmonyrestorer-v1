@@ -21,6 +21,9 @@ class Settings:
 
         # Audio
         self.supported_formats = {".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac"}
+        self.max_audio_duration_seconds = int(
+            os.getenv("MAX_AUDIO_DURATION_SECONDS", str(10 * 60))  # 10 minutes
+        )
         self.uvr_model_name = os.getenv("UVR_MODEL_NAME", "UVR-DeNoise.pth")
 
         # Security
@@ -44,6 +47,7 @@ class Settings:
 
         # Server
         self.log_level = os.getenv("LOG_LEVEL", "INFO")
+        self.log_format = os.getenv("LOG_FORMAT", "text")  # "text" or "json"
 
         # Ensure directories exist
         self.upload_dir.mkdir(parents=True, exist_ok=True)

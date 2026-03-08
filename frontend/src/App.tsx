@@ -3,9 +3,8 @@ import { Download, Loader2, RotateCcw, Brain, Crown, Sparkles, BarChart3 } from 
 import { uploadAudio, pollUntilDone, getDownloadUrl } from './api/client';
 import { UploadArea } from './components/UploadArea';
 import { ProgressCard } from './components/ProgressCard';
-import { SettingsPanel } from './components/SettingsPanel';
 import { Waveform } from './components/Waveform';
-import type { ProcessingSettings, ProcessingStatus } from './types';
+import type { ProcessingStatus } from './types';
 
 const INITIAL_STATUS: ProcessingStatus = {
   status: 'idle',
@@ -13,21 +12,9 @@ const INITIAL_STATUS: ProcessingStatus = {
   message: 'Ready to enhance your audio',
 };
 
-const INITIAL_SETTINGS: ProcessingSettings = {
-  noise_reduction: 'medium',
-  enhance_speech: true,
-  remove_reverb: false,
-  isolate_voice: false,
-  boost_clarity: true,
-  output_format: 'wav',
-  quality: 'high',
-  preserve_dynamics: true,
-};
-
 export default function HarmonyRestorer() {
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<ProcessingStatus>(INITIAL_STATUS);
-  const [settings, setSettings] = useState<ProcessingSettings>(INITIAL_SETTINGS);
   const [isProcessing, setIsProcessing] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -103,7 +90,7 @@ export default function HarmonyRestorer() {
         <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
       </div>
 
-      <div className="relative z-10 container mx-auto px-6 py-8 max-w-6xl">
+      <div className="relative z-10 container mx-auto px-6 py-8 max-w-2xl">
         {/* Header */}
         <header className="text-center mb-12">
           <div className="inline-flex items-center space-x-3 mb-6">
@@ -121,57 +108,50 @@ export default function HarmonyRestorer() {
           </p>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Main content */}
-          <div className="lg:col-span-2 space-y-6">
-            <UploadArea onFileSelect={handleFileSelect} isProcessing={isProcessing} currentFile={file} />
+        <div className="space-y-6">
+          <UploadArea onFileSelect={handleFileSelect} isProcessing={isProcessing} currentFile={file} />
 
-            {file && (
-              <div className="bg-white/5 backdrop-blur-xl rounded-3xl p-6 border border-white/20 shadow-lg">
-                <h3 className="text-lg font-semibold text-white/90 mb-4 flex items-center space-x-2">
-                  <BarChart3 className="w-5 h-5 text-blue-400" />
-                  <span>Waveform</span>
-                </h3>
-                <Waveform isActive={isProcessing} />
-              </div>
+          {file && (
+            <div className="bg-white/5 backdrop-blur-xl rounded-3xl p-6 border border-white/20 shadow-lg">
+              <h3 className="text-lg font-semibold text-white/90 mb-4 flex items-center space-x-2">
+                <BarChart3 className="w-5 h-5 text-blue-400" />
+                <span>Waveform</span>
+              </h3>
+              <Waveform isActive={isProcessing} />
+            </div>
+          )}
+
+          <ProgressCard status={status} />
+
+          {/* Controls */}
+          <div className="flex space-x-4">
+            <button
+              onClick={processAudio}
+              disabled={!file || isProcessing}
+              className="flex-1 bg-blue-500 hover:bg-blue-600 disabled:bg-white/10 disabled:text-white/30 text-white font-semibold py-4 px-6 rounded-2xl transition-all duration-300 flex items-center justify-center space-x-2 disabled:cursor-not-allowed shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40"
+            >
+              {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Brain className="w-5 h-5" />}
+              <span>{isProcessing ? 'Processing...' : 'Enhance Audio'}</span>
+            </button>
+
+            {status.downloadUrl && (
+              <a
+                href={status.downloadUrl}
+                download
+                className="bg-green-500 hover:bg-green-600 text-white font-semibold py-4 px-6 rounded-2xl transition-all duration-300 flex items-center space-x-2 shadow-lg shadow-green-500/30"
+              >
+                <Download className="w-5 h-5" />
+                <span>Download</span>
+              </a>
             )}
 
-            <ProgressCard status={status} />
-
-            {/* Controls */}
-            <div className="flex space-x-4">
-              <button
-                onClick={processAudio}
-                disabled={!file || isProcessing}
-                className="flex-1 bg-blue-500 hover:bg-blue-600 disabled:bg-white/10 disabled:text-white/30 text-white font-semibold py-4 px-6 rounded-2xl transition-all duration-300 flex items-center justify-center space-x-2 disabled:cursor-not-allowed shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40"
-              >
-                {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Brain className="w-5 h-5" />}
-                <span>{isProcessing ? 'Processing...' : 'Enhance Audio'}</span>
-              </button>
-
-              {status.downloadUrl && (
-                <a
-                  href={status.downloadUrl}
-                  download
-                  className="bg-green-500 hover:bg-green-600 text-white font-semibold py-4 px-6 rounded-2xl transition-all duration-300 flex items-center space-x-2 shadow-lg shadow-green-500/30"
-                >
-                  <Download className="w-5 h-5" />
-                  <span>Download</span>
-                </a>
-              )}
-
-              <button
-                onClick={handleReset}
-                className="bg-white/10 hover:bg-white/20 text-white/70 hover:text-white font-semibold py-4 px-4 rounded-2xl transition-all duration-300 border border-white/20"
-              >
-                <RotateCcw className="w-5 h-5" />
-              </button>
-            </div>
-          </div>
-
-          {/* Settings sidebar */}
-          <div>
-            <SettingsPanel settings={settings} onSettingsChange={setSettings} disabled={isProcessing} />
+            <button
+              onClick={handleReset}
+              aria-label="Reset"
+              className="bg-white/10 hover:bg-white/20 text-white/70 hover:text-white font-semibold py-4 px-4 rounded-2xl transition-all duration-300 border border-white/20"
+            >
+              <RotateCcw className="w-5 h-5" />
+            </button>
           </div>
         </div>
 

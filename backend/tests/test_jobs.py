@@ -1,6 +1,7 @@
 """Tests for JobManager business logic."""
 
 from datetime import datetime, timedelta
+from unittest.mock import MagicMock
 
 from app.schemas import JobStatus, JobStatusEnum
 from app.services.jobs import JobManager
@@ -100,3 +101,76 @@ def test_job_counts():
 def test_job_counts_empty():
     mgr = JobManager()
     assert mgr.job_counts == {}
+
+
+# --- process() error paths ---
+
+
+def test_process_sets_failed_on_denoiser_error(tmp_path):
+    """When the denoiser raises, job status should be FAILED."""
+    mgr = JobManager()
+    mock_denoiser = MagicMock()
+    mock_denoiser.denoise.side_effect = RuntimeError("model crashed")
+    mgr._denoiser = mock_denoiser
+
+    input_file = tmp_path / "input.wav"
+    input_file.write_bytes(b"fake audio")
+
+    mgr.create_job("fail-job")
+    mgr.process("fail-job", input_file)
+
+    job = mgr.get_job("fail-job")
+    assert job is not None
+    assert job.status == JobStatusEnum.FAILED
+    assert job.progress == -1
+
+
+def test_process_handles_vanished_job(tmp_path):
+    """If a job is removed before processing starts, process() exits cleanly."""
+    mgr = JobManager()
+    input_file = tmp_path / "input.wav"
+    input_file.write_bytes(b"fake audio")
+
+    mgr.create_job("vanish-job")
+    # Simulate cleanup removing the job before process runs
+    del mgr._jobs["vanish-job"]
+
+    # Should not raise
+    mgr.process("vanish-job", input_file)
+
+
+# --- download guard ---
+
+
+def test_cleanup_skips_downloading_jobs():
+    """Jobs marked as downloading should not be cleaned up."""
+    mgr = JobManager()
+    mgr._jobs["dl-job"] = JobStatus(
+        job_id="dl-job",
+        status=JobStatusEnum.COMPLETED,
+        progress=100,
+        message="done",
+        created_at=datetime.now() - timedelta(hours=2),
+        completed_at=datetime.now() - timedelta(hours=2),
+    )
+
+    mgr.mark_downloading("dl-job")
+    removed = mgr.cleanup_expired()
+
+    assert removed == 0
+    assert mgr.get_job("dl-job") is not None
+
+    mgr.unmark_downloading("dl-job")
+    removed = mgr.cleanup_expired()
+    assert removed == 1
+
+
+def test_mark_downloading_returns_false_for_missing_job():
+    mgr = JobManager()
+    assert mgr.mark_downloading("nonexistent") is False
+
+
+def test_unmark_downloading_is_idempotent():
+    mgr = JobManager()
+    # Should not raise even if job was never marked
+    mgr.unmark_downloading("nonexistent")

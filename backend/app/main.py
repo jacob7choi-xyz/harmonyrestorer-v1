@@ -1,8 +1,10 @@
 """HarmonyRestorer v1 — FastAPI application."""
 
 import asyncio
+import json
 import logging
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
 from app.config import settings
 from app.exceptions import unhandled_exception_handler
@@ -13,10 +15,37 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
-logging.basicConfig(
-    level=settings.log_level,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
+
+class JSONFormatter(logging.Formatter):
+    """Structured JSON log formatter for production environments."""
+
+    def format(self, record: logging.LogRecord) -> str:
+        log_entry = {
+            "timestamp": datetime.now(UTC).isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+        if record.exc_info and record.exc_info[1]:
+            log_entry["exception"] = self.formatException(record.exc_info)
+        return json.dumps(log_entry)
+
+
+def _configure_logging() -> None:
+    """Set up logging based on LOG_FORMAT setting."""
+    handler = logging.StreamHandler()
+    if settings.log_format == "json":
+        handler.setFormatter(JSONFormatter())
+    else:
+        handler.setFormatter(
+            logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+        )
+    logging.root.handlers.clear()
+    logging.root.addHandler(handler)
+    logging.root.setLevel(settings.log_level)
+
+
+_configure_logging()
 logger = logging.getLogger(__name__)
 
 

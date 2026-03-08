@@ -1,4 +1,4 @@
-"""Tests for security features: rate limiting, error sanitization."""
+"""Tests for security features: rate limiting, error sanitization, input validation."""
 
 from unittest.mock import patch
 
@@ -6,7 +6,7 @@ from app.config import settings
 from app.main import app
 from fastapi.testclient import TestClient
 
-SMALL_WAV = b"RIFF" + b"\x00" * 40
+SMALL_WAV = b"RIFF" + b"\x00" * 4 + b"WAVE" + b"\x00" * 32
 
 
 # --- Rate limiting ---
@@ -56,3 +56,41 @@ def test_unhandled_exception_returns_generic_error():
     # Ensure no stack trace or internal details leak
     assert "secret" not in str(body)
     assert "Traceback" not in str(body)
+
+
+# --- Magic byte validation ---
+
+
+def test_upload_rejects_mismatched_magic_bytes(client):
+    """A PDF disguised as .wav should be rejected."""
+    pdf_bytes = b"%PDF-1.4" + b"\x00" * 40
+    r = client.post(
+        "/api/v1/denoise",
+        files={"file": ("fake.wav", pdf_bytes, "audio/wav")},
+    )
+    assert r.status_code == 400
+    assert "does not match" in r.json()["detail"]
+
+
+def test_upload_rejects_empty_file(client):
+    """Empty files should be rejected (no magic bytes to validate)."""
+    r = client.post(
+        "/api/v1/denoise",
+        files={"file": ("empty.wav", b"", "audio/wav")},
+    )
+    assert r.status_code == 400
+
+
+def test_path_traversal_filename_uses_uuid(client, mock_denoiser):
+    """Path traversal in filename is neutralized by UUID-based storage."""
+    r = client.post(
+        "/api/v1/denoise",
+        files={"file": ("../../etc/passwd.wav", SMALL_WAV, "audio/wav")},
+    )
+    # Should succeed -- the malicious filename is ignored, UUID is used
+    assert r.status_code == 200
+    job_id = r.json()["job_id"]
+    # Verify the job_id is a valid UUID, not a path
+    import uuid
+
+    uuid.UUID(job_id)  # Raises if not valid UUID

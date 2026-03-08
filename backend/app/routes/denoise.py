@@ -1,9 +1,11 @@
 """Audio denoising endpoints."""
 
+import io
 import logging
 import uuid
 from pathlib import Path
 
+import soundfile as sf
 from app.config import settings
 from app.schemas import DenoiseUploadResponse, JobStatus, JobStatusEnum
 from app.services.jobs import job_manager
@@ -16,6 +18,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["denoise"])
 
 _MAX_MB = settings.max_upload_bytes / (1024 * 1024)
+_MAX_DURATION_MIN = settings.max_audio_duration_seconds / 60
+
+# Formats where soundfile can read duration from raw bytes
+_SOUNDFILE_FORMATS = {".wav", ".flac", ".ogg"}
 
 # Magic byte signatures for supported audio formats
 _MAGIC_BYTES: dict[str, list[tuple[int, bytes]]] = {
@@ -87,6 +93,20 @@ async def denoise_audio(
             status_code=400,
             detail=f"File content does not match {file_ext} format",
         )
+
+    # Validate audio duration for formats soundfile can parse
+    if file_ext in _SOUNDFILE_FORMATS:
+        try:
+            info = sf.info(io.BytesIO(content))
+            if info.duration > settings.max_audio_duration_seconds:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Audio too long ({info.duration:.0f}s). Max {_MAX_DURATION_MIN:.0f} minutes.",
+                )
+        except HTTPException:
+            raise
+        except Exception:
+            logger.warning("Could not read audio duration for %s file, skipping check", file_ext)
 
     job_id = str(uuid.uuid4())
     input_path = settings.upload_dir / f"{job_id}{file_ext}"

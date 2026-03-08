@@ -3,6 +3,8 @@ import { Upload, FileAudio } from 'lucide-react';
 
 const MAX_FILE_SIZE_MB = 50;
 const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
+const MAX_DURATION_MINUTES = 10;
+const MAX_DURATION_SECONDS = MAX_DURATION_MINUTES * 60;
 
 interface UploadAreaProps {
   onFileSelect: (file: File) => void;
@@ -15,7 +17,33 @@ export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAr
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const validateAndSelect = (file: File): void => {
+  const checkDuration = (file: File): Promise<boolean> => {
+    return new Promise((resolve) => {
+      const audio = new Audio();
+      const url = URL.createObjectURL(file);
+      audio.src = url;
+
+      audio.addEventListener('loadedmetadata', () => {
+        URL.revokeObjectURL(url);
+        if (audio.duration > MAX_DURATION_SECONDS) {
+          setError(
+            `Audio too long (${Math.ceil(audio.duration / 60)} min). Max ${MAX_DURATION_MINUTES} minutes.`
+          );
+          resolve(false);
+        } else {
+          resolve(true);
+        }
+      });
+
+      audio.addEventListener('error', () => {
+        URL.revokeObjectURL(url);
+        // Can't read duration -- let the backend validate
+        resolve(true);
+      });
+    });
+  };
+
+  const validateAndSelect = async (file: File): Promise<void> => {
     setError(null);
     if (!file.type.startsWith('audio/')) {
       setError('Please select an audio file (WAV, MP3, FLAC, OGG, M4A, AAC)');
@@ -25,6 +53,8 @@ export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAr
       setError(`File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Max ${MAX_FILE_SIZE_MB} MB.`);
       return;
     }
+    const durationOk = await checkDuration(file);
+    if (!durationOk) return;
     onFileSelect(file);
   };
 
@@ -60,8 +90,18 @@ export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAr
     }
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      handleClick();
+    }
+  };
+
   return (
     <div
+      role="button"
+      tabIndex={0}
+      aria-label={currentFile ? `Selected: ${currentFile.name}. Press to change file.` : 'Upload audio file'}
       className={`relative rounded-3xl p-8 text-center transition-all duration-300 cursor-pointer border border-white/20
         ${isDragging
           ? 'bg-blue-500/10 border-blue-400/40 scale-[1.02] shadow-2xl shadow-blue-500/20'
@@ -72,6 +112,7 @@ export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAr
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
       onClick={handleClick}
+      onKeyDown={handleKeyDown}
     >
       <input
         ref={fileInputRef}

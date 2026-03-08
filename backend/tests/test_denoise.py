@@ -132,3 +132,21 @@ def test_download_not_completed(client):
 def test_download_invalid_uuid(client):
     r = client.get("/api/v1/download/not-a-valid-uuid")
     assert r.status_code == 400
+
+
+def test_download_after_job_cleanup(client, mock_denoiser):
+    """Download should return 404 after the job has been cleaned up."""
+    from app.services.jobs import job_manager
+
+    r = client.post(
+        "/api/v1/denoise",
+        files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
+    )
+    job_id = r.json()["job_id"]
+
+    # Simulate cleanup removing the job
+    with job_manager._lock:
+        del job_manager._jobs[job_id]
+
+    r = client.get(f"/api/v1/download/{job_id}")
+    assert r.status_code == 404
