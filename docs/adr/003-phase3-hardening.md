@@ -1,4 +1,4 @@
-# ADR-004: Phase 3 Hardening -- Duration, Accessibility, Tests, Logging
+# ADR-003: Phase 3 Hardening -- Duration, Accessibility, Tests, Logging
 
 **Date:** 2026-03-07
 
@@ -10,7 +10,7 @@
 
 After Phase 1 (critical security fixes) and Phase 2 (quality hardening), the remaining audit findings fell into six categories:
 
-1. **Unenforced rule**: CLAUDE.md documents a 10-minute max audio duration, but no code checked it -- backend or frontend.
+1. **Unenforced rule**: Project docs specify a 10-minute max audio duration, but no code checked it -- backend or frontend.
 2. **Accessibility gap**: The upload area used `<div onClick>` with no keyboard support, failing WCAG compliance.
 3. **UI deception**: The SettingsPanel exposed 8 controls (noise reduction, reverb removal, voice isolation, etc.) that were never sent to the backend. UVR runs with zero configurable parameters.
 4. **Test blind spots**: 30 tests covered happy paths but missed error handling in `process()`, download guard lifecycle, magic byte rejection, path traversal defense, and cleanup race conditions.
@@ -80,7 +80,7 @@ Added IP allowlist to `/health` location block:
 ## Consequences
 
 ### Positive
-- All CLAUDE.md security rules now have code enforcing them
+- All documented security rules now have code enforcing them
 - Upload area is keyboard-navigable (WCAG 2.1 compliant)
 - UI no longer lies about capabilities
 - Test suite covers error paths, security edge cases, and download guard lifecycle
