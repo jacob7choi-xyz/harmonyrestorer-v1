@@ -24,7 +24,9 @@ import numpy as np
 import soundfile as sf
 import torch
 
-from backend.app._archive.op_gan import OpGANGenerator
+# Import OpGAN components from archive
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
+from app._archive.op_gan import OpGANGenerator  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -97,6 +99,9 @@ def _chunk_audio(audio: np.ndarray) -> list[tuple[int, np.ndarray]]:
 def _overlap_add(chunks: list[tuple[int, np.ndarray]], original_length: int) -> np.ndarray:
     """Reassemble processed chunks using overlap-add with linear crossfade.
 
+    Only interior overlap regions get crossfaded. The first chunk keeps
+    its original start, and the last chunk keeps its original end.
+
     Args:
         chunks: List of (start_index, processed_frame) tuples.
         original_length: Length of the original audio to trim to.
@@ -104,19 +109,28 @@ def _overlap_add(chunks: list[tuple[int, np.ndarray]], original_length: int) -> 
     Returns:
         Reconstructed audio as 1D float32 array.
     """
+    if len(chunks) == 1:
+        start, frame = chunks[0]
+        return frame[:original_length].copy()
+
     output = np.zeros(original_length, dtype=np.float32)
     weights = np.zeros(original_length, dtype=np.float32)
+    last_idx = len(chunks) - 1
 
-    for start, frame in chunks:
+    for i, (start, frame) in enumerate(chunks):
         end = min(start + len(frame), original_length)
         length = end - start
 
-        # Linear ramp window for crossfade
         window = np.ones(length, dtype=np.float32)
         if _OVERLAP > 0:
             fade_len = min(_OVERLAP, length)
-            window[:fade_len] *= np.linspace(0, 1, fade_len, dtype=np.float32)
-            window[-fade_len:] *= np.linspace(1, 0, fade_len, dtype=np.float32)
+            # First chunk: no fade-in, only fade-out
+            # Last chunk: only fade-in, no fade-out
+            # Middle chunks: both fade-in and fade-out
+            if i > 0:
+                window[:fade_len] *= np.linspace(0, 1, fade_len, dtype=np.float32)
+            if i < last_idx:
+                window[-fade_len:] *= np.linspace(1, 0, fade_len, dtype=np.float32)
 
         output[start:end] += frame[:length] * window
         weights[start:end] += window
@@ -179,6 +193,10 @@ def restore_file(
     audio, sr = sf.read(input_path, dtype="float32")
     if sr != _EXPECTED_SR:
         raise ValueError(f"Expected {_EXPECTED_SR}Hz, got {sr}Hz: {input_path}")
+
+    # Convert stereo to mono by averaging channels
+    if audio.ndim == 2:
+        audio = audio.mean(axis=1)
 
     start = time.monotonic()
     restored = restore_audio(generator, audio, device)

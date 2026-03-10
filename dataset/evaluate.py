@@ -100,6 +100,12 @@ def evaluate_pair(
     if sr_restored != _EXPECTED_SR:
         raise ValueError(f"Restored file not {_EXPECTED_SR}Hz: {restored_path} ({sr_restored}Hz)")
 
+    # Convert stereo to mono if needed
+    if clean.ndim == 2:
+        clean = clean.mean(axis=1)
+    if restored.ndim == 2:
+        restored = restored.mean(axis=1)
+
     # Trim to equal length
     min_len = min(len(clean), len(restored))
     clean = clean[:min_len]
