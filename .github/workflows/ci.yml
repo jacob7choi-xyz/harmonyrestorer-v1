@@ -28,7 +28,9 @@ jobs:
         run: pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
 
       - name: Install project dependencies
-        run: pip install ".[dev]"
+        run: |
+          pip install ".[dev]"
+          pip install "filelock>=3.20.3"
 
       - name: Format check (black)
         run: black --check backend/app/ backend/tests/
