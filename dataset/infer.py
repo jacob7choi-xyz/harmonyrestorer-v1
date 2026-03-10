@@ -72,6 +72,8 @@ def _chunk_audio(audio: np.ndarray) -> list[tuple[int, np.ndarray]]:
         List of (start_index, frame) tuples.
     """
     total = len(audio)
+    if total == 0:
+        raise ValueError("Audio is empty (zero samples)")
 
     if total <= _FRAME_LEN:
         padded = np.zeros(_FRAME_LEN, dtype=np.float32)
@@ -282,11 +284,17 @@ def main() -> None:
             sys.exit(1)
 
         logger.info("Processing %d files from %s", len(wav_files), args.input_dir)
+        failed = 0
         for wav_file in wav_files:
             output_path = args.output_dir / wav_file.name
-            restore_file(generator, wav_file, output_path, device)
+            try:
+                restore_file(generator, wav_file, output_path, device)
+            except Exception as e:
+                logger.error("Failed to restore %s: %s", wav_file.name, e)
+                failed += 1
 
-        logger.info("Done. Restored %d files to %s", len(wav_files), args.output_dir)
+        succeeded = len(wav_files) - failed
+        logger.info("Done. Restored %d/%d files to %s", succeeded, len(wav_files), args.output_dir)
 
 
 if __name__ == "__main__":

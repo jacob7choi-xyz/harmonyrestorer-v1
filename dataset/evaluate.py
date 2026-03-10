@@ -106,8 +106,16 @@ def evaluate_pair(
     if restored.ndim == 2:
         restored = restored.mean(axis=1)
 
-    # Trim to equal length
+    # Trim to equal length, warn if mismatch is significant
     min_len = min(len(clean), len(restored))
+    max_len = max(len(clean), len(restored))
+    if max_len > 0 and (max_len - min_len) / max_len > 0.01:
+        logger.warning(
+            "Length mismatch: clean=%d, restored=%d (%.1f%% diff)",
+            len(clean),
+            len(restored),
+            (max_len - min_len) / max_len * 100,
+        )
     clean = clean[:min_len]
     restored = restored[:min_len]
 
@@ -140,6 +148,13 @@ def evaluate_directory(
     Returns:
         Dict with 'per_file' results and 'summary' statistics.
     """
+    if not restored_dir.is_dir():
+        logger.error("Restored directory does not exist: %s", restored_dir)
+        sys.exit(1)
+    if not clean_dir.is_dir():
+        logger.error("Clean directory does not exist: %s", clean_dir)
+        sys.exit(1)
+
     restored_files = sorted(restored_dir.glob("*.wav"))
     if not restored_files:
         logger.error("No WAV files in %s", restored_dir)
