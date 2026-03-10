@@ -111,6 +111,12 @@ def evaluate_pair(
     clean = clean[:min_len]
     restored = restored[:min_len]
 
+    # Guard against silent/corrupt files that would cause division by zero
+    if np.max(np.abs(clean)) < 1e-10:
+        raise ValueError(f"Clean file is silent: {clean_path}")
+    if np.max(np.abs(restored)) < 1e-10:
+        raise ValueError(f"Restored file is silent: {restored_path}")
+
     return {
         "sdr": compute_sdr(clean, restored),
         "pesq": compute_pesq(clean, restored, _EXPECTED_SR),

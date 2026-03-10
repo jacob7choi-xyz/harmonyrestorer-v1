@@ -86,9 +86,12 @@ def _chunk_audio(audio: np.ndarray) -> list[tuple[int, np.ndarray]]:
         if end <= total:
             chunks.append((start, audio[start:end]))
         else:
-            # Pad the final chunk
-            padded = np.zeros(_FRAME_LEN, dtype=np.float32)
             remaining = total - start
+            if remaining <= _OVERLAP and chunks:
+                # Tail is too short to justify a new chunk -- skip it,
+                # the previous chunk's overlap already covers this region
+                break
+            padded = np.zeros(_FRAME_LEN, dtype=np.float32)
             padded[:remaining] = audio[start:]
             chunks.append((start, padded))
             break
@@ -168,7 +171,7 @@ def restore_audio(
     for start, frame in chunks:
         tensor = torch.from_numpy(frame).unsqueeze(0).unsqueeze(0).to(device)
         restored = generator(tensor)
-        processed.append((start, restored.squeeze().cpu().numpy()))
+        processed.append((start, restored.squeeze(0).squeeze(0).cpu().numpy()))
 
     return _overlap_add(processed, original_length)
 
