@@ -33,6 +33,12 @@ dataset = [
     "scipy~=1.10.0",
     "torch~=2.0.0",
 ]
+eval = [
+    # Benchmarking metrics for audio restoration quality
+    "mir_eval~=0.7.0",
+    "pesq~=0.0.4",
+    "pystoi~=0.4.0",
+]
 dev = [
     # Testing
     "pytest~=9.0.0",
@@ -55,6 +61,7 @@ dev = [
 all = [
     "harmonyrestorer[dev]",
     "harmonyrestorer[dataset]",
+    "harmonyrestorer[eval]",
 ]
 
 [project.urls]
