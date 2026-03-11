@@ -116,7 +116,7 @@ The `_archive/` folder contains a from-scratch implementation of **1D Operationa
 
 ### Benchmark Results
 
-Trained 100 epochs on Tesla T4 (~51 hours, ~$41 GCP). Evaluated on 131,027 noisy/clean pairs:
+Trained 100 epochs on Tesla T4 (~51 hours, ~$41 GCP). Model operates at 16kHz mono. Evaluated on 131,027 noisy/clean pairs:
 
 | Metric   | Mean  | Median |
 |----------|-------|--------|

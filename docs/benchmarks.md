@@ -2,7 +2,7 @@
 
 ## OpGAN v1 (2026-03-11)
 
-Training: 100 epochs, ~51 hours on Tesla T4, ~$41 total GCP cost (training + inference + eval).
+Training: 100 epochs, ~51 hours on Tesla T4, ~$41 total GCP cost (training + inference + eval). Model operates at 16kHz mono. Input at other sample rates is resampled automatically; output is always 16kHz.
 
 | Metric   | Mean  | Std  | Median |
 |----------|-------|------|--------|
