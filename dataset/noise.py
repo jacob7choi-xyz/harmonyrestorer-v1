@@ -149,7 +149,7 @@ def mains_hum(
     hum = np.zeros(length, dtype=np.float32)
 
     for h in range(1, n_harmonics + 1):
-        # Each harmonic is 6 dB quieter than the previous
+        # Amplitude falls off as 1/h^1.5 (steeper than 1/f)
         amplitude = 1.0 / (h**1.5)
         phase = rng.uniform(0, 2 * np.pi)
         hum += amplitude * np.sin(2 * np.pi * freq * h * t + phase)

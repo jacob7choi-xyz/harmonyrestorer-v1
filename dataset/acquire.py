@@ -318,7 +318,11 @@ def acquire_from_manifest(
             continue
 
         url = entry["url"]
-        filename = entry.get("filename", Path(url).name)
+        raw_filename = entry.get("filename", Path(url).name)
+
+        # Sanitize filename to prevent path traversal
+        filename = raw_filename.replace("/", "_").replace("\\", "_")
+        filename = Path(filename).name  # strip any remaining directory components
 
         # Apply format filter
         if formats and Path(filename).suffix.lower() not in formats:
@@ -328,7 +332,10 @@ def acquire_from_manifest(
         if any(kw in filename.lower() for kw in exclude_lower):
             continue
 
-        output_path = output_dir / filename
+        output_path = (output_dir / filename).resolve()
+        if not output_path.is_relative_to(output_dir.resolve()):
+            logger.warning("Path traversal blocked: %s", raw_filename)
+            continue
 
         if output_path.exists():
             logger.debug("Skipping (exists): %s", filename)
@@ -337,7 +344,8 @@ def acquire_from_manifest(
 
         try:
             logger.info("Downloading: %s", filename)
-            urllib.request.urlretrieve(url, output_path)
+            with urllib.request.urlopen(url, timeout=120) as resp:
+                output_path.write_bytes(resp.read())
             downloaded += 1
         except (urllib.error.URLError, OSError) as e:
             logger.error("Download failed: %s -- %s", url, e)

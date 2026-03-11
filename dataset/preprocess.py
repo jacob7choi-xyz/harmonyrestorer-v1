@@ -15,9 +15,9 @@ import argparse
 import logging
 from pathlib import Path
 
+import librosa
 import numpy as np
 import soundfile as sf
-from scipy.signal import resample as scipy_resample
 
 logger = logging.getLogger(__name__)
 
@@ -52,10 +52,9 @@ def load_and_resample(
     else:
         audio = audio[:, 0]
 
-    # Resample with anti-aliased Fourier method (avoids aliasing from linear interp)
+    # Resample with librosa (polyphase Kaiser-windowed sinc filter)
     if sr != target_sr:
-        target_len = int(len(audio) * target_sr / sr)
-        audio = scipy_resample(audio, target_len).astype(np.float32)
+        audio = librosa.resample(audio, orig_sr=sr, target_sr=target_sr).astype(np.float32)
         sr = target_sr
 
     return audio, sr
@@ -154,12 +153,12 @@ def preprocess_directory(
         frames = slice_frames(audio, frame_len, hop_len)
 
         if not frames:
-            logger.info(
-                "Skipping %s: too short for frame_len=%d (%.1fs audio)",
-                file_path.name,
-                frame_len,
-                len(audio) / sr,
-            )
+            duration = len(audio) / sr
+            if len(audio) < frame_len:
+                reason = f"too short for frame_len={frame_len} ({duration:.1f}s audio)"
+            else:
+                reason = f"all frames below silence threshold ({duration:.1f}s audio)"
+            logger.info("Skipping %s: %s", file_path.name, reason)
             continue
 
         # Save each frame as a separate .wav file

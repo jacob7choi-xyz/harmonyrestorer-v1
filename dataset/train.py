@@ -70,20 +70,21 @@ def _save_checkpoint(
     optimizer_d: torch.optim.Optimizer,
     epoch: int,
     best_val_loss: float,
+    scaler: torch.amp.GradScaler | None = None,
 ) -> None:
     """Save training checkpoint."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save(
-        {
-            "epoch": epoch,
-            "generator_state_dict": generator.state_dict(),
-            "discriminator_state_dict": discriminator.state_dict(),
-            "optimizer_g_state_dict": optimizer_g.state_dict(),
-            "optimizer_d_state_dict": optimizer_d.state_dict(),
-            "best_val_loss": best_val_loss,
-        },
-        path,
-    )
+    data: dict = {
+        "epoch": epoch,
+        "generator_state_dict": generator.state_dict(),
+        "discriminator_state_dict": discriminator.state_dict(),
+        "optimizer_g_state_dict": optimizer_g.state_dict(),
+        "optimizer_d_state_dict": optimizer_d.state_dict(),
+        "best_val_loss": best_val_loss,
+    }
+    if scaler is not None:
+        data["scaler_state_dict"] = scaler.state_dict()
+    torch.save(data, path)
     logger.info("Saved checkpoint: %s (epoch %d)", path, epoch)
 
 
@@ -94,6 +95,7 @@ def _load_checkpoint(
     optimizer_g: torch.optim.Optimizer,
     optimizer_d: torch.optim.Optimizer,
     device: torch.device,
+    scaler: torch.amp.GradScaler | None = None,
 ) -> tuple[int, float]:
     """Load training checkpoint.
 
@@ -105,6 +107,8 @@ def _load_checkpoint(
     discriminator.load_state_dict(checkpoint["discriminator_state_dict"])
     optimizer_g.load_state_dict(checkpoint["optimizer_g_state_dict"])
     optimizer_d.load_state_dict(checkpoint["optimizer_d_state_dict"])
+    if scaler is not None and "scaler_state_dict" in checkpoint:
+        scaler.load_state_dict(checkpoint["scaler_state_dict"])
     epoch = checkpoint["epoch"]
     best_val_loss = checkpoint["best_val_loss"]
     logger.info("Resumed from checkpoint: %s (epoch %d, best_val=%.4f)", path, epoch, best_val_loss)
@@ -223,8 +227,7 @@ def validate(
         disc_fake = discriminator(generated)
         d_loss = criterion.discriminator_loss(disc_real, disc_fake)
 
-        disc_for_gen = discriminator(generated)
-        _, breakdown = criterion.generator_loss(disc_for_gen, generated, clean)
+        _, breakdown = criterion.generator_loss(disc_fake, generated, clean)
 
         totals["g_total"] += breakdown["total"]
         totals["g_adv"] += breakdown["adversarial"]
@@ -317,6 +320,12 @@ def train(
     optimizer_g = torch.optim.AdamW(generator.parameters(), lr=lr_gen, betas=(0.5, 0.999))
     optimizer_d = torch.optim.AdamW(discriminator.parameters(), lr=lr_disc, betas=(0.5, 0.999))
 
+    # Mixed precision: only on CUDA (MPS doesn't support float16 autocast)
+    use_amp = device.type == "cuda"
+    scaler = torch.amp.GradScaler("cuda") if use_amp else None
+    if use_amp:
+        logger.info("CUDA AMP enabled (float16 mixed precision)")
+
     # --- Resume ---
     start_epoch = 0
     best_val_loss = float("inf")
@@ -328,17 +337,12 @@ def train(
             optimizer_g,
             optimizer_d,
             device,
+            scaler=scaler,
         )
 
     # --- Training ---
     grad_monitor = GradientHealthMonitor(max_grad_norm=_MAX_GRAD_NORM, log_frequency=100)
     checkpoint_dir.mkdir(parents=True, exist_ok=True)
-
-    # Mixed precision: only on CUDA (MPS doesn't support float16 autocast)
-    use_amp = device.type == "cuda"
-    scaler = torch.amp.GradScaler("cuda") if use_amp else None
-    if use_amp:
-        logger.info("CUDA AMP enabled (float16 mixed precision)")
 
     # Save training config for reproducibility
     config = {
@@ -362,7 +366,7 @@ def train(
     logger.info("Starting training for %d epochs (from epoch %d)", epochs, start_epoch)
 
     for epoch in range(start_epoch, epochs):
-        epoch_start = time.time()
+        epoch_start = time.monotonic()
 
         train_losses = train_epoch(
             generator,
@@ -384,7 +388,7 @@ def train(
             device,
         )
 
-        epoch_time = time.time() - epoch_start
+        epoch_time = time.monotonic() - epoch_start
 
         # Log progress
         if (epoch + 1) % log_interval == 0 or epoch == start_epoch:
@@ -415,6 +419,7 @@ def train(
                 optimizer_d,
                 epoch + 1,
                 best_val_loss,
+                scaler=scaler,
             )
 
         # Periodic checkpoint every 10 epochs
@@ -427,6 +432,7 @@ def train(
                 optimizer_d,
                 epoch + 1,
                 best_val_loss,
+                scaler=scaler,
             )
 
     # Final save
@@ -438,6 +444,7 @@ def train(
         optimizer_d,
         epochs,
         best_val_loss,
+        scaler=scaler,
     )
 
     # Log gradient stats

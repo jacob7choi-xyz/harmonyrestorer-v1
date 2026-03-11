@@ -16,14 +16,16 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
+import tempfile
 import time
 from pathlib import Path
 
+import librosa
 import numpy as np
 import soundfile as sf
 import torch
-import librosa
 
 # Import OpGAN components from archive
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
@@ -202,20 +204,28 @@ def restore_file(
         ValueError: If sample rate doesn't match expected 16kHz.
     """
     audio, sr = sf.read(input_path, dtype="float32")
+
+    # Convert stereo to mono before resampling (half the work)
+    if audio.ndim == 2:
+        audio = audio.mean(axis=1)
+
     if sr != _EXPECTED_SR:
         logger.info("Resampling from %dHz to %dHz", sr, _EXPECTED_SR)
         audio = librosa.resample(audio, orig_sr=sr, target_sr=_EXPECTED_SR)
-
-    # Convert stereo to mono by averaging channels
-    if audio.ndim == 2:
-        audio = audio.mean(axis=1)
 
     start = time.monotonic()
     restored = restore_audio(generator, audio, device)
     elapsed = time.monotonic() - start
 
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-    sf.write(output_path, restored, _EXPECTED_SR)
+    # Write to temp file then atomic rename to avoid corrupt files on crash
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".wav", dir=output_path.parent)
+    os.close(tmp_fd)
+    try:
+        sf.write(tmp_path, restored, _EXPECTED_SR)
+        Path(tmp_path).rename(output_path)
+    except BaseException:
+        Path(tmp_path).unlink(missing_ok=True)
+        raise
 
     duration = len(audio) / _EXPECTED_SR
     logger.info(
@@ -283,6 +293,7 @@ def main() -> None:
     generator = _load_generator(args.checkpoint, device)
 
     if single_mode:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
         restore_file(generator, args.input, args.output, device)
     else:
         wav_files = sorted(args.input_dir.glob("*.wav"))
@@ -290,9 +301,18 @@ def main() -> None:
             logger.error("No WAV files found in %s", args.input_dir)
             sys.exit(1)
 
-        logger.info("Processing %d files from %s", len(wav_files), args.input_dir)
+        args.output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Skip files that already exist (allows resuming interrupted runs)
+        existing_names = {p.name for p in args.output_dir.glob("*.wav")}
+        remaining = [f for f in wav_files if f.name not in existing_names]
+        skipped = len(wav_files) - len(remaining)
+        if skipped:
+            logger.info("Skipping %d already-processed files", skipped)
+
+        logger.info("Processing %d files from %s", len(remaining), args.input_dir)
         failed = 0
-        for wav_file in wav_files:
+        for i, wav_file in enumerate(remaining):
             output_path = args.output_dir / wav_file.name
             try:
                 restore_file(generator, wav_file, output_path, device)
@@ -300,8 +320,17 @@ def main() -> None:
                 logger.error("Failed to restore %s: %s", wav_file.name, e)
                 failed += 1
 
-        succeeded = len(wav_files) - failed
-        logger.info("Done. Restored %d/%d files to %s", succeeded, len(wav_files), args.output_dir)
+            if (i + 1) % 1000 == 0:
+                logger.info("Progress: %d/%d files", i + 1, len(remaining))
+
+        succeeded = len(remaining) - failed
+        logger.info(
+            "Done. Restored %d/%d files to %s (skipped %d existing)",
+            succeeded,
+            len(remaining),
+            args.output_dir,
+            skipped,
+        )
 
 
 if __name__ == "__main__":

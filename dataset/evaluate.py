@@ -173,7 +173,8 @@ def evaluate_directory(
     for restored_path in restored_files:
         # Match variant to clean: "frame__v00" -> "frame"
         stem = restored_path.stem
-        clean_stem = stem.split("__v")[0] if "__v" in stem else stem
+        sep_idx = stem.rfind("__v")
+        clean_stem = stem[:sep_idx] if sep_idx != -1 else stem
 
         clean_path = clean_stems.get(clean_stem)
         if clean_path is None:

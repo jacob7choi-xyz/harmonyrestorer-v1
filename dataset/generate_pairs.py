@@ -11,13 +11,14 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import logging
 from pathlib import Path
 
 import soundfile as sf
 
-from dataset.noise import DegradationParams, random_degradation
+from dataset.noise import random_degradation
 
 logger = logging.getLogger(__name__)
 
@@ -36,8 +37,8 @@ def generate_pairs(
     analog degradation. Saves pairs as:
         output_dir/
             clean/frame_name.wav
-            noisy/frame_name__v0.wav
-            noisy/frame_name__v1.wav
+            noisy/frame_name__v00.wav
+            noisy/frame_name__v01.wav
             ...
             metadata/frame_name__v0.json  (degradation params)
 
@@ -121,7 +122,7 @@ def generate_pairs(
                 "clean_frame": clean_path.name,
                 "variant": v,
                 "seed": variant_seed,
-                "params": _params_to_dict(params),
+                "params": dataclasses.asdict(params),
             }
             try:
                 with open(meta_path, "w") as f:
@@ -136,25 +137,6 @@ def generate_pairs(
 
     logger.info("Done: %d total pairs in %s", total_pairs, output_dir)
     return total_pairs
-
-
-def _params_to_dict(params: DegradationParams) -> dict:
-    """Convert DegradationParams to a JSON-serializable dict."""
-    return {
-        "hiss_snr_db": params.hiss_snr_db,
-        "hiss_color": params.hiss_color,
-        "crackle_density": params.crackle_density,
-        "crackle_amplitude": params.crackle_amplitude,
-        "hum_amplitude": params.hum_amplitude,
-        "hum_freq": params.hum_freq,
-        "rolloff_hz": params.rolloff_hz,
-        "saturation_drive": params.saturation_drive,
-        "enable_hiss": params.enable_hiss,
-        "enable_crackle": params.enable_crackle,
-        "enable_hum": params.enable_hum,
-        "enable_rolloff": params.enable_rolloff,
-        "enable_saturation": params.enable_saturation,
-    }
 
 
 def main() -> None:
