@@ -20,6 +20,11 @@ import sys
 from pathlib import Path
 
 import numpy as np
+
+# mir_eval uses np.Inf removed in NumPy 2.0
+if not hasattr(np, "Inf"):
+    np.Inf = np.inf  # type: ignore[attr-defined]
+
 import soundfile as sf
 from mir_eval.separation import bss_eval_sources
 from pesq import pesq
