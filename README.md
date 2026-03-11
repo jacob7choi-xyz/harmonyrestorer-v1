@@ -112,7 +112,19 @@ Current dataset: 145 tracks from 14 composers, 29,240 clean frames, 146,200 trai
 
 ## OpGAN
 
-The `_archive/` folder contains a from-scratch implementation of **1D Operational GANs** based on [Kiranyaz et al. 2022](https://arxiv.org/abs/2212.14618). Training script at `dataset/train.py` supports CUDA mixed precision, checkpoint resume, and gradient health monitoring. The production API currently uses pretrained UVR models.
+The `_archive/` folder contains a from-scratch implementation of **1D Operational GANs** based on [Kiranyaz et al. 2022](https://arxiv.org/abs/2212.14618). Training script at `dataset/train.py` supports CUDA mixed precision, checkpoint resume, and gradient health monitoring.
+
+### Benchmark Results
+
+Trained 100 epochs on Tesla T4 (~51 hours, ~$41 GCP). Evaluated on 131,027 noisy/clean pairs:
+
+| Metric   | Mean  | Median |
+|----------|-------|--------|
+| SDR (dB) | 23.74 | 23.85  |
+| PESQ     | 4.04  | 4.28   |
+| STOI     | 0.960 | 0.989  |
+
+See [docs/benchmarks.md](docs/benchmarks.md) for details. The production API currently uses pretrained UVR models pending head-to-head comparison.
 
 ## Roadmap
 
@@ -121,8 +133,9 @@ The `_archive/` folder contains a from-scratch implementation of **1D Operationa
 - [x] React frontend with real API integration
 - [x] Docker + CI/CD
 - [x] Build/acquire paired training dataset (146,200 pairs from 14 composers)
-- [ ] Train OpGAN
-- [ ] Benchmark OpGAN vs UVR (SDR, PESQ, STOI)
+- [x] Train OpGAN (100 epochs on T4)
+- [x] Benchmark OpGAN (SDR 23.74 dB, PESQ 4.04, STOI 0.960)
+- [ ] Benchmark UVR on same dataset for head-to-head comparison
 - [ ] Swap in OpGAN if it outperforms UVR
 
 ## License

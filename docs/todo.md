@@ -8,12 +8,13 @@
 - [ ] Skim HiFi-GAN loss design -- multi-scale discriminator + feature matching loss if our audio quality needs sharpening
 - [ ] Skim Noise2Noise -- technique for training on real historical recordings without clean references
 
-## After Training
+## After Benchmark (see docs/benchmarks.md for results)
 
-- [ ] Benchmark OpGAN vs UVR (SDR, PESQ, STOI) on test set
+- [ ] Benchmark UVR on same dataset for head-to-head comparison
 - [ ] Listen to restored samples side-by-side (OpGAN vs UVR vs noisy original)
 - [ ] If OpGAN wins: swap it into the production backend
 - [ ] If OpGAN loses: review Kiranyaz hyperparameters, consider longer training or loss function changes
+- [ ] Test on out-of-distribution audio (live recordings, different genres, real-world noise)
 
 ## Future Enhancements
 
