@@ -54,7 +54,12 @@ def _load_generator(checkpoint_path: Path, device: torch.device) -> OpGANGenerat
 
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=True)
     generator = OpGANGenerator()
-    generator.load_state_dict(checkpoint["generator_state_dict"])
+    state_dict = {
+        k: v
+        for k, v in checkpoint["generator_state_dict"].items()
+        if not k.endswith("_operator_weights_cache")
+    }
+    generator.load_state_dict(state_dict)
     generator.to(device)
     generator.eval()
 
