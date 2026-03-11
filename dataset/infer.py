@@ -23,7 +23,7 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 import torch
-from scipy.signal import resample
+import librosa
 
 # Import OpGAN components from archive
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
@@ -204,8 +204,7 @@ def restore_file(
     audio, sr = sf.read(input_path, dtype="float32")
     if sr != _EXPECTED_SR:
         logger.info("Resampling from %dHz to %dHz", sr, _EXPECTED_SR)
-        num_samples = int(len(audio) * _EXPECTED_SR / sr)
-        audio = resample(audio, num_samples).astype(np.float32)
+        audio = librosa.resample(audio, orig_sr=sr, target_sr=_EXPECTED_SR)
 
     # Convert stereo to mono by averaging channels
     if audio.ndim == 2:
