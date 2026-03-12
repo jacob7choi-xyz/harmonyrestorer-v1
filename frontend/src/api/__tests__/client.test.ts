@@ -48,6 +48,17 @@ describe('uploadAudio', () => {
     await expect(uploadAudio(file)).rejects.toThrow('Upload failed')
   })
 
+  it('falls back to status code when detail field is missing', async () => {
+    global.fetch = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 422,
+      json: () => Promise.resolve({}),
+    })
+
+    const file = new File(['data'], 'test.wav', { type: 'audio/wav' })
+    await expect(uploadAudio(file)).rejects.toThrow('Upload failed (422)')
+  })
+
   it('passes AbortSignal to fetch', async () => {
     const mockResponse = { job_id: 'abc', status: 'queued', message: 'ok' }
     mockFetchResponse(mockResponse)
@@ -91,6 +102,15 @@ describe('getJobStatus', () => {
   it('throws on non-ok response', async () => {
     mockFetchResponse({ detail: 'Not found' }, false, 404)
     await expect(getJobStatus('bad-id')).rejects.toThrow('Not found')
+  })
+
+  it('falls back to status code when detail field is missing', async () => {
+    global.fetch = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      status: 502,
+      json: () => Promise.resolve({}),
+    })
+    await expect(getJobStatus('abc')).rejects.toThrow('Status check failed (502)')
   })
 
   it('passes AbortSignal to fetch', async () => {
@@ -280,7 +300,7 @@ describe('pollUntilDone', () => {
     expect((error as DOMException).name).toBe('AbortError')
   })
 
-  it('rejects when onUpdate callback throws', async () => {
+  it('rejects when onUpdate callback throws on completed', async () => {
     const completedStatus = {
       job_id: 'abc',
       status: 'completed' as const,
@@ -302,6 +322,34 @@ describe('pollUntilDone', () => {
     const error = await rejection
     expect(error).toBeInstanceOf(Error)
     expect(error.message).toBe('render crashed')
+  })
+
+  it('rejects when onUpdate throws mid-sequence and stops polling', async () => {
+    const processingStatus = {
+      job_id: 'abc',
+      status: 'processing' as const,
+      progress: 50,
+      message: 'Working...',
+      completed_at: null,
+      download_url: null,
+      processing_time: null,
+    }
+
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(processingStatus) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(processingStatus) })
+
+    const onUpdate = vi.fn().mockImplementation(() => {
+      throw new Error('state update failed')
+    })
+    const promise = pollUntilDone('abc', onUpdate)
+    const rejection = promise.catch((e: Error) => e)
+
+    await vi.advanceTimersByTimeAsync(0)
+    const error = await rejection
+    expect(error.message).toBe('state update failed')
+    // Should not have scheduled a second poll
+    expect(global.fetch).toHaveBeenCalledTimes(1)
   })
 
   it('rejects immediately if signal already aborted', async () => {

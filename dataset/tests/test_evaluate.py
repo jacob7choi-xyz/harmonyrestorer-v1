@@ -358,6 +358,28 @@ class TestEvaluateDirectory:
         assert result["summary"]["count"] == 1
         assert result["summary"]["skipped"] == 1
 
+    def test_skips_empty_audio_files(self, tmp_path: Path) -> None:
+        """Empty audio files (0 samples) are skipped, not fatal."""
+        clean_dir = tmp_path / "clean"
+        restored_dir = tmp_path / "restored"
+        clean_dir.mkdir()
+        restored_dir.mkdir()
+
+        # One good pair
+        signal = _sine()
+        rng = np.random.default_rng(42)
+        restored = signal + 0.01 * rng.standard_normal(len(signal)).astype(np.float32)
+        _write_wav(clean_dir / "good.wav", signal)
+        _write_wav(restored_dir / "good.wav", restored)
+
+        # One pair with empty restored file (0 samples)
+        _write_wav(clean_dir / "empty.wav", signal)
+        _write_wav(restored_dir / "empty.wav", np.array([], dtype=np.float32))
+
+        result = evaluate_directory(restored_dir, clean_dir)
+        assert result["summary"]["count"] == 1
+        assert result["summary"]["skipped"] == 1
+
     def test_inf_sdr_in_summary_does_not_crash(self, tmp_path: Path) -> None:
         """Identical files produce inf SDR; summary aggregation should not crash."""
         clean_dir = tmp_path / "clean"
