@@ -25,22 +25,12 @@ interface Ribbon {
   hue: number;
 }
 
-interface Bar {
-  x: number;
-  baseHeight: number;
-  waveOffset: number;
-  phase: number;
-  speed: number;
-}
-
 interface IntensityConfig {
   ribbonAmplitude: number;
   ribbonSpeed: number;
   ringPulse: number;
   glowSize: number;
   starBrightness: number;
-  barAmplitude: number;
-  barSpeed: number;
 }
 
 const CONFIG: Record<Intensity, IntensityConfig> = {
@@ -50,8 +40,6 @@ const CONFIG: Record<Intensity, IntensityConfig> = {
     ringPulse: 0.3,
     glowSize: 0.8,
     starBrightness: 0.5,
-    barAmplitude: 0.3,
-    barSpeed: 0.8,
   },
   processing: {
     ribbonAmplitude: 1.0,
@@ -59,8 +47,6 @@ const CONFIG: Record<Intensity, IntensityConfig> = {
     ringPulse: 0.8,
     glowSize: 1.2,
     starBrightness: 0.9,
-    barAmplitude: 0.9,
-    barSpeed: 2.2,
   },
   complete: {
     ribbonAmplitude: 0.7,
@@ -68,8 +54,6 @@ const CONFIG: Record<Intensity, IntensityConfig> = {
     ringPulse: 0.4,
     glowSize: 0.9,
     starBrightness: 0.6,
-    barAmplitude: 0.4,
-    barSpeed: 1.0,
   },
 };
 
@@ -77,8 +61,6 @@ const LERP_SPEED = 0.025;
 const STAR_COUNT = 150;
 const RING_COUNT = 4;
 const RIBBON_POINTS = 60;
-const BAR_WIDTH = 14;
-const BAR_GAP = 8;
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
@@ -97,23 +79,6 @@ function generateStars(w: number, h: number): Star[] {
     });
   }
   return stars;
-}
-
-function generateBars(w: number, h: number): Bar[] {
-  const totalW = BAR_WIDTH + BAR_GAP;
-  const count = Math.max(1, Math.floor(w / totalW));
-  const bars: Bar[] = [];
-  for (let i = 0; i < count; i++) {
-    const norm = i / count;
-    bars.push({
-      x: i * totalW + BAR_GAP * 0.5,
-      baseHeight: (0.08 + Math.random() * 0.22) * h,
-      waveOffset: norm * Math.PI * 4,
-      phase: Math.random() * Math.PI * 2,
-      speed: 0.4 + Math.random() * 0.5,
-    });
-  }
-  return bars;
 }
 
 function generateRibbons(): Ribbon[] {
@@ -234,74 +199,10 @@ function drawRibbon(
   }
 }
 
-function drawBars(
-  ctx: CanvasRenderingContext2D,
-  bars: Bar[],
-  w: number,
-  h: number,
-  time: number,
-  amp: number,
-  spd: number,
-): void {
-  const baseline = h;
-
-  for (let i = 0; i < bars.length; i++) {
-    const bar = bars[i];
-    const sweep1 = Math.sin(time * 1.2 * spd + bar.waveOffset);
-    const sweep2 = Math.sin(time * 0.7 * spd - bar.waveOffset * 1.5) * 0.5;
-    const jitter = Math.sin(time * bar.speed * spd * 0.5 + bar.phase) * 0.15;
-    const oscillation = (sweep1 + sweep2 + jitter) / 1.65;
-    const barHeight = Math.max(3, bar.baseHeight * (1 + oscillation * amp));
-    const y = baseline - barHeight;
-
-    // Distance from center for hue shift
-    const centerDist = Math.abs((bar.x + BAR_WIDTH / 2) / w - 0.5) * 2;
-    const barHue = 220 + centerDist * 60;
-
-    // Body gradient
-    const grad = ctx.createLinearGradient(0, y, 0, baseline);
-    grad.addColorStop(0, `hsla(${barHue}, 80%, 70%, 0.8)`);
-    grad.addColorStop(0.15, `hsla(${barHue}, 85%, 55%, 0.7)`);
-    grad.addColorStop(0.5, `hsla(${barHue}, 88%, 40%, 0.4)`);
-    grad.addColorStop(1, `hsla(${barHue}, 90%, 25%, 0.05)`);
-
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = grad;
-
-    // Rounded top
-    const r = Math.min(BAR_WIDTH / 2, barHeight / 2);
-    if (barHeight > r * 2) {
-      ctx.beginPath();
-      ctx.moveTo(bar.x, baseline);
-      ctx.lineTo(bar.x, y + r);
-      ctx.quadraticCurveTo(bar.x, y, bar.x + r, y);
-      ctx.lineTo(bar.x + BAR_WIDTH - r, y);
-      ctx.quadraticCurveTo(bar.x + BAR_WIDTH, y, bar.x + BAR_WIDTH, y + r);
-      ctx.lineTo(bar.x + BAR_WIDTH, baseline);
-      ctx.closePath();
-      ctx.fill();
-    } else {
-      ctx.fillRect(bar.x, y, BAR_WIDTH, barHeight);
-    }
-
-    // Subtle inner glow
-    const coreW = BAR_WIDTH * 0.35;
-    const coreX = bar.x + (BAR_WIDTH - coreW) / 2;
-    const coreGrad = ctx.createLinearGradient(0, y, 0, y + barHeight * 0.5);
-    coreGrad.addColorStop(0, `hsla(${barHue}, 40%, 95%, 0.4)`);
-    coreGrad.addColorStop(1, `hsla(${barHue}, 60%, 70%, 0)`);
-    ctx.fillStyle = coreGrad;
-    ctx.fillRect(coreX, y + r, coreW, barHeight * 0.5);
-  }
-
-  ctx.globalAlpha = 1;
-}
-
 export function TechnoBackground({ intensity }: TechnoBackgroundProps): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
   const starsRef = useRef<Star[]>([]);
-  const barsRef = useRef<Bar[]>([]);
   const ribbonsRef = useRef<Ribbon[]>(generateRibbons());
   const intensityRef = useRef<Intensity>(intensity);
 
@@ -310,8 +211,6 @@ export function TechnoBackground({ intensity }: TechnoBackgroundProps): React.JS
   const curRingPulse = useRef(CONFIG.idle.ringPulse);
   const curGlowSize = useRef(CONFIG.idle.glowSize);
   const curStarBright = useRef(CONFIG.idle.starBrightness);
-  const curBarAmp = useRef(CONFIG.idle.barAmplitude);
-  const curBarSpd = useRef(CONFIG.idle.barSpeed);
 
   useEffect(() => {
     intensityRef.current = intensity;
@@ -340,7 +239,6 @@ export function TechnoBackground({ intensity }: TechnoBackgroundProps): React.JS
       ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
       glowCtx!.setTransform(dpr, 0, 0, dpr, 0, 0);
       starsRef.current = generateStars(rect.width, rect.height);
-      barsRef.current = generateBars(rect.width, rect.height);
     }
 
     resize();
@@ -362,26 +260,21 @@ export function TechnoBackground({ intensity }: TechnoBackgroundProps): React.JS
       curRingPulse.current = lerp(curRingPulse.current, target.ringPulse, LERP_SPEED);
       curGlowSize.current = lerp(curGlowSize.current, target.glowSize, LERP_SPEED);
       curStarBright.current = lerp(curStarBright.current, target.starBrightness, LERP_SPEED);
-      curBarAmp.current = lerp(curBarAmp.current, target.barAmplitude, LERP_SPEED);
-      curBarSpd.current = lerp(curBarSpd.current, target.barSpeed, LERP_SPEED);
 
       const rAmp = curRibbonAmp.current;
       const rSpd = curRibbonSpd.current;
       const ringPulse = curRingPulse.current;
       const glowSz = curGlowSize.current;
       const starBr = curStarBright.current;
-      const bAmp = curBarAmp.current;
-      const bSpd = curBarSpd.current;
 
       const maxLen = Math.max(w, h) * 0.55;
       const ribbons = ribbonsRef.current;
 
-      // -- Glow canvas: ribbons + bars for bloom --
+      // -- Glow canvas: ribbons for bloom --
       glowCtx!.clearRect(0, 0, w, h);
       for (let i = 0; i < ribbons.length; i++) {
         drawRibbon(glowCtx!, cx, cy, ribbons[i], time, rAmp, rSpd, maxLen);
       }
-      drawBars(glowCtx!, barsRef.current, w, h, time, bAmp, bSpd);
 
       // -- Main canvas --
       ctx!.clearRect(0, 0, w, h);
@@ -451,9 +344,6 @@ export function TechnoBackground({ intensity }: TechnoBackgroundProps): React.JS
       ambGrad.addColorStop(1, 'hsla(280, 50%, 30%, 0)');
       ctx!.fillStyle = ambGrad;
       ctx!.fillRect(cx - ambR, cy - ambR, ambR * 2, ambR * 2);
-
-      // Sharp bars on top of bloom
-      drawBars(ctx!, barsRef.current, w, h, time, bAmp, bSpd);
 
       // Vignette
       const vig = ctx!.createRadialGradient(cx, cy, w * 0.15, cx, h * 0.5, w * 0.85);
