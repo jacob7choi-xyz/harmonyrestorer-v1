@@ -4,6 +4,7 @@ import { uploadAudio, pollUntilDone, getDownloadUrl } from './api/client';
 import { UploadArea } from './components/UploadArea';
 import { WaveformCanvas } from './components/WaveformCanvas';
 import { ComparisonView } from './components/ComparisonView';
+import { TechnoBackground } from './components/TechnoBackground';
 import { useAudioDecoder, computePeaks } from './hooks/useAudioDecoder';
 import type { ProcessingStatus, WizardStep } from './types';
 
@@ -188,13 +189,18 @@ export default function HarmonyRestorer(): React.JSX.Element {
     e.preventDefault();
   }, []);
 
+  const bgIntensity = step === 'processing' ? 'processing'
+    : step === 'complete' ? 'complete'
+    : 'idle';
+
   return (
     <div
       className="min-h-screen bg-[#121212]"
       onDrop={handleGlobalDrop}
       onDragOver={handleGlobalDragOver}
     >
-      <div className="mx-auto max-w-2xl px-6 py-16">
+      <TechnoBackground intensity={bgIntensity} />
+      <div className="relative z-10 mx-auto max-w-2xl px-6 py-16">
         {/* Header */}
         <header className="text-center mb-12">
           <h1 className="text-3xl font-bold text-white tracking-tight mb-2">
