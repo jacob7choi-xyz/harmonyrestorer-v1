@@ -86,7 +86,7 @@ describe('Waveform', () => {
   })
 
   it('clears interval on unmount', () => {
-    const clearIntervalSpy = vi.spyOn(global, 'clearInterval')
+    const clearIntervalSpy = vi.spyOn(globalThis, 'clearInterval')
     const { unmount } = render(<Waveform isActive={true} />)
     unmount()
     expect(clearIntervalSpy).toHaveBeenCalled()

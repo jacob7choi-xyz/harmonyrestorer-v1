@@ -4,7 +4,7 @@ import { uploadAudio, getJobStatus, getDownloadUrl, pollUntilDone } from '../cli
 vi.stubEnv('VITE_API_URL', '/api/v1')
 
 function mockFetchResponse(data: unknown, ok = true, status = 200): void {
-  global.fetch = vi.fn().mockResolvedValueOnce({
+  globalThis.fetch = vi.fn().mockResolvedValueOnce({
     ok,
     status,
     json: () => Promise.resolve(data),
@@ -24,7 +24,7 @@ describe('uploadAudio', () => {
     const result = await uploadAudio(file)
 
     expect(result).toEqual(mockResponse)
-    expect(global.fetch).toHaveBeenCalledWith(
+    expect(globalThis.fetch).toHaveBeenCalledWith(
       expect.stringContaining('/denoise'),
       expect.objectContaining({ method: 'POST' }),
     )
@@ -38,7 +38,7 @@ describe('uploadAudio', () => {
   })
 
   it('throws generic message when error response has no detail', async () => {
-    global.fetch = vi.fn().mockResolvedValueOnce({
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({
       ok: false,
       status: 500,
       json: () => Promise.reject(new Error('parse error')),
@@ -49,7 +49,7 @@ describe('uploadAudio', () => {
   })
 
   it('falls back to status code when detail field is missing', async () => {
-    global.fetch = vi.fn().mockResolvedValueOnce({
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({
       ok: false,
       status: 422,
       json: () => Promise.resolve({}),
@@ -67,7 +67,7 @@ describe('uploadAudio', () => {
     const file = new File(['data'], 'test.wav', { type: 'audio/wav' })
     await uploadAudio(file, controller.signal)
 
-    expect(global.fetch).toHaveBeenCalledWith(
+    expect(globalThis.fetch).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ signal: controller.signal }),
     )
@@ -93,7 +93,7 @@ describe('getJobStatus', () => {
 
     const result = await getJobStatus('abc-123')
     expect(result).toEqual(mockStatus)
-    expect(global.fetch).toHaveBeenCalledWith(
+    expect(globalThis.fetch).toHaveBeenCalledWith(
       expect.stringContaining('/status/abc-123'),
       expect.any(Object),
     )
@@ -105,7 +105,7 @@ describe('getJobStatus', () => {
   })
 
   it('falls back to status code when detail field is missing', async () => {
-    global.fetch = vi.fn().mockResolvedValueOnce({
+    globalThis.fetch = vi.fn().mockResolvedValueOnce({
       ok: false,
       status: 502,
       json: () => Promise.resolve({}),
@@ -128,7 +128,7 @@ describe('getJobStatus', () => {
     const controller = new AbortController()
     await getJobStatus('abc', controller.signal)
 
-    expect(global.fetch).toHaveBeenCalledWith(
+    expect(globalThis.fetch).toHaveBeenCalledWith(
       expect.any(String),
       expect.objectContaining({ signal: controller.signal }),
     )
@@ -219,7 +219,7 @@ describe('pollUntilDone', () => {
     }
 
     // First call returns processing, second returns completed
-    global.fetch = vi.fn()
+    globalThis.fetch = vi.fn()
       .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(processingStatus) })
       .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(completedStatus) })
 
@@ -236,11 +236,11 @@ describe('pollUntilDone', () => {
 
     expect(result).toEqual(completedStatus)
     expect(onUpdate).toHaveBeenCalledTimes(2)
-    expect(global.fetch).toHaveBeenCalledTimes(2)
+    expect(globalThis.fetch).toHaveBeenCalledTimes(2)
   })
 
   it('rejects on network error during polling', async () => {
-    global.fetch = vi.fn().mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    globalThis.fetch = vi.fn().mockRejectedValueOnce(new TypeError('Failed to fetch'))
 
     const onUpdate = vi.fn()
     const promise = pollUntilDone('abc', onUpdate)
@@ -255,7 +255,7 @@ describe('pollUntilDone', () => {
   it('rejects when aborted mid-poll', async () => {
     const controller = new AbortController()
     const abortError = new DOMException('The operation was aborted', 'AbortError')
-    global.fetch = vi.fn().mockRejectedValueOnce(abortError)
+    globalThis.fetch = vi.fn().mockRejectedValueOnce(abortError)
 
     const onUpdate = vi.fn()
     const promise = pollUntilDone('abc', onUpdate, controller.signal)
@@ -279,7 +279,7 @@ describe('pollUntilDone', () => {
     }
 
     // First poll succeeds with processing, second never happens (aborted)
-    global.fetch = vi.fn()
+    globalThis.fetch = vi.fn()
       .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(processingStatus) })
 
     const controller = new AbortController()
@@ -335,7 +335,7 @@ describe('pollUntilDone', () => {
       processing_time: null,
     }
 
-    global.fetch = vi.fn()
+    globalThis.fetch = vi.fn()
       .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(processingStatus) })
       .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(processingStatus) })
 
@@ -349,7 +349,7 @@ describe('pollUntilDone', () => {
     const error = await rejection
     expect(error.message).toBe('state update failed')
     // Should not have scheduled a second poll
-    expect(global.fetch).toHaveBeenCalledTimes(1)
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1)
   })
 
   it('rejects immediately if signal already aborted', async () => {

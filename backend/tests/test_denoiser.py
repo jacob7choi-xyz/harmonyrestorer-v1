@@ -6,7 +6,6 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from app.services.denoiser import DENOISED_OUTPUT_MARKER, DenoiserService
 
 
@@ -63,9 +62,7 @@ class TestGetSeparator:
         mock_sep_cls.assert_called_once()
 
     @patch("app.services.denoiser.Separator")
-    def test_load_model_failure_allows_retry(
-        self, mock_sep_cls: MagicMock, tmp_path: Path
-    ) -> None:
+    def test_load_model_failure_allows_retry(self, mock_sep_cls: MagicMock, tmp_path: Path) -> None:
         """If load_model fails, _separator stays None so next call retries."""
         mock_separator = mock_sep_cls.return_value
         mock_separator.load_model.side_effect = [RuntimeError("model not found"), None]
@@ -87,16 +84,14 @@ class TestDenoise:
     """Tests for the denoise method."""
 
     @patch("app.services.denoiser.Separator")
-    def test_returns_denoised_output_path(
-        self, mock_sep_cls: MagicMock, tmp_path: Path
-    ) -> None:
+    def test_returns_denoised_output_path(self, mock_sep_cls: MagicMock, tmp_path: Path) -> None:
         """Returns path to the denoised output file."""
         output_dir = tmp_path / "output"
         output_dir.mkdir()
         service = DenoiserService(output_dir=output_dir)
 
         # Simulate separator creating a denoised file
-        denoised_name = f"track_(No Noise).wav"
+        denoised_name = "track_(No Noise).wav"
         denoised_path = output_dir / denoised_name
         denoised_path.write_bytes(b"RIFF" + b"\x00" * 40)
 
@@ -110,9 +105,7 @@ class TestDenoise:
         assert result == denoised_path.resolve()
 
     @patch("app.services.denoiser.Separator")
-    def test_raises_when_no_denoised_output(
-        self, mock_sep_cls: MagicMock, tmp_path: Path
-    ) -> None:
+    def test_raises_when_no_denoised_output(self, mock_sep_cls: MagicMock, tmp_path: Path) -> None:
         """Raises RuntimeError when separator produces no denoised file."""
         output_dir = tmp_path / "output"
         output_dir.mkdir()
@@ -128,9 +121,7 @@ class TestDenoise:
             service.denoise(input_path)
 
     @patch("app.services.denoiser.Separator")
-    def test_path_traversal_neutralized(
-        self, mock_sep_cls: MagicMock, tmp_path: Path
-    ) -> None:
+    def test_path_traversal_neutralized(self, mock_sep_cls: MagicMock, tmp_path: Path) -> None:
         """Path traversal in output name is neutralized by .name stripping."""
         output_dir = tmp_path / "output"
         output_dir.mkdir()
@@ -154,15 +145,13 @@ class TestDenoise:
         assert result.is_relative_to(output_dir.resolve())
 
     @patch("app.services.denoiser.Separator")
-    def test_calls_separate_with_string_path(
-        self, mock_sep_cls: MagicMock, tmp_path: Path
-    ) -> None:
+    def test_calls_separate_with_string_path(self, mock_sep_cls: MagicMock, tmp_path: Path) -> None:
         """Separator.separate receives a string path, not a Path object."""
         output_dir = tmp_path / "output"
         output_dir.mkdir()
         service = DenoiserService(output_dir=output_dir)
 
-        denoised_name = f"track_(No Noise).wav"
+        denoised_name = "track_(No Noise).wav"
         denoised_path = output_dir / denoised_name
         denoised_path.write_bytes(b"RIFF" + b"\x00" * 40)
 
@@ -201,11 +190,8 @@ class TestDenoise:
         result = service.denoise(input_path)
         assert result == denoised_path.resolve()
 
-
     @patch("app.services.denoiser.Separator")
-    def test_raises_when_separate_fails(
-        self, mock_sep_cls: MagicMock, tmp_path: Path
-    ) -> None:
+    def test_raises_when_separate_fails(self, mock_sep_cls: MagicMock, tmp_path: Path) -> None:
         """Exception from separator.separate propagates to caller."""
         output_dir = tmp_path / "output"
         output_dir.mkdir()
