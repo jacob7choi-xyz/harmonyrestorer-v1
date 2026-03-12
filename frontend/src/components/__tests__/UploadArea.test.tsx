@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { UploadArea } from '../UploadArea'
 
@@ -63,5 +63,24 @@ describe('UploadArea', () => {
     render(<UploadArea onFileSelect={vi.fn()} isProcessing={false} currentFile={file} />)
     const area = screen.getByRole('button')
     expect(area).toHaveAttribute('aria-label', 'Selected: song.wav. Press to change file.')
+  })
+
+  it('calls onFileSelect for valid audio file', async () => {
+    vi.useFakeTimers()
+    const onFileSelect = vi.fn()
+
+    render(<UploadArea onFileSelect={onFileSelect} isProcessing={false} currentFile={null} />)
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    const audioFile = new File(['audio'], 'song.wav', { type: 'audio/wav' })
+    Object.defineProperty(audioFile, 'size', { value: 1024 })
+    fireEvent.change(input, { target: { files: [audioFile] } })
+
+    // Duration check creates an Audio element. In jsdom, loadedmetadata won't fire,
+    // so the 5s timeout resolves true, allowing onFileSelect to be called.
+    await vi.advanceTimersByTimeAsync(5100)
+
+    expect(onFileSelect).toHaveBeenCalledWith(audioFile)
+    vi.useRealTimers()
   })
 })

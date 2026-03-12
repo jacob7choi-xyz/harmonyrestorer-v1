@@ -99,7 +99,7 @@ class TestDenoise:
         service = DenoiserService(output_dir=output_dir)
 
         mock_separator = mock_sep_cls.return_value
-        mock_separator.separate.return_value = ["track_(Noise).wav"]
+        mock_separator.separate.return_value = [str(tmp_path / "track_(Noise).wav")]
 
         input_path = tmp_path / "track.wav"
         input_path.write_bytes(b"RIFF" + b"\x00" * 40)

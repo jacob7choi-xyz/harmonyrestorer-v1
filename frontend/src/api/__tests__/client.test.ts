@@ -92,6 +92,27 @@ describe('getJobStatus', () => {
     mockFetchResponse({ detail: 'Not found' }, false, 404)
     await expect(getJobStatus('bad-id')).rejects.toThrow('Not found')
   })
+
+  it('passes AbortSignal to fetch', async () => {
+    const mockStatus = {
+      job_id: 'abc',
+      status: 'processing',
+      progress: 0,
+      message: 'Working',
+      completed_at: null,
+      download_url: null,
+      processing_time: null,
+    }
+    mockFetchResponse(mockStatus)
+
+    const controller = new AbortController()
+    await getJobStatus('abc', controller.signal)
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ signal: controller.signal }),
+    )
+  })
 })
 
 describe('getDownloadUrl', () => {
@@ -155,6 +176,47 @@ describe('pollUntilDone', () => {
     const error = await rejection
     expect(error).toBeInstanceOf(Error)
     expect(error.message).toBe('Processing error')
+  })
+
+  it('polls multiple times before completing', async () => {
+    const processingStatus = {
+      job_id: 'abc',
+      status: 'processing' as const,
+      progress: 50,
+      message: 'Working...',
+      completed_at: null,
+      download_url: null,
+      processing_time: null,
+    }
+    const completedStatus = {
+      job_id: 'abc',
+      status: 'completed' as const,
+      progress: 100,
+      message: 'Done',
+      completed_at: '2026-01-01',
+      download_url: '/download/abc',
+      processing_time: 5.0,
+    }
+
+    // First call returns processing, second returns completed
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(processingStatus) })
+      .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(completedStatus) })
+
+    const onUpdate = vi.fn()
+    const promise = pollUntilDone('abc', onUpdate)
+
+    // First poll: processing
+    await vi.advanceTimersByTimeAsync(0)
+    expect(onUpdate).toHaveBeenCalledWith(processingStatus)
+
+    // Second poll after interval
+    await vi.advanceTimersByTimeAsync(1500)
+    const result = await promise
+
+    expect(result).toEqual(completedStatus)
+    expect(onUpdate).toHaveBeenCalledTimes(2)
+    expect(global.fetch).toHaveBeenCalledTimes(2)
   })
 
   it('rejects immediately if signal already aborted', async () => {

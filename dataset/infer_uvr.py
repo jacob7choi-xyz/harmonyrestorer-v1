@@ -44,12 +44,18 @@ def _resample_if_needed(input_path: Path, temp_dir: Path) -> Path:
     Returns:
         Path to use as input for the separator.
     """
-    audio, sr = librosa.load(input_path, sr=None, mono=True)
-    if sr == _TARGET_SR:
+    info = sf.info(str(input_path))
+    if info.samplerate == _TARGET_SR and info.channels == 1:
         return input_path
 
-    logger.debug("Resampling %s from %d Hz to %d Hz", input_path.name, sr, _TARGET_SR)
-    audio = librosa.resample(audio, orig_sr=sr, target_sr=_TARGET_SR)
+    logger.debug(
+        "Converting %s (%d Hz, %d ch) to %d Hz mono",
+        input_path.name,
+        info.samplerate,
+        info.channels,
+        _TARGET_SR,
+    )
+    audio, _ = librosa.load(input_path, sr=_TARGET_SR, mono=True)
     resampled_path = temp_dir / f"_resampled_{input_path.name}"
     sf.write(str(resampled_path), audio, _TARGET_SR, subtype="FLOAT")
     return resampled_path

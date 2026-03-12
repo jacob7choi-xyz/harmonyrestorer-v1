@@ -24,6 +24,14 @@ describe('ProgressCard', () => {
     expect(screen.getByText('30%')).toBeInTheDocument()
   })
 
+  it('shows progress bar during queued status', () => {
+    const status: ProcessingStatus = { status: 'queued', progress: 10, message: 'Queued...' }
+    render(<ProgressCard status={status} />)
+    expect(screen.getByText('10%')).toBeInTheDocument()
+    expect(screen.getByText('Progress')).toBeInTheDocument()
+    expect(screen.getByText('Queued...')).toBeInTheDocument()
+  })
+
   it('hides progress bar for completed status', () => {
     const status: ProcessingStatus = { status: 'completed', progress: 100, message: 'Done' }
     render(<ProgressCard status={status} />)
