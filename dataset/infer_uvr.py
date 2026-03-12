@@ -19,12 +19,40 @@ import tempfile
 import time
 from pathlib import Path
 
+import librosa
+import soundfile as sf
 from audio_separator.separator import Separator
 
 logger = logging.getLogger(__name__)
 
+_TARGET_SR = 16_000
+
 # UVR marks denoised output with this substring in the filename
 _DENOISED_MARKER = "No Noise"
+
+
+def _resample_if_needed(input_path: Path, temp_dir: Path) -> Path:
+    """Resample input to 16 kHz mono if needed, returning the path to use.
+
+    If the file is already 16 kHz mono, returns the original path unchanged.
+    Otherwise writes a resampled copy to temp_dir and returns that path.
+
+    Args:
+        input_path: Original input audio file.
+        temp_dir: Directory for writing resampled scratch files.
+
+    Returns:
+        Path to use as input for the separator.
+    """
+    audio, sr = librosa.load(input_path, sr=None, mono=True)
+    if sr == _TARGET_SR:
+        return input_path
+
+    logger.debug("Resampling %s from %d Hz to %d Hz", input_path.name, sr, _TARGET_SR)
+    audio = librosa.resample(audio, orig_sr=sr, target_sr=_TARGET_SR)
+    resampled_path = temp_dir / f"_resampled_{input_path.name}"
+    sf.write(str(resampled_path), audio, _TARGET_SR, subtype="FLOAT")
+    return resampled_path
 
 
 def _find_denoised_output(temp_dir: Path) -> Path | None:
@@ -72,8 +100,11 @@ def restore_file(
         else:
             f.unlink()
 
+    # Ensure input is 16 kHz mono before passing to UVR
+    actual_input = _resample_if_needed(input_path, temp_dir)
+
     start = time.monotonic()
-    separator.separate(str(input_path))
+    separator.separate(str(actual_input))
     elapsed = time.monotonic() - start
 
     denoised = _find_denoised_output(temp_dir)
