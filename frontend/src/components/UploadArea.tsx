@@ -118,8 +118,8 @@ export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAr
       aria-label={currentFile ? `Selected: ${currentFile.name}. Press to change file.` : 'Upload audio file'}
       className={`rounded-xl p-8 text-center transition-all cursor-pointer border
         ${isDragging
-          ? 'bg-[#1DB954]/10 border-[#1DB954]/50 scale-[1.02]'
-          : 'bg-[#282828] border-transparent hover:bg-[#333333] hover:border-[#1DB954]/30'}
+          ? 'bg-[#1DB954]/10 border-[#1DB954]/50 scale-[1.02] backdrop-blur-md'
+          : 'bg-[#282828]/50 backdrop-blur-md border-white/5 hover:bg-[#333333]/50 hover:border-[#1DB954]/30'}
         ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}

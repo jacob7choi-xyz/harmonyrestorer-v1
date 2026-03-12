@@ -98,7 +98,10 @@ export default function HarmonyRestorer(): React.JSX.Element {
         const enhUrl = URL.createObjectURL(blob);
         setEnhancedBlobUrl(enhUrl);
 
-        // Decode enhanced audio for waveform visualization
+        // Decode enhanced audio for waveform visualization.
+        // A new AudioContext is created and closed per upload rather than using a
+        // singleton. This is acceptable because uploads are infrequent and it avoids
+        // managing AudioContext lifetime/suspension across the component tree.
         try {
           const arrayBuffer = await blob.arrayBuffer();
           const audioCtx = new AudioContext();
@@ -109,11 +112,11 @@ export default function HarmonyRestorer(): React.JSX.Element {
           } finally {
             await audioCtx.close();
           }
-        } catch {
-          // Waveform decode failed, playback still works
+        } catch (err) {
+          console.warn('Failed to decode enhanced audio waveform:', err);
         }
-      } catch {
-        // Enhanced audio fetch failed, fallback to download link
+      } catch (err) {
+        console.warn('Failed to fetch enhanced audio for playback:', err);
       }
 
       setStatus({
@@ -215,7 +218,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
             <button
               onClick={processAudio}
               disabled={!file || isProcessing}
-              className="w-full flex items-center justify-center gap-2 bg-[#1DB954] hover:bg-[#1ED760] hover:scale-[1.02] disabled:bg-[#333333] disabled:text-[#727272] text-black font-bold py-3.5 px-6 rounded-full transition-all disabled:cursor-not-allowed disabled:hover:scale-100"
+              className="w-full flex items-center justify-center gap-2 bg-[#1DB954] hover:bg-[#1ED760] hover:scale-[1.02] disabled:bg-[#333333]/50 disabled:backdrop-blur-md disabled:text-[#727272] text-black font-bold py-3.5 px-6 rounded-full transition-all disabled:cursor-not-allowed disabled:hover:scale-100"
             >
               <span>Enhance</span>
             </button>
@@ -291,7 +294,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
         )}
 
         <footer className="text-center mt-16 pt-8 border-t border-[#282828]">
-          <p className="text-[#727272] text-sm">Powered by UVR AI denoising</p>
+          <p className="text-[#B3B3B3] text-sm font-medium">Powered by UVR AI denoising</p>
         </footer>
       </div>
     </div>

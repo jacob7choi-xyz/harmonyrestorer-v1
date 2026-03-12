@@ -58,12 +58,14 @@ export function useAudioPlayback(src: string | null): UseAudioPlaybackReturn {
   const play = useCallback((): void => {
     const audio = audioRef.current;
     if (!audio) return;
-    audio.play().catch(() => {
+    // Cancel any previous tick loop before attempting play
+    cancelAnimationFrame(rafRef.current);
+    audio.play().then(() => {
+      setState(prev => ({ ...prev, isPlaying: true }));
+      startTicking();
+    }).catch(() => {
       setState(prev => ({ ...prev, isPlaying: false }));
-      cancelAnimationFrame(rafRef.current);
     });
-    setState(prev => ({ ...prev, isPlaying: true }));
-    startTicking();
   }, [startTicking]);
 
   const pause = useCallback((): void => {
