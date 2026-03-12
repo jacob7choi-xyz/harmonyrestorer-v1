@@ -86,7 +86,13 @@ export async function pollUntilDone(
 
       try {
         const status = await getJobStatus(jobId, signal);
-        onUpdate(status);
+        try {
+          onUpdate(status);
+        } catch (callbackErr) {
+          cleanup();
+          reject(callbackErr);
+          return;
+        }
 
         if (status.status === 'completed') {
           cleanup();

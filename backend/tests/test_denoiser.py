@@ -202,6 +202,43 @@ class TestDenoise:
         assert result == denoised_path.resolve()
 
 
+    @patch("app.services.denoiser.Separator")
+    def test_raises_when_separate_fails(
+        self, mock_sep_cls: MagicMock, tmp_path: Path
+    ) -> None:
+        """Exception from separator.separate propagates to caller."""
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+        service = DenoiserService(output_dir=output_dir)
+
+        mock_separator = mock_sep_cls.return_value
+        mock_separator.separate.side_effect = RuntimeError("corrupted audio")
+
+        input_path = tmp_path / "track.wav"
+        input_path.write_bytes(b"RIFF" + b"\x00" * 40)
+
+        with pytest.raises(RuntimeError, match="corrupted audio"):
+            service.denoise(input_path)
+
+    @patch("app.services.denoiser.Separator")
+    def test_raises_when_separate_returns_empty_list(
+        self, mock_sep_cls: MagicMock, tmp_path: Path
+    ) -> None:
+        """Empty output list from separator raises RuntimeError."""
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+        service = DenoiserService(output_dir=output_dir)
+
+        mock_separator = mock_sep_cls.return_value
+        mock_separator.separate.return_value = []
+
+        input_path = tmp_path / "track.wav"
+        input_path.write_bytes(b"RIFF" + b"\x00" * 40)
+
+        with pytest.raises(RuntimeError, match="Could not find denoised output"):
+            service.denoise(input_path)
+
+
 class TestDenoisedOutputMarker:
     """Tests for the DENOISED_OUTPUT_MARKER constant."""
 

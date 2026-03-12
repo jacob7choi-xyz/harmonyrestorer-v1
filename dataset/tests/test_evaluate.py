@@ -316,6 +316,66 @@ class TestEvaluateDirectory:
         with pytest.raises(RuntimeError, match="No files successfully evaluated"):
             evaluate_directory(restored_dir, clean_dir)
 
+    def test_skips_files_without_clean_reference(self, tmp_path: Path) -> None:
+        """Files without a matching clean reference are skipped and counted."""
+        clean_dir = tmp_path / "clean"
+        restored_dir = tmp_path / "restored"
+        clean_dir.mkdir()
+        restored_dir.mkdir()
+
+        # Create one matching pair and one orphan
+        signal = _sine()
+        rng = np.random.default_rng(42)
+        restored = signal + 0.01 * rng.standard_normal(len(signal)).astype(np.float32)
+
+        _write_wav(clean_dir / "matched.wav", signal)
+        _write_wav(restored_dir / "matched.wav", restored)
+        _write_wav(restored_dir / "orphan.wav", _sine(freq=880.0))
+
+        result = evaluate_directory(restored_dir, clean_dir)
+        assert result["summary"]["count"] == 1
+        assert result["summary"]["skipped"] == 1
+
+    def test_skips_files_that_fail_evaluation(self, tmp_path: Path) -> None:
+        """Files that raise during evaluate_pair are skipped, not fatal."""
+        clean_dir = tmp_path / "clean"
+        restored_dir = tmp_path / "restored"
+        clean_dir.mkdir()
+        restored_dir.mkdir()
+
+        # One good pair
+        signal = _sine()
+        rng = np.random.default_rng(42)
+        restored = signal + 0.01 * rng.standard_normal(len(signal)).astype(np.float32)
+        _write_wav(clean_dir / "good.wav", signal)
+        _write_wav(restored_dir / "good.wav", restored)
+
+        # One pair where restored is silent (triggers ValueError)
+        _write_wav(clean_dir / "bad.wav", signal)
+        _write_wav(restored_dir / "bad.wav", np.zeros(_NUM_SAMPLES, dtype=np.float32))
+
+        result = evaluate_directory(restored_dir, clean_dir)
+        assert result["summary"]["count"] == 1
+        assert result["summary"]["skipped"] == 1
+
+    def test_inf_sdr_in_summary_does_not_crash(self, tmp_path: Path) -> None:
+        """Identical files produce inf SDR; summary aggregation should not crash."""
+        clean_dir = tmp_path / "clean"
+        restored_dir = tmp_path / "restored"
+        clean_dir.mkdir()
+        restored_dir.mkdir()
+
+        # All identical pairs -> inf SDR
+        for i in range(2):
+            signal = _sine(freq=440.0 + i * 100)
+            _write_wav(clean_dir / f"frame{i}.wav", signal)
+            _write_wav(restored_dir / f"frame{i}.wav", signal)
+
+        result = evaluate_directory(restored_dir, clean_dir)
+        summary = result["summary"]
+        assert summary["count"] == 2
+        assert summary["sdr_mean"] == float("inf")
+
     def test_returns_correct_summary_statistics(self, tmp_path: Path) -> None:
         """Summary should contain mean, std, and median for all three metrics."""
         clean_dir = tmp_path / "clean"

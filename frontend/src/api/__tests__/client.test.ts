@@ -247,6 +247,63 @@ describe('pollUntilDone', () => {
     expect((error as DOMException).name).toBe('AbortError')
   })
 
+  it('rejects when aborted between polls', async () => {
+    const processingStatus = {
+      job_id: 'abc',
+      status: 'processing' as const,
+      progress: 50,
+      message: 'Working...',
+      completed_at: null,
+      download_url: null,
+      processing_time: null,
+    }
+
+    // First poll succeeds with processing, second never happens (aborted)
+    global.fetch = vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: () => Promise.resolve(processingStatus) })
+
+    const controller = new AbortController()
+    const onUpdate = vi.fn()
+    const promise = pollUntilDone('abc', onUpdate, controller.signal)
+    const rejection = promise.catch((e: unknown) => e)
+
+    // First poll completes: status is processing, setTimeout scheduled
+    await vi.advanceTimersByTimeAsync(0)
+    expect(onUpdate).toHaveBeenCalledWith(processingStatus)
+
+    // Abort before the next poll fires
+    controller.abort()
+
+    await vi.advanceTimersByTimeAsync(1500)
+    const error = await rejection
+    expect(error).toBeInstanceOf(DOMException)
+    expect((error as DOMException).name).toBe('AbortError')
+  })
+
+  it('rejects when onUpdate callback throws', async () => {
+    const completedStatus = {
+      job_id: 'abc',
+      status: 'completed' as const,
+      progress: 100,
+      message: 'Done',
+      completed_at: '2026-01-01',
+      download_url: '/download/abc',
+      processing_time: 5.0,
+    }
+    mockFetchResponse(completedStatus)
+
+    const onUpdate = vi.fn().mockImplementation(() => {
+      throw new Error('render crashed')
+    })
+    const promise = pollUntilDone('abc', onUpdate)
+    const rejection = promise.catch((e: Error) => e)
+
+    await vi.advanceTimersByTimeAsync(0)
+    const error = await rejection
+    expect(error).toBeInstanceOf(Error)
+    expect(error.message).toBe('render crashed')
+  })
+
   it('rejects immediately if signal already aborted', async () => {
     const controller = new AbortController()
     controller.abort()
