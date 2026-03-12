@@ -11,11 +11,15 @@ describe('ProgressCard', () => {
     expect(screen.getByText('Ready to enhance')).toBeInTheDocument()
   })
 
-  it('shows progress bar during processing', () => {
+  it('shows progress bar during processing with correct width', () => {
     const status: ProcessingStatus = { status: 'processing', progress: 50, message: 'Working...' }
-    render(<ProgressCard status={status} />)
+    const { container } = render(<ProgressCard status={status} />)
     expect(screen.getByText('50%')).toBeInTheDocument()
     expect(screen.getByText('Progress')).toBeInTheDocument()
+
+    // Verify the progress bar div has the correct width
+    const bar = container.querySelector('[class*="transition-all"]') as HTMLElement
+    expect(bar.style.width).toBe('50%')
   })
 
   it('shows progress bar during uploading', () => {

@@ -24,8 +24,10 @@ class DenoiserService:
         """Lazy-load the UVR separator model."""
         if self._separator is None:
             logger.info("Loading UVR denoising model...")
-            self._separator = Separator(output_dir=str(self.output_dir), output_format="WAV")
-            self._separator.load_model(self.model_name)
+            sep = Separator(output_dir=str(self.output_dir), output_format="WAV")
+            sep.load_model(self.model_name)
+            # Only assign after load_model succeeds so a failed load is retried
+            self._separator = sep
             logger.info("UVR model loaded")
         return self._separator
 

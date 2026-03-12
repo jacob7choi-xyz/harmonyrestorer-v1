@@ -99,7 +99,10 @@ export async function pollUntilDone(
         }
       } catch (err) {
         cleanup();
-        if (err instanceof DOMException && err.name === 'AbortError') return;
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          reject(err);
+          return;
+        }
         reject(err);
       }
     };

@@ -62,6 +62,26 @@ class TestGetSeparator:
         assert first is second
         mock_sep_cls.assert_called_once()
 
+    @patch("app.services.denoiser.Separator")
+    def test_load_model_failure_allows_retry(
+        self, mock_sep_cls: MagicMock, tmp_path: Path
+    ) -> None:
+        """If load_model fails, _separator stays None so next call retries."""
+        mock_separator = mock_sep_cls.return_value
+        mock_separator.load_model.side_effect = [RuntimeError("model not found"), None]
+
+        service = DenoiserService(output_dir=tmp_path)
+
+        with pytest.raises(RuntimeError, match="model not found"):
+            service._get_separator()
+
+        assert service._separator is None
+
+        # Second call should retry and succeed
+        sep = service._get_separator()
+        assert sep is mock_separator
+        assert mock_separator.load_model.call_count == 2
+
 
 class TestDenoise:
     """Tests for the denoise method."""

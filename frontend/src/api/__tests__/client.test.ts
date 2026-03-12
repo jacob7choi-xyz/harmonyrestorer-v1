@@ -219,6 +219,34 @@ describe('pollUntilDone', () => {
     expect(global.fetch).toHaveBeenCalledTimes(2)
   })
 
+  it('rejects on network error during polling', async () => {
+    global.fetch = vi.fn().mockRejectedValueOnce(new TypeError('Failed to fetch'))
+
+    const onUpdate = vi.fn()
+    const promise = pollUntilDone('abc', onUpdate)
+    const rejection = promise.catch((e: Error) => e)
+
+    await vi.advanceTimersByTimeAsync(0)
+    const error = await rejection
+    expect(error).toBeInstanceOf(TypeError)
+    expect(error.message).toBe('Failed to fetch')
+  })
+
+  it('rejects when aborted mid-poll', async () => {
+    const controller = new AbortController()
+    const abortError = new DOMException('The operation was aborted', 'AbortError')
+    global.fetch = vi.fn().mockRejectedValueOnce(abortError)
+
+    const onUpdate = vi.fn()
+    const promise = pollUntilDone('abc', onUpdate, controller.signal)
+    const rejection = promise.catch((e: unknown) => e)
+
+    await vi.advanceTimersByTimeAsync(0)
+    const error = await rejection
+    expect(error).toBeInstanceOf(DOMException)
+    expect((error as DOMException).name).toBe('AbortError')
+  })
+
   it('rejects immediately if signal already aborted', async () => {
     const controller = new AbortController()
     controller.abort()

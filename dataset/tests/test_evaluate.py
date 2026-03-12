@@ -181,6 +181,19 @@ class TestEvaluatePair:
         with pytest.raises(ValueError, match="16000Hz"):
             evaluate_pair(clean_path, restored_path)
 
+    def test_raises_when_only_restored_is_wrong_sr(self, tmp_path: Path) -> None:
+        """Should raise even if only the restored file has wrong sample rate."""
+        clean_signal = _sine()
+        restored_signal = _sine(sr=44100)
+
+        clean_path = tmp_path / "clean.wav"
+        restored_path = tmp_path / "restored.wav"
+        _write_wav(clean_path, clean_signal, sr=_SR)
+        _write_wav(restored_path, restored_signal, sr=44100)
+
+        with pytest.raises(ValueError, match="16000Hz"):
+            evaluate_pair(clean_path, restored_path)
+
     def test_handles_stereo_files(self, tmp_path: Path) -> None:
         """Stereo files should be converted to mono and evaluated successfully."""
         mono = _sine()

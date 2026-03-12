@@ -1,8 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { UploadArea } from '../UploadArea'
 
 describe('UploadArea', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('renders upload prompt when no file selected', () => {
     render(<UploadArea onFileSelect={vi.fn()} isProcessing={false} currentFile={null} />)
     expect(screen.getByText(/drop audio file here/i)).toBeInTheDocument()
@@ -22,6 +26,21 @@ describe('UploadArea', () => {
 
     render(<UploadArea onFileSelect={vi.fn()} isProcessing={false} currentFile={file} />)
     expect(screen.getByText('2.00 MB')).toBeInTheDocument()
+  })
+
+  it('shows error for non-audio file', async () => {
+    const onFileSelect = vi.fn()
+    render(<UploadArea onFileSelect={onFileSelect} isProcessing={false} currentFile={null} />)
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    const textFile = new File(['hello'], 'readme.txt', { type: 'text/plain' })
+
+    fireEvent.change(input, { target: { files: [textFile] } })
+
+    await vi.waitFor(() => {
+      expect(screen.getByText(/please select an audio file/i)).toBeInTheDocument()
+    })
+    expect(onFileSelect).not.toHaveBeenCalled()
   })
 
   it('shows error for oversized file', async () => {
@@ -44,12 +63,6 @@ describe('UploadArea', () => {
     render(<UploadArea onFileSelect={vi.fn()} isProcessing={true} currentFile={null} />)
     const input = document.querySelector('input[type="file"]') as HTMLInputElement
     expect(input.disabled).toBe(true)
-  })
-
-  it('accepts click to open file dialog', () => {
-    render(<UploadArea onFileSelect={vi.fn()} isProcessing={false} currentFile={null} />)
-    const area = screen.getByRole('button')
-    expect(area).toBeInTheDocument()
   })
 
   it('has correct aria-label when no file selected', () => {
@@ -81,6 +94,5 @@ describe('UploadArea', () => {
     await vi.advanceTimersByTimeAsync(5100)
 
     expect(onFileSelect).toHaveBeenCalledWith(audioFile)
-    vi.useRealTimers()
   })
 })
