@@ -1,10 +1,11 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Download, Loader2, RotateCcw, Brain, Crown, Sparkles, BarChart3 } from 'lucide-react';
+import { Download, Loader2, RotateCcw } from 'lucide-react';
 import { uploadAudio, pollUntilDone, getDownloadUrl } from './api/client';
 import { UploadArea } from './components/UploadArea';
-import { ProgressCard } from './components/ProgressCard';
-import { Waveform } from './components/Waveform';
-import type { ProcessingStatus } from './types';
+import { WaveformCanvas } from './components/WaveformCanvas';
+import { ComparisonView } from './components/ComparisonView';
+import { useAudioDecoder, computePeaks } from './hooks/useAudioDecoder';
+import type { ProcessingStatus, WizardStep } from './types';
 
 const INITIAL_STATUS: ProcessingStatus = {
   status: 'idle',
@@ -12,27 +13,82 @@ const INITIAL_STATUS: ProcessingStatus = {
   message: 'Ready to enhance your audio',
 };
 
-export default function HarmonyRestorer() {
+function deriveStep(status: ProcessingStatus['status']): WizardStep {
+  switch (status) {
+    case 'uploading':
+    case 'queued':
+    case 'processing':
+      return 'processing';
+    case 'completed':
+      return 'complete';
+    default:
+      return 'upload';
+  }
+}
+
+const STEPS: WizardStep[] = ['upload', 'processing', 'complete'];
+
+function StepIndicator({ current }: { current: WizardStep }): React.JSX.Element {
+  const currentIndex = STEPS.indexOf(current);
+  return (
+    <div className="flex items-center justify-center gap-2 mb-8">
+      {STEPS.map((step, i) => (
+        <div
+          key={step}
+          className={`w-2 h-2 rounded-full transition-colors ${
+            i === currentIndex
+              ? 'bg-[#1DB954]'
+              : i < currentIndex
+                ? 'bg-[#B3B3B3]'
+                : 'bg-[#333333]'
+          }`}
+        />
+      ))}
+    </div>
+  );
+}
+
+export default function HarmonyRestorer(): React.JSX.Element {
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<ProcessingStatus>(INITIAL_STATUS);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [originalBlobUrl, setOriginalBlobUrl] = useState<string | null>(null);
+  const [enhancedBlobUrl, setEnhancedBlobUrl] = useState<string | null>(null);
+  const [enhancedPeaks, setEnhancedPeaks] = useState<Float32Array | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  // Cancel in-flight requests on unmount
+  const { waveform } = useAudioDecoder(file);
+  const step = deriveStep(status.status);
+
+  // Cleanup blob URLs on unmount
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
+      if (originalBlobUrl) URL.revokeObjectURL(originalBlobUrl);
+      if (enhancedBlobUrl) URL.revokeObjectURL(enhancedBlobUrl);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const processAudio = useCallback(async () => {
+  const resetState = useCallback((): void => {
+    abortRef.current?.abort();
+    if (originalBlobUrl) URL.revokeObjectURL(originalBlobUrl);
+    if (enhancedBlobUrl) URL.revokeObjectURL(enhancedBlobUrl);
+    setFile(null);
+    setStatus(INITIAL_STATUS);
+    setIsProcessing(false);
+    setOriginalBlobUrl(null);
+    setEnhancedBlobUrl(null);
+    setEnhancedPeaks(null);
+  }, [originalBlobUrl, enhancedBlobUrl]);
+
+  const processAudio = useCallback(async (): Promise<void> => {
     if (!file) return;
 
+    setIsProcessing(true);
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-
-    setIsProcessing(true);
     setStatus({ status: 'uploading', progress: 0, message: 'Uploading audio file...' });
 
     try {
@@ -50,12 +106,42 @@ export default function HarmonyRestorer() {
         });
       }, controller.signal);
 
+      const downloadUrl = getDownloadUrl(result.job_id);
+
+      // Create blob URL from original file for in-browser playback
+      const origUrl = URL.createObjectURL(file);
+      setOriginalBlobUrl(origUrl);
+
+      try {
+        const res = await fetch(downloadUrl, { signal: controller.signal });
+        const blob = await res.blob();
+        const enhUrl = URL.createObjectURL(blob);
+        setEnhancedBlobUrl(enhUrl);
+
+        // Decode enhanced audio for waveform visualization
+        try {
+          const arrayBuffer = await blob.arrayBuffer();
+          const audioCtx = new AudioContext();
+          try {
+            const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
+            const channelData = audioBuffer.getChannelData(0);
+            setEnhancedPeaks(computePeaks(channelData, 200));
+          } finally {
+            await audioCtx.close();
+          }
+        } catch {
+          // Waveform decode failed, playback still works
+        }
+      } catch {
+        // Enhanced audio fetch failed, fallback to download link
+      }
+
       setStatus({
         status: 'completed',
         progress: 100,
         message: 'Audio enhancement complete',
         jobId: result.job_id,
-        downloadUrl: getDownloadUrl(result.job_id),
+        downloadUrl,
         processingTime: result.processing_time ?? undefined,
       });
     } catch (err) {
@@ -70,93 +156,159 @@ export default function HarmonyRestorer() {
     }
   }, [file]);
 
-  const handleFileSelect = (selectedFile: File) => {
+  const handleFileSelect = useCallback((selectedFile: File): void => {
+    if (isProcessing) {
+      abortRef.current?.abort();
+      setIsProcessing(false);
+    }
+    if (originalBlobUrl) URL.revokeObjectURL(originalBlobUrl);
+    if (enhancedBlobUrl) URL.revokeObjectURL(enhancedBlobUrl);
     setFile(selectedFile);
     setStatus(INITIAL_STATUS);
-  };
+    setOriginalBlobUrl(null);
+    setEnhancedBlobUrl(null);
+    setEnhancedPeaks(null);
+  }, [isProcessing, originalBlobUrl, enhancedBlobUrl]);
 
-  const handleReset = () => {
-    setFile(null);
-    setStatus(INITIAL_STATUS);
-    setIsProcessing(false);
-  };
+  // Global drop zone
+  const handleGlobalDrop = useCallback((e: React.DragEvent<HTMLDivElement>): void => {
+    e.preventDefault();
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      const dropped = files[0];
+      const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
+      if (dropped.type.startsWith('audio/')) {
+        if (dropped.size > MAX_FILE_SIZE_BYTES) return;
+        handleFileSelect(dropped);
+      }
+    }
+  }, [handleFileSelect]);
+
+  const handleGlobalDragOver = useCallback((e: React.DragEvent<HTMLDivElement>): void => {
+    e.preventDefault();
+  }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 relative overflow-hidden">
-      {/* Background blurs */}
-      <div className="absolute inset-0">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl" />
-        <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl" />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
-      </div>
-
-      <div className="relative z-10 container mx-auto px-6 py-8 max-w-2xl">
+    <div
+      className="min-h-screen bg-[#121212]"
+      onDrop={handleGlobalDrop}
+      onDragOver={handleGlobalDragOver}
+    >
+      <div className="mx-auto max-w-2xl px-6 py-16">
         {/* Header */}
         <header className="text-center mb-12">
-          <div className="inline-flex items-center space-x-3 mb-6">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center shadow-lg shadow-blue-500/30">
-              <Crown className="w-6 h-6 text-white" />
-            </div>
-            <h1 className="text-4xl font-bold bg-gradient-to-r from-white to-white/80 bg-clip-text text-transparent">
-              HarmonyRestorer
-            </h1>
-            <Sparkles className="w-5 h-5 text-blue-400 ml-2" />
-          </div>
-          <p className="text-xl text-white/70 max-w-2xl mx-auto font-medium leading-relaxed">
-            Professional audio restoration powered by advanced AI.
-            Achieve studio-quality results with one tap.
+          <h1 className="text-3xl font-bold text-white tracking-tight mb-2">
+            HarmonyRestorer
+          </h1>
+          <p className="text-[#B3B3B3]">
+            AI-powered audio restoration. Upload, enhance, compare.
           </p>
         </header>
 
-        <div className="space-y-6">
-          <UploadArea onFileSelect={handleFileSelect} isProcessing={isProcessing} currentFile={file} />
+        <StepIndicator current={step} />
 
-          {file && (
-            <div className="bg-white/5 backdrop-blur-xl rounded-3xl p-6 border border-white/20 shadow-lg">
-              <h3 className="text-lg font-semibold text-white/90 mb-4 flex items-center space-x-2">
-                <BarChart3 className="w-5 h-5 text-blue-400" />
-                <span>Waveform</span>
-              </h3>
-              <Waveform isActive={isProcessing} />
-            </div>
-          )}
+        {/* Step 1: Upload */}
+        {step === 'upload' && (
+          <div className="space-y-6 animate-fade-in">
+            <UploadArea
+              onFileSelect={handleFileSelect}
+              isProcessing={isProcessing}
+              currentFile={file}
+            />
 
-          <ProgressCard status={status} />
+            {waveform && (
+              <div className="bg-[#282828] rounded-xl p-4">
+                <p className="text-sm font-bold text-[#B3B3B3] mb-3">Preview</p>
+                <WaveformCanvas peaks={waveform.peaks} accentColor="#B3B3B3" baseColor="#404040" />
+              </div>
+            )}
 
-          {/* Controls */}
-          <div className="flex space-x-4">
-            <button
-              onClick={processAudio}
-              disabled={!file || isProcessing}
-              className="flex-1 bg-blue-500 hover:bg-blue-600 disabled:bg-white/10 disabled:text-white/30 text-white font-semibold py-4 px-6 rounded-2xl transition-all duration-300 flex items-center justify-center space-x-2 disabled:cursor-not-allowed shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40"
-            >
-              {isProcessing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Brain className="w-5 h-5" />}
-              <span>{isProcessing ? 'Processing...' : 'Enhance Audio'}</span>
-            </button>
-
-            {status.downloadUrl && (
-              <a
-                href={status.downloadUrl}
-                download
-                className="bg-green-500 hover:bg-green-600 text-white font-semibold py-4 px-6 rounded-2xl transition-all duration-300 flex items-center space-x-2 shadow-lg shadow-green-500/30"
-              >
-                <Download className="w-5 h-5" />
-                <span>Download</span>
-              </a>
+            {status.status === 'failed' && (
+              <div className="bg-[#E34040]/10 rounded-lg p-4">
+                <p className="text-sm text-[#E34040]">{status.message}</p>
+              </div>
             )}
 
             <button
-              onClick={handleReset}
-              aria-label="Reset"
-              className="bg-white/10 hover:bg-white/20 text-white/70 hover:text-white font-semibold py-4 px-4 rounded-2xl transition-all duration-300 border border-white/20"
+              onClick={processAudio}
+              disabled={!file || isProcessing}
+              className="w-full flex items-center justify-center gap-2 bg-[#1DB954] hover:bg-[#1ED760] hover:scale-[1.02] disabled:bg-[#333333] disabled:text-[#727272] text-black font-bold py-3.5 px-6 rounded-full transition-all disabled:cursor-not-allowed disabled:hover:scale-100"
             >
-              <RotateCcw className="w-5 h-5" />
+              <span>Enhance</span>
             </button>
           </div>
-        </div>
+        )}
 
-        <footer className="text-center mt-16 pt-8 border-t border-white/10">
-          <p className="text-white/50 text-sm">Powered by UVR AI denoising</p>
+        {/* Step 2: Processing */}
+        {step === 'processing' && (
+          <div className="space-y-6 animate-fade-in">
+            {waveform && (
+              <div className="bg-[#282828] rounded-xl p-4">
+                <WaveformCanvas peaks={waveform.peaks} accentColor="#1DB954" baseColor="#404040" />
+              </div>
+            )}
+
+            <div className="bg-[#282828] rounded-xl p-6">
+              <div className="flex items-center gap-3 mb-4">
+                <Loader2 className="w-5 h-5 text-[#1DB954] animate-spin" />
+                <span className="text-sm font-medium text-white">{status.message}</span>
+              </div>
+
+              <div className="w-full bg-[#404040] rounded-full h-1 overflow-hidden">
+                <div
+                  className="h-full bg-[#1DB954] rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${status.progress}%` }}
+                />
+              </div>
+
+              <p className="text-xs text-[#727272] mt-2 text-right">
+                {Math.round(status.progress)}%
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: Complete */}
+        {step === 'complete' && (
+          <div className="space-y-6 animate-fade-in">
+            {status.processingTime != null && (
+              <p className="text-sm text-[#B3B3B3] text-center">
+                Enhanced in {status.processingTime.toFixed(1)}s
+              </p>
+            )}
+
+            <ComparisonView
+              originalSrc={originalBlobUrl}
+              enhancedSrc={enhancedBlobUrl}
+              originalPeaks={waveform?.peaks ?? null}
+              enhancedPeaks={enhancedPeaks}
+            />
+
+            <div className="flex gap-3">
+              {status.downloadUrl && (
+                <a
+                  href={status.downloadUrl}
+                  download
+                  className="flex-1 flex items-center justify-center gap-2 bg-[#1DB954] hover:bg-[#1ED760] hover:scale-[1.02] text-black font-bold py-3.5 px-6 rounded-full transition-all"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download</span>
+                </a>
+              )}
+
+              <button
+                onClick={resetState}
+                className="flex items-center justify-center gap-2 bg-[#282828] hover:bg-[#333333] text-white font-medium py-3.5 px-5 rounded-full transition-colors"
+              >
+                <RotateCcw className="w-4 h-4" />
+                <span>New file</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        <footer className="text-center mt-16 pt-8 border-t border-[#282828]">
+          <p className="text-[#727272] text-sm">Powered by UVR AI denoising</p>
         </footer>
       </div>
     </div>

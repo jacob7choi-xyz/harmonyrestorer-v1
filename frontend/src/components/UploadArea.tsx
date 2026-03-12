@@ -12,7 +12,7 @@ interface UploadAreaProps {
   currentFile: File | null;
 }
 
-export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAreaProps) {
+export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAreaProps): React.JSX.Element {
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -116,12 +116,11 @@ export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAr
       role="button"
       tabIndex={0}
       aria-label={currentFile ? `Selected: ${currentFile.name}. Press to change file.` : 'Upload audio file'}
-      className={`relative rounded-3xl p-8 text-center transition-all duration-300 cursor-pointer border border-white/20
+      className={`rounded-xl p-8 text-center transition-all cursor-pointer border
         ${isDragging
-          ? 'bg-blue-500/10 border-blue-400/40 scale-[1.02] shadow-2xl shadow-blue-500/20'
-          : 'bg-white/5 hover:bg-white/10 hover:border-white/30 hover:shadow-xl'}
-        ${isProcessing ? 'opacity-60 cursor-not-allowed' : ''}
-        backdrop-blur-xl shadow-lg`}
+          ? 'bg-[#1DB954]/10 border-[#1DB954]/50 scale-[1.02]'
+          : 'bg-[#282828] border-transparent hover:bg-[#333333] hover:border-[#1DB954]/30'}
+        ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -140,28 +139,28 @@ export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAr
       <div className="flex flex-col items-center space-y-4">
         {currentFile ? (
           <>
-            <div className="w-16 h-16 rounded-2xl bg-blue-500/20 flex items-center justify-center backdrop-blur-sm border border-blue-400/30">
-              <FileAudio className="w-8 h-8 text-blue-400" />
+            <div className="w-16 h-16 rounded-full bg-[#1DB954]/20 flex items-center justify-center">
+              <FileAudio className="w-8 h-8 text-[#1DB954]" />
             </div>
             <div>
-              <p className="text-lg font-medium text-white/90">{currentFile.name}</p>
-              <p className="text-sm text-white/60">{(currentFile.size / 1024 / 1024).toFixed(2)} MB</p>
+              <p className="text-lg font-medium text-white">{currentFile.name}</p>
+              <p className="text-sm text-[#B3B3B3]">{(currentFile.size / 1024 / 1024).toFixed(2)} MB</p>
             </div>
           </>
         ) : (
           <>
-            <div className="w-16 h-16 rounded-2xl bg-white/10 flex items-center justify-center backdrop-blur-sm border border-white/20">
-              <Upload className="w-8 h-8 text-white/70" />
+            <div className="w-16 h-16 rounded-full bg-[#333333] flex items-center justify-center">
+              <Upload className="w-8 h-8 text-[#B3B3B3]" />
             </div>
             <div>
-              <p className="text-xl font-medium text-white/90 mb-2">Drop audio file here</p>
-              <p className="text-sm text-white/60">or tap to browse — WAV, FLAC, MP3, OGG, M4A, AAC</p>
+              <p className="text-xl font-medium text-white mb-2">Drop audio file here</p>
+              <p className="text-sm text-[#B3B3B3]">or tap to browse -- WAV, FLAC, MP3, OGG, M4A, AAC</p>
             </div>
           </>
         )}
 
         {error && (
-          <p className="text-sm text-red-400 mt-2">{error}</p>
+          <p className="text-sm text-[#E34040] mt-2">{error}</p>
         )}
       </div>
     </div>

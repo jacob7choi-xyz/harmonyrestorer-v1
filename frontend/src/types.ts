@@ -6,3 +6,16 @@ export interface ProcessingStatus {
   downloadUrl?: string;
   processingTime?: number;
 }
+
+export type WizardStep = 'upload' | 'processing' | 'complete';
+
+export interface WaveformData {
+  peaks: Float32Array;
+  duration: number;
+}
+
+export interface PlaybackState {
+  isPlaying: boolean;
+  currentTime: number;
+  duration: number;
+}
