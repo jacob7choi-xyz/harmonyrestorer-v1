@@ -5,7 +5,7 @@ AI-powered audio denoising. Upload noisy audio, get clean audio back.
 - **Model**: UVR-DeNoise from [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui) via [audio-separator](https://github.com/karaokenerds/python-audio-separator)
 - **Formats**: WAV, MP3, FLAC, OGG, M4A, AAC (max 50 MB, 10 minutes)
 - **Stack**: FastAPI + React/TypeScript, Docker-ready
-- **Tests**: 242 passing (backend 54, dataset 113, frontend 75)
+- **Tests**: 251 passing (backend 54, dataset 113, frontend 84)
 
 ## Quick Start
 
@@ -60,7 +60,7 @@ frontend/src/
 ├── types.ts             # Shared types
 ├── api/client.ts        # Backend API calls + polling
 ├── hooks/               # useAudioDecoder, useAudioPlayback
-└── components/          # UploadArea, WaveformCanvas, AudioPlayer, ComparisonView, ErrorBoundary
+└── components/          # TechnoBackground, UploadArea, WaveformCanvas, AudioPlayer, ComparisonView, ErrorBoundary
 ```
 
 ## Security
@@ -136,6 +136,7 @@ See [docs/benchmarks.md](docs/benchmarks.md) for details. The production API cur
 - [x] Working denoising API (UVR)
 - [x] Security hardening (3 phases)
 - [x] React frontend with wizard flow, real waveform, audio playback, before/after comparison
+- [x] Frontend redesign: animated canvas background, blue accent, social footer, 84 tests
 - [x] Docker + CI/CD
 - [x] Build/acquire paired training dataset (146,200 pairs from 14 composers)
 - [x] Train OpGAN (100 epochs on T4)
