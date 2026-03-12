@@ -1,20 +1,29 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+
+const IDLE_HEIGHTS: number[] = Array(32).fill(0.1);
 
 export function Waveform({ isActive }: { isActive: boolean }) {
-  const [heights, setHeights] = useState(Array(32).fill(0.1));
+  const [animatedHeights, setAnimatedHeights] = useState<number[]>(IDLE_HEIGHTS);
 
   useEffect(() => {
     if (!isActive) {
-      setHeights(Array(32).fill(0.1));
       return;
     }
 
     const interval = setInterval(() => {
-      setHeights(prev => prev.map(() => Math.random() * 0.9 + 0.1));
+      setAnimatedHeights(prev => prev.map(() => Math.random() * 0.9 + 0.1));
     }, 100);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      setAnimatedHeights(IDLE_HEIGHTS);
+    };
   }, [isActive]);
+
+  const heights = useMemo(
+    () => (isActive ? animatedHeights : IDLE_HEIGHTS),
+    [isActive, animatedHeights],
+  );
 
   return (
     <div className="flex items-end justify-center space-x-1 h-16 px-4">

@@ -11,8 +11,8 @@ requires-python = ">=3.11"
 
 dependencies = [
     # FastAPI Stack
-    "fastapi~=0.128.0",
-    "uvicorn[standard]~=0.40.0",
+    "fastapi~=0.135.0",
+    "uvicorn[standard]~=0.41.0",
     "python-multipart~=0.0.22",
 
     # Audio Processing (audio-separator pulls in its own audio deps)
@@ -20,16 +20,16 @@ dependencies = [
 
     # Config & Utilities
     "pydantic~=2.12.0",
-    "python-dotenv~=1.0.0",
-    "psutil~=5.9.0",
+    "python-dotenv~=1.2.0",
+    "psutil~=7.2.0",
 ]
 
 [project.optional-dependencies]
 dataset = [
     # Dataset pipeline for OpGAN training
     "internetarchive~=4.0.0",
-    "numpy>=1.24.0",
-    "soundfile~=0.12.0",
+    "numpy>=1.24.0,<2.4",
+    "soundfile~=0.13.0",
     "scipy>=1.10.0",
     "torch>=2.0.0",
 ]
@@ -40,22 +40,22 @@ eval = [
 ]
 dev = [
     # Testing
-    "httpx~=0.27.0",
+    "httpx~=0.28.0",
     "pytest~=9.0.0",
     "pytest-asyncio~=1.3.0",
     "pytest-cov~=7.0.0",
     "pytest-mock~=3.15.0",
 
     # Linting & Formatting
-    "black~=26.1.0",
+    "black~=26.3.0",
     "ruff~=0.15.0",
     "mypy~=1.19.0",
-    "isort~=7.0.0",
+    "isort~=8.0.0",
 
     # Security Scanning
-    "bandit~=1.7.0",
+    "bandit~=1.9.0",
     "pip-audit>=2.7.0",
-    "detect-secrets~=1.4.0",
+    "detect-secrets~=1.5.0",
 ]
 
 all = [

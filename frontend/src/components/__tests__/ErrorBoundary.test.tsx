@@ -1,18 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import type { ReactNode } from 'react'
 import { ErrorBoundary } from '../ErrorBoundary'
 
 let shouldThrow = true
 
-function ConditionalThrower(): JSX.Element {
+function ConditionalThrower(): ReactNode {
   if (shouldThrow) {
     throw new Error('Test explosion')
   }
   return <div>Recovered content</div>
 }
 
-function AlwaysThrower(): JSX.Element {
+function AlwaysThrower(): ReactNode {
   throw new Error('Test explosion')
 }
 

@@ -67,7 +67,7 @@ GitHub Actions workflow with parallel backend + frontend jobs. Backend: black, i
 - Wired real API calls (upload → poll status → download)
 - `ErrorBoundary` added
 - Removed 17 unused dependencies
-- Added `.eslintrc.json`, `.env.example`
+- Added ESLint config, `.env.example`
 
 ## Consequences
 

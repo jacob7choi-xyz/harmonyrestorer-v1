@@ -65,7 +65,7 @@ First full run of the pipeline:
 **Negative:**
 - Synthetic noise may not perfectly match real analog recordings -- the model's real-world performance depends on how well our synthesis approximates actual degradation
 - Resampling to 16kHz discards high-frequency content above 8kHz -- acceptable for the current model but limits future work at higher sample rates
-- Linear interpolation for resampling is fast but lower quality than polyphase filtering -- good enough for training data but should be revisited if artifacts appear
+- ~~Linear interpolation for resampling~~ Resolved: switched to `librosa.resample` (polyphase filtering) for higher quality resampling
 
 **Limitations:**
 - No real analog noise samples yet -- could improve by recording actual tape/vinyl noise floors and using those instead of synthetic approximations

@@ -56,7 +56,7 @@ Frontend checks:
 
 ```bash
 cd frontend
-npm run lint && npm run type-check && npm run build
+npm run lint && npm run type-check && npm run build && npm run test
 ```
 
 ## Dataset Pipeline (for OpGAN training)
@@ -126,13 +126,16 @@ backend/app/           # FastAPI backend
   services/            # Business logic (denoiser, job manager)
   _archive/            # OpGAN model code (do not modify)
 frontend/src/          # React/TypeScript frontend
-dataset/               # Training data pipeline
+dataset/               # Training data pipeline & evaluation
   acquire.py           # Download from Internet Archive
   preprocess.py        # Resample, normalize, slice to frames
   noise.py             # Analog noise synthesis
   generate_pairs.py    # Create noisy/clean training pairs
   torch_dataset.py     # PyTorch Dataset for training
   train.py             # OpGAN training loop
+  infer.py             # OpGAN batch inference
+  infer_uvr.py         # UVR batch inference
+  evaluate.py          # SDR/PESQ/STOI evaluation
 data/                  # Generated data (gitignored)
   raw/                 # Downloaded source audio
   frames/              # Preprocessed 2s frames
@@ -157,14 +160,20 @@ checkpoints/           # Model checkpoints (gitignored)
 ## Running Tests
 
 ```bash
-# All tests
+# Backend tests (54 tests)
 cd backend && pytest -v
 
-# Single test
-pytest tests/test_health.py::test_health_returns_ok -v
+# Dataset tests (113 tests, run from project root)
+cd .. && pytest dataset/tests/ -v
 
-# With coverage
-pytest --cov=app --cov-report=html -v
+# Frontend tests (45 tests)
+cd frontend && npm run test
+
+# Single backend test
+cd backend && pytest tests/test_health.py::test_health_returns_ok -v
+
+# Backend with coverage
+cd backend && pytest --cov=app --cov-report=html -v
 ```
 
 ## Security Rules

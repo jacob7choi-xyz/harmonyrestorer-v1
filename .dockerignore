@@ -51,6 +51,8 @@ mlruns/
 .pytest_cache
 .coverage
 docs/
-research/
-scripts/
+data/
+samples/
 CLAUDE.md
+AGENTS.md
+.claude/

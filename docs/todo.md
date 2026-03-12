@@ -21,5 +21,5 @@
 - [ ] Try two-stage approach (coarse OpGAN denoise -> fine refinement) inspired by Moliner
 - [ ] Borrow HiFi-GAN discriminator architecture if adversarial loss isn't producing sharp audio
 - [ ] Explore Noise2Noise training on real historical recordings (no clean references needed)
-- [ ] Frontend tests (vitest/jest setup)
+- [x] Frontend tests (45 tests across 5 suites: client API, Waveform, ProgressCard, UploadArea, ErrorBoundary)
 - [ ] Duration validation for MP3/M4A/AAC on backend (currently frontend-only)
