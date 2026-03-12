@@ -27,27 +27,6 @@ function deriveStep(status: ProcessingStatus['status']): WizardStep {
   }
 }
 
-const STEPS: WizardStep[] = ['upload', 'processing', 'complete'];
-
-function StepIndicator({ current }: { current: WizardStep }): React.JSX.Element {
-  const currentIndex = STEPS.indexOf(current);
-  return (
-    <div className="flex items-center justify-center gap-2 mb-8">
-      {STEPS.map((step, i) => (
-        <div
-          key={step}
-          className={`w-2 h-2 rounded-full transition-colors ${
-            i === currentIndex
-              ? 'bg-[#1DB954]'
-              : i < currentIndex
-                ? 'bg-[#B3B3B3]'
-                : 'bg-[#333333]'
-          }`}
-        />
-      ))}
-    </div>
-  );
-}
 
 export default function HarmonyRestorer(): React.JSX.Element {
   const [file, setFile] = useState<File | null>(null);
@@ -210,8 +189,6 @@ export default function HarmonyRestorer(): React.JSX.Element {
             AI-powered audio restoration. Upload, enhance, compare.
           </p>
         </header>
-
-        <StepIndicator current={step} />
 
         {/* Step 1: Upload */}
         {step === 'upload' && (

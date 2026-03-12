@@ -9,27 +9,37 @@ class MockResizeObserver {
 }
 globalThis.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
 
-const mockFillRect = vi.fn();
-const mockClearRect = vi.fn();
-const mockScale = vi.fn();
-const mockCreateLinearGradient = vi.fn().mockReturnValue({
-  addColorStop: vi.fn(),
-});
+function createMockCtx(): Record<string, unknown> {
+  const gradientStub = { addColorStop: vi.fn() };
+  return {
+    fillRect: vi.fn(),
+    clearRect: vi.fn(),
+    scale: vi.fn(),
+    setTransform: vi.fn(),
+    save: vi.fn(),
+    restore: vi.fn(),
+    beginPath: vi.fn(),
+    moveTo: vi.fn(),
+    lineTo: vi.fn(),
+    quadraticCurveTo: vi.fn(),
+    closePath: vi.fn(),
+    fill: vi.fn(),
+    arc: vi.fn(),
+    drawImage: vi.fn(),
+    createLinearGradient: vi.fn().mockReturnValue(gradientStub),
+    createRadialGradient: vi.fn().mockReturnValue(gradientStub),
+    fillStyle: '',
+    globalAlpha: 1,
+    filter: '',
+  };
+}
 
-HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue({
-  fillRect: mockFillRect,
-  clearRect: mockClearRect,
-  scale: mockScale,
-  createLinearGradient: mockCreateLinearGradient,
-  fillStyle: '',
-  globalAlpha: 1,
-}) as unknown as typeof HTMLCanvasElement.prototype.getContext;
+HTMLCanvasElement.prototype.getContext = vi.fn().mockImplementation(
+  () => createMockCtx(),
+) as unknown as typeof HTMLCanvasElement.prototype.getContext;
 
 describe('TechnoBackground', () => {
   beforeEach(() => {
-    mockFillRect.mockClear();
-    mockClearRect.mockClear();
-    mockScale.mockClear();
     vi.spyOn(window, 'requestAnimationFrame').mockReturnValue(1);
     vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
   });

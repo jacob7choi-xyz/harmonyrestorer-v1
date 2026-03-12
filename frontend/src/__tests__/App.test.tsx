@@ -91,12 +91,6 @@ describe('App (HarmonyRestorer)', () => {
     expect(screen.getByText(/drop audio file here/i)).toBeInTheDocument();
   });
 
-  it('renders three step indicator dots', () => {
-    const { container } = render(<App />);
-    const dots = container.querySelectorAll('.rounded-full.w-2.h-2');
-    expect(dots).toHaveLength(3);
-  });
-
   it('shows the Enhance button disabled when no file is selected', () => {
     render(<App />);
     const button = screen.getByRole('button', { name: /enhance/i });
