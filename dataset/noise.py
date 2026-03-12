@@ -277,12 +277,13 @@ def apply_degradation(
     # Additive noise: tape hiss
     if params.enable_hiss:
         hiss = tape_hiss(length, sr, color=params.hiss_color, rng=rng)
-        # Scale hiss to target SNR
+        # Scale hiss to target SNR relative to the degraded signal
         signal_power = np.mean(degraded**2)
-        if signal_power > 0:
+        hiss_power = np.mean(hiss**2)
+        if signal_power > 0 and hiss_power > 0:
             snr_linear = 10 ** (params.hiss_snr_db / 10)
-            noise_power = signal_power / snr_linear
-            hiss *= np.sqrt(noise_power)
+            target_noise_power = signal_power / snr_linear
+            hiss *= np.sqrt(target_noise_power / hiss_power)
             degraded += hiss
 
     # Additive noise: vinyl crackle

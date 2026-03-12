@@ -16,17 +16,10 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import sys
 from pathlib import Path
 
 import numpy as np
-
-# mir_eval uses np.Inf removed in NumPy 2.0
-if not hasattr(np, "Inf"):
-    np.Inf = np.inf  # type: ignore[attr-defined]
-
 import soundfile as sf
-from mir_eval.separation import bss_eval_sources
 from pesq import pesq
 from pystoi import stoi
 
@@ -38,6 +31,9 @@ _EXPECTED_SR = 16_000
 def compute_sdr(clean: np.ndarray, restored: np.ndarray) -> float:
     """Compute Signal-to-Distortion Ratio.
 
+    Direct computation for single-source case, avoiding the expensive
+    multi-source permutation solver in mir_eval.bss_eval_sources.
+
     Args:
         clean: Reference clean audio (1D float32).
         restored: Restored audio (1D float32).
@@ -45,11 +41,12 @@ def compute_sdr(clean: np.ndarray, restored: np.ndarray) -> float:
     Returns:
         SDR in dB.
     """
-    sdr, _, _, _ = bss_eval_sources(
-        clean.reshape(1, -1),
-        restored.reshape(1, -1),
-    )
-    return float(sdr[0])
+    noise = clean - restored
+    signal_power = np.sum(clean**2)
+    noise_power = np.sum(noise**2)
+    if noise_power < 1e-10:
+        return float("inf")
+    return float(10.0 * np.log10(signal_power / noise_power))
 
 
 def compute_pesq(clean: np.ndarray, restored: np.ndarray, sr: int) -> float:
@@ -154,16 +151,13 @@ def evaluate_directory(
         Dict with 'per_file' results and 'summary' statistics.
     """
     if not restored_dir.is_dir():
-        logger.error("Restored directory does not exist: %s", restored_dir)
-        sys.exit(1)
+        raise FileNotFoundError(f"Restored directory does not exist: {restored_dir}")
     if not clean_dir.is_dir():
-        logger.error("Clean directory does not exist: %s", clean_dir)
-        sys.exit(1)
+        raise FileNotFoundError(f"Clean directory does not exist: {clean_dir}")
 
     restored_files = sorted(restored_dir.glob("*.wav"))
     if not restored_files:
-        logger.error("No WAV files in %s", restored_dir)
-        sys.exit(1)
+        raise FileNotFoundError(f"No WAV files in {restored_dir}")
 
     clean_stems = {p.stem: p for p in clean_dir.glob("*.wav")}
 
@@ -191,8 +185,7 @@ def evaluate_directory(
             skipped += 1
 
     if not results:
-        logger.error("No files successfully evaluated")
-        sys.exit(1)
+        raise RuntimeError("No files successfully evaluated")
 
     # Aggregate statistics
     sdrs = [r["sdr"] for r in results]
@@ -265,7 +258,11 @@ def main() -> None:
 
     logger.info("Evaluating %s against %s", args.restored, args.clean)
 
-    results = evaluate_directory(args.restored, args.clean)
+    try:
+        results = evaluate_directory(args.restored, args.clean)
+    except (FileNotFoundError, RuntimeError) as e:
+        logger.error("%s", e)
+        raise SystemExit(1) from e
     _print_summary(results["summary"])
 
     if args.output:

@@ -202,18 +202,18 @@ def search_and_download(
     logger.info("Searching: %s", query)
 
     try:
-        results = list(ia.search_items(query))
+        search_iter = ia.search_items(query)
     except Exception as e:
         logger.error("Search failed: %s", e)
         return 0
 
-    logger.info("Found %d items", len(results))
-
     downloaded = 0
-    for result in results:
+    items_seen = 0
+    for result in search_iter:
         if downloaded >= max_tracks:
             break
 
+        items_seen += 1
         identifier = result.get("identifier", "")
         remaining = max_tracks - downloaded
         downloaded += download_item(
@@ -224,7 +224,7 @@ def search_and_download(
             exclude_keywords=exclude_keywords,
         )
 
-    logger.info("Total downloaded: %d tracks", downloaded)
+    logger.info("Total downloaded: %d tracks from %d items", downloaded, items_seen)
     return downloaded
 
 
@@ -318,6 +318,9 @@ def acquire_from_manifest(
             continue
 
         url = entry["url"]
+        if not isinstance(url, str) or not url.startswith(("http://", "https://")):
+            logger.warning("Skipping non-HTTP URL: %s", url)
+            continue
         raw_filename = entry.get("filename", Path(url).name)
 
         # Sanitize filename to prevent path traversal

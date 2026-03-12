@@ -41,23 +41,15 @@ def load_and_resample(
         Tuple of (mono_signal, sample_rate) or None if loading fails.
     """
     try:
-        audio, sr = sf.read(path, dtype="float32", always_2d=True)
+        # librosa.load handles WAV, FLAC, OGG natively and MP3, M4A, AAC
+        # via ffmpeg/audioread -- unlike soundfile which only supports
+        # libsndfile formats
+        audio, sr = librosa.load(path, sr=target_sr, mono=True)
     except Exception as e:
         logger.warning("Failed to load %s: %s", path.name, e)
         return None
 
-    # Convert to mono by averaging channels
-    if audio.shape[1] > 1:
-        audio = np.mean(audio, axis=1)
-    else:
-        audio = audio[:, 0]
-
-    # Resample with librosa (polyphase Kaiser-windowed sinc filter)
-    if sr != target_sr:
-        audio = librosa.resample(audio, orig_sr=sr, target_sr=target_sr).astype(np.float32)
-        sr = target_sr
-
-    return audio, sr
+    return audio.astype(np.float32), target_sr
 
 
 def normalize(signal: np.ndarray, headroom: float = 0.95) -> np.ndarray:

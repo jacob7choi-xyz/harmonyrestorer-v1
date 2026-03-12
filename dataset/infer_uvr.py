@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import shutil
 import sys
 import tempfile
@@ -82,7 +83,15 @@ def restore_file(
             f"No denoised output for {input_path.name}. Files in temp dir: {existing}"
         )
 
-    shutil.move(str(denoised), str(output_path))
+    # Atomic write: temp file then rename to avoid corrupt files on crash
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".wav", dir=output_path.parent)
+    os.close(tmp_fd)
+    try:
+        shutil.move(str(denoised), tmp_path)
+        Path(tmp_path).rename(output_path)
+    except BaseException:
+        Path(tmp_path).unlink(missing_ok=True)
+        raise
 
     logger.info("Restored %s in %.2fs", input_path.name, elapsed)
 
@@ -152,7 +161,7 @@ def main() -> None:
             try:
                 restore_file(separator, wav_file, output_path, temp_dir)
             except Exception as e:
-                logger.error("Failed to restore %s: %s", wav_file.name, e)
+                logger.error("Failed to restore %s: %s", wav_file.name, e, exc_info=True)
                 failed += 1
 
             if (i + 1) % 1000 == 0:

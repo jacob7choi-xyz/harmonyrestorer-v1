@@ -200,8 +200,6 @@ def restore_file(
         output_path: Path to save restored WAV.
         device: Torch device.
 
-    Raises:
-        ValueError: If sample rate doesn't match expected 16kHz.
     """
     audio, sr = sf.read(input_path, dtype="float32")
 
@@ -317,7 +315,7 @@ def main() -> None:
             try:
                 restore_file(generator, wav_file, output_path, device)
             except Exception as e:
-                logger.error("Failed to restore %s: %s", wav_file.name, e)
+                logger.error("Failed to restore %s: %s", wav_file.name, e, exc_info=True)
                 failed += 1
 
             if (i + 1) % 1000 == 0:
