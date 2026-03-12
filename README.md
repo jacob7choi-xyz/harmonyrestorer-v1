@@ -5,7 +5,7 @@ AI-powered audio denoising. Upload noisy audio, get clean audio back.
 - **Model**: UVR-DeNoise from [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui) via [audio-separator](https://github.com/karaokenerds/python-audio-separator)
 - **Formats**: WAV, MP3, FLAC, OGG, M4A, AAC (max 50 MB, 10 minutes)
 - **Stack**: FastAPI + React/TypeScript, Docker-ready
-- **Tests**: 39 passing (0.2s)
+- **Tests**: 242 passing (backend 54, dataset 113, frontend 75)
 
 ## Quick Start
 
@@ -56,10 +56,11 @@ backend/app/
 └── _archive/            # OpGAN research code (see below)
 
 frontend/src/
-├── App.tsx              # Main component
+├── App.tsx              # Wizard orchestrator (upload/processing/complete)
 ├── types.ts             # Shared types
 ├── api/client.ts        # Backend API calls + polling
-└── components/          # UploadArea, ProgressCard, Waveform, ErrorBoundary
+├── hooks/               # useAudioDecoder, useAudioPlayback
+└── components/          # UploadArea, WaveformCanvas, AudioPlayer, ComparisonView, ErrorBoundary
 ```
 
 ## Security
@@ -84,8 +85,12 @@ Backend and frontend have independent Dockerfiles with non-root users, health ch
 ## Quality Gate
 
 ```bash
-cd backend
-black --check . && isort --check . && ruff check . && mypy . && pytest -v
+# Backend + dataset
+cd backend && black --check . && isort --check . && ruff check . && mypy . && pytest -v
+cd .. && pytest dataset/tests/ -v
+
+# Frontend
+cd frontend && npm run type-check && npm run lint && npm run build && npm run test
 ```
 
 ## Dataset Pipeline
@@ -130,7 +135,7 @@ See [docs/benchmarks.md](docs/benchmarks.md) for details. The production API cur
 
 - [x] Working denoising API (UVR)
 - [x] Security hardening (3 phases)
-- [x] React frontend with real API integration
+- [x] React frontend with wizard flow, real waveform, audio playback, before/after comparison
 - [x] Docker + CI/CD
 - [x] Build/acquire paired training dataset (146,200 pairs from 14 composers)
 - [x] Train OpGAN (100 epochs on T4)
