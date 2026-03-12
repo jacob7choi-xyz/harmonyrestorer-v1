@@ -323,7 +323,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
             </a>
           </div>
 
-          <p className="text-[#727272] text-xs">&copy; 2026 <a href="https://jacobjchoi.xyz/" target="_blank" rel="noopener noreferrer" className="underline hover:text-white transition-colors">Jacob J. Choi</a></p>
+          <p className="text-[#727272] text-xs">&copy; {new Date().getFullYear()} <a href="https://jacobjchoi.xyz/" target="_blank" rel="noopener noreferrer" className="underline hover:text-white transition-colors">Jacob J. Choi</a></p>
         </footer>
       </div>
     </div>
