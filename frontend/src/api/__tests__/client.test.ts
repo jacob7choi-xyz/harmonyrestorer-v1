@@ -352,6 +352,56 @@ describe('pollUntilDone', () => {
     expect(globalThis.fetch).toHaveBeenCalledTimes(1)
   })
 
+  it('rejects after MAX_POLL_DURATION timeout', async () => {
+    const processingStatus = {
+      job_id: 'abc',
+      status: 'processing' as const,
+      progress: 50,
+      message: 'Working...',
+      completed_at: null,
+      download_url: null,
+      processing_time: null,
+    }
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve(processingStatus),
+    })
+
+    const onUpdate = vi.fn()
+    const promise = pollUntilDone('abc', onUpdate)
+    const rejection = promise.catch((e: Error) => e)
+
+    // Advance past the 5-minute timeout (300,000ms)
+    await vi.advanceTimersByTimeAsync(301_500)
+    const error = await rejection
+    expect(error).toBeInstanceOf(Error)
+    expect(error.message).toBe('Processing timed out')
+  })
+
+  it('rejects on unknown job status', async () => {
+    const unknownStatus = {
+      job_id: 'abc',
+      status: 'exploded' as unknown as 'processing',
+      progress: 0,
+      message: 'Boom',
+      completed_at: null,
+      download_url: null,
+      processing_time: null,
+    }
+    mockFetchResponse(unknownStatus)
+
+    const onUpdate = vi.fn()
+    const promise = pollUntilDone('abc', onUpdate)
+    const rejection = promise.catch((e: Error) => e)
+
+    await vi.advanceTimersByTimeAsync(0)
+    const error = await rejection
+    expect(error).toBeInstanceOf(Error)
+    expect(error.message).toBe('Unexpected job status: exploded')
+  })
+
   it('rejects immediately if signal already aborted', async () => {
     const controller = new AbortController()
     controller.abort()

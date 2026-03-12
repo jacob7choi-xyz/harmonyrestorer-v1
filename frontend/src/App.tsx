@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { Download, Loader2, RotateCcw } from 'lucide-react';
 import { uploadAudio, pollUntilDone, getDownloadUrl } from './api/client';
 import { UploadArea } from './components/UploadArea';
+import { AudioPlayer } from './components/AudioPlayer';
 import { WaveformCanvas } from './components/WaveformCanvas';
 import { ComparisonView } from './components/ComparisonView';
 import { TechnoBackground } from './components/TechnoBackground';
@@ -34,6 +35,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
   const [isProcessing, setIsProcessing] = useState(false);
   const [originalBlobUrl, setOriginalBlobUrl] = useState<string | null>(null);
   const [enhancedBlobUrl, setEnhancedBlobUrl] = useState<string | null>(null);
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [enhancedPeaks, setEnhancedPeaks] = useState<Float32Array | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -44,6 +46,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
+      if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
       if (originalBlobUrl) URL.revokeObjectURL(originalBlobUrl);
       if (enhancedBlobUrl) URL.revokeObjectURL(enhancedBlobUrl);
     };
@@ -52,15 +55,17 @@ export default function HarmonyRestorer(): React.JSX.Element {
 
   const resetState = useCallback((): void => {
     abortRef.current?.abort();
+    if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
     if (originalBlobUrl) URL.revokeObjectURL(originalBlobUrl);
     if (enhancedBlobUrl) URL.revokeObjectURL(enhancedBlobUrl);
     setFile(null);
     setStatus(INITIAL_STATUS);
     setIsProcessing(false);
+    setPreviewBlobUrl(null);
     setOriginalBlobUrl(null);
     setEnhancedBlobUrl(null);
     setEnhancedPeaks(null);
-  }, [originalBlobUrl, enhancedBlobUrl]);
+  }, [previewBlobUrl, originalBlobUrl, enhancedBlobUrl]);
 
   const processAudio = useCallback(async (): Promise<void> => {
     if (!file) return;
@@ -144,14 +149,16 @@ export default function HarmonyRestorer(): React.JSX.Element {
       abortRef.current?.abort();
       setIsProcessing(false);
     }
+    if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
     if (originalBlobUrl) URL.revokeObjectURL(originalBlobUrl);
     if (enhancedBlobUrl) URL.revokeObjectURL(enhancedBlobUrl);
     setFile(selectedFile);
+    setPreviewBlobUrl(URL.createObjectURL(selectedFile));
     setStatus(INITIAL_STATUS);
     setOriginalBlobUrl(null);
     setEnhancedBlobUrl(null);
     setEnhancedPeaks(null);
-  }, [isProcessing, originalBlobUrl, enhancedBlobUrl]);
+  }, [isProcessing, previewBlobUrl, originalBlobUrl, enhancedBlobUrl]);
 
   // Global drop zone
   const handleGlobalDrop = useCallback((e: React.DragEvent<HTMLDivElement>): void => {
@@ -203,10 +210,12 @@ export default function HarmonyRestorer(): React.JSX.Element {
             />
 
             {waveform && (
-              <div className="bg-[#282828] rounded-xl p-4">
-                <p className="text-sm font-bold text-[#B3B3B3] mb-3">Preview</p>
-                <WaveformCanvas peaks={waveform.peaks} accentColor="#B3B3B3" baseColor="#404040" />
-              </div>
+              <AudioPlayer
+                label="Preview"
+                src={previewBlobUrl}
+                peaks={waveform.peaks}
+                accentColor="#B3B3B3"
+              />
             )}
 
             {status.status === 'failed' && (
@@ -218,7 +227,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
             <button
               onClick={processAudio}
               disabled={!file || isProcessing}
-              className="w-full flex items-center justify-center gap-2 bg-[#1DB954] hover:bg-[#1ED760] hover:scale-[1.02] disabled:bg-[#333333]/50 disabled:backdrop-blur-md disabled:text-[#727272] text-black font-bold py-3.5 px-6 rounded-full transition-all disabled:cursor-not-allowed disabled:hover:scale-100"
+              className="w-full flex items-center justify-center gap-2 bg-[#5B8DEF] hover:bg-[#7BA4F7] hover:scale-[1.02] disabled:bg-[#333333]/50 disabled:backdrop-blur-md disabled:text-[#727272] text-black font-bold py-3.5 px-6 rounded-full transition-all disabled:cursor-not-allowed disabled:hover:scale-100"
             >
               <span>Enhance</span>
             </button>
@@ -230,19 +239,19 @@ export default function HarmonyRestorer(): React.JSX.Element {
           <div className="space-y-6 animate-fade-in">
             {waveform && (
               <div className="bg-[#282828] rounded-xl p-4">
-                <WaveformCanvas peaks={waveform.peaks} accentColor="#1DB954" baseColor="#404040" />
+                <WaveformCanvas peaks={waveform.peaks} accentColor="#5B8DEF" baseColor="#404040" />
               </div>
             )}
 
             <div className="bg-[#282828] rounded-xl p-6">
               <div className="flex items-center gap-3 mb-4">
-                <Loader2 className="w-5 h-5 text-[#1DB954] animate-spin" />
+                <Loader2 className="w-5 h-5 text-[#5B8DEF] animate-spin" />
                 <span className="text-sm font-medium text-white">{status.message}</span>
               </div>
 
               <div className="w-full bg-[#404040] rounded-full h-1 overflow-hidden">
                 <div
-                  className="h-full bg-[#1DB954] rounded-full transition-all duration-500 ease-out"
+                  className="h-full bg-[#5B8DEF] rounded-full transition-all duration-500 ease-out"
                   style={{ width: `${status.progress}%` }}
                 />
               </div>
@@ -275,7 +284,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
                 <a
                   href={status.downloadUrl}
                   download
-                  className="flex-1 flex items-center justify-center gap-2 bg-[#1DB954] hover:bg-[#1ED760] hover:scale-[1.02] text-black font-bold py-3.5 px-6 rounded-full transition-all"
+                  className="flex-1 flex items-center justify-center gap-2 bg-[#5B8DEF] hover:bg-[#7BA4F7] hover:scale-[1.02] text-black font-bold py-3.5 px-6 rounded-full transition-all"
                 >
                   <Download className="w-4 h-4" />
                   <span>Download</span>

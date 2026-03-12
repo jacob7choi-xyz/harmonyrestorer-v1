@@ -55,6 +55,10 @@ export function getDownloadUrl(jobId: string): string {
   return `${API_BASE}/download/${jobId}`;
 }
 
+const MAX_POLL_DURATION = 300_000;
+
+const KNOWN_STATUSES = new Set(['queued', 'processing', 'completed', 'failed']);
+
 export async function pollUntilDone(
   jobId: string,
   onUpdate: (status: JobStatusResponse) => void,
@@ -63,6 +67,7 @@ export async function pollUntilDone(
 ): Promise<JobStatusResponse> {
   return new Promise((resolve, reject) => {
     let timeoutId: ReturnType<typeof setTimeout>;
+    const startTime = Date.now();
 
     const cleanup = (): void => {
       clearTimeout(timeoutId);
@@ -84,6 +89,12 @@ export async function pollUntilDone(
     const poll = async (): Promise<void> => {
       if (signal?.aborted) return;
 
+      if (Date.now() - startTime > MAX_POLL_DURATION) {
+        cleanup();
+        reject(new Error('Processing timed out'));
+        return;
+      }
+
       try {
         const status = await getJobStatus(jobId, signal);
         try {
@@ -100,6 +111,9 @@ export async function pollUntilDone(
         } else if (status.status === 'failed') {
           cleanup();
           reject(new Error(status.message || 'Processing failed'));
+        } else if (!KNOWN_STATUSES.has(status.status)) {
+          cleanup();
+          reject(new Error(`Unexpected job status: ${status.status}`));
         } else {
           timeoutId = setTimeout(poll, intervalMs);
         }

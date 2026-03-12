@@ -9,9 +9,13 @@ interface UseAudioPlaybackReturn {
   audioRef: React.RefObject<HTMLAudioElement | null>;
 }
 
+/** Threshold in seconds -- only update state when currentTime drifts this far. */
+const TIME_UPDATE_THRESHOLD = 0.03;
+
 export function useAudioPlayback(src: string | null): UseAudioPlaybackReturn {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const rafRef = useRef<number>(0);
+  const lastReportedTimeRef = useRef<number>(0);
   const [state, setState] = useState<PlaybackState>({
     isPlaying: false,
     currentTime: 0,
@@ -23,6 +27,7 @@ export function useAudioPlayback(src: string | null): UseAudioPlaybackReturn {
     if (!audio || !src) return;
 
     audio.src = src;
+    lastReportedTimeRef.current = 0;
 
     const onMeta = (): void => {
       setState(prev => ({ ...prev, duration: audio.duration }));
@@ -48,7 +53,10 @@ export function useAudioPlayback(src: string | null): UseAudioPlaybackReturn {
     const tick = (): void => {
       const audio = audioRef.current;
       if (audio && !audio.paused) {
-        setState(prev => ({ ...prev, currentTime: audio.currentTime }));
+        if (Math.abs(audio.currentTime - lastReportedTimeRef.current) > TIME_UPDATE_THRESHOLD) {
+          lastReportedTimeRef.current = audio.currentTime;
+          setState(prev => ({ ...prev, currentTime: audio.currentTime }));
+        }
         rafRef.current = requestAnimationFrame(tick);
       }
     };
@@ -81,6 +89,7 @@ export function useAudioPlayback(src: string | null): UseAudioPlaybackReturn {
     if (!audio || !audio.duration) return;
     const clamped = Math.max(0, Math.min(1, fraction));
     audio.currentTime = clamped * audio.duration;
+    lastReportedTimeRef.current = audio.currentTime;
     setState(prev => ({ ...prev, currentTime: audio.currentTime }));
   }, []);
 

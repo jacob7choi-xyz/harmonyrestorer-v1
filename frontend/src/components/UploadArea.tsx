@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Upload, FileAudio } from 'lucide-react';
 
 const MAX_FILE_SIZE_MB = 50;
@@ -16,25 +16,56 @@ export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAr
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const durationCheckCleanupRef = useRef<(() => void) | null>(null);
+
+  // Clean up any pending duration check on unmount
+  useEffect(() => {
+    return () => {
+      durationCheckCleanupRef.current?.();
+    };
+  }, []);
 
   const checkDuration = (file: File): Promise<boolean> => {
+    // Clean up any previous pending check
+    durationCheckCleanupRef.current?.();
+
     return new Promise((resolve) => {
       const audio = new Audio();
       const url = URL.createObjectURL(file);
       audio.src = url;
+      let settled = false;
 
       const cleanup = (): void => {
+        if (durationCheckCleanupRef.current === onUnmount) {
+          durationCheckCleanupRef.current = null;
+        }
+        audio.pause();
+        audio.removeAttribute('src');
         URL.revokeObjectURL(url);
         clearTimeout(timeoutId);
       };
 
+      const onUnmount = (): void => {
+        if (!settled) {
+          settled = true;
+          cleanup();
+          resolve(false);
+        }
+      };
+
+      durationCheckCleanupRef.current = onUnmount;
+
       // Timeout after 5s if audio metadata never loads
       const timeoutId = setTimeout(() => {
+        if (settled) return;
+        settled = true;
         cleanup();
         resolve(true); // Let backend validate
       }, 5000);
 
       audio.addEventListener('loadedmetadata', () => {
+        if (settled) return;
+        settled = true;
         cleanup();
         if (audio.duration > MAX_DURATION_SECONDS) {
           setError(
@@ -47,6 +78,8 @@ export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAr
       });
 
       audio.addEventListener('error', () => {
+        if (settled) return;
+        settled = true;
         cleanup();
         // Can't read duration -- let the backend validate
         resolve(true);
@@ -118,8 +151,8 @@ export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAr
       aria-label={currentFile ? `Selected: ${currentFile.name}. Press to change file.` : 'Upload audio file'}
       className={`rounded-xl p-8 text-center transition-all cursor-pointer border
         ${isDragging
-          ? 'bg-[#1DB954]/10 border-[#1DB954]/50 scale-[1.02] backdrop-blur-md'
-          : 'bg-[#282828]/50 backdrop-blur-md border-white/5 hover:bg-[#333333]/50 hover:border-[#1DB954]/30'}
+          ? 'bg-[#5B8DEF]/10 border-[#5B8DEF]/50 scale-[1.02] backdrop-blur-md'
+          : 'bg-[#282828]/50 backdrop-blur-md border-white/5 hover:bg-[#333333]/50 hover:border-[#5B8DEF]/30'}
         ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -139,8 +172,8 @@ export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAr
       <div className="flex flex-col items-center space-y-4">
         {currentFile ? (
           <>
-            <div className="w-16 h-16 rounded-full bg-[#1DB954]/20 flex items-center justify-center">
-              <FileAudio className="w-8 h-8 text-[#1DB954]" />
+            <div className="w-16 h-16 rounded-full bg-[#5B8DEF]/20 flex items-center justify-center">
+              <FileAudio className="w-8 h-8 text-[#5B8DEF]" />
             </div>
             <div>
               <p className="text-lg font-medium text-white">{currentFile.name}</p>
@@ -149,7 +182,7 @@ export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAr
           </>
         ) : (
           <>
-            <div className="w-16 h-16 rounded-full bg-[#333333] flex items-center justify-center">
+            <div className="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
               <Upload className="w-8 h-8 text-[#B3B3B3]" />
             </div>
             <div>

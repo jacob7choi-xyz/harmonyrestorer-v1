@@ -67,13 +67,29 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
+/** Draw a 4-pointed sparkle centered at (x, y) with the given radius. */
+function drawSparkle(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+  const inner = r * 0.2;
+  ctx.beginPath();
+  ctx.moveTo(x, y - r);           // top
+  ctx.lineTo(x + inner, y - inner);
+  ctx.lineTo(x + r, y);           // right
+  ctx.lineTo(x + inner, y + inner);
+  ctx.lineTo(x, y + r);           // bottom
+  ctx.lineTo(x - inner, y + inner);
+  ctx.lineTo(x - r, y);           // left
+  ctx.lineTo(x - inner, y - inner);
+  ctx.closePath();
+  ctx.fill();
+}
+
 function generateStars(w: number, h: number): Star[] {
   const stars: Star[] = [];
   for (let i = 0; i < STAR_COUNT; i++) {
     stars.push({
       x: Math.random() * w,
       y: Math.random() * h,
-      size: 0.8 + Math.random() * 2,
+      size: 1.5 + Math.random() * 3,
       phase: Math.random() * TAU,
       speed: 0.5 + Math.random() * 2,
       brightness: 0.5 + Math.random() * 0.5,
@@ -227,11 +243,16 @@ function drawRibbon(
   }
 }
 
+// Suppress unused warnings -- ribbon code kept for re-enabling
+void generateRibbons;
+void drawRibbon;
+
 export function TechnoBackground({ intensity }: TechnoBackgroundProps): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
   const starsRef = useRef<Star[]>([]);
-  const ribbonsRef = useRef<Ribbon[]>(generateRibbons());
+  // Kept for when ribbons are re-enabled
+  // const ribbonsRef = useRef<Ribbon[]>(generateRibbons());
   const intensityRef = useRef<Intensity>(intensity);
 
   const curRibbonAmp = useRef(CONFIG.idle.ribbonAmplitude);
@@ -251,10 +272,6 @@ export function TechnoBackground({ intensity }: TechnoBackgroundProps): React.JS
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const glowCanvas = document.createElement('canvas');
-    const glowCtx = glowCanvas.getContext('2d');
-    if (!glowCtx) return;
-
     function resize(): void {
       const dpr = window.devicePixelRatio || 1;
       const rect = canvas!.getBoundingClientRect();
@@ -262,10 +279,7 @@ export function TechnoBackground({ intensity }: TechnoBackgroundProps): React.JS
       const h = rect.height * dpr;
       canvas!.width = w;
       canvas!.height = h;
-      glowCanvas.width = w;
-      glowCanvas.height = h;
       ctx!.setTransform(dpr, 0, 0, dpr, 0, 0);
-      glowCtx!.setTransform(dpr, 0, 0, dpr, 0, 0);
       starsRef.current = generateStars(rect.width, rect.height);
     }
 
@@ -289,20 +303,15 @@ export function TechnoBackground({ intensity }: TechnoBackgroundProps): React.JS
       curGlowSize.current = lerp(curGlowSize.current, target.glowSize, LERP_SPEED);
       curStarBright.current = lerp(curStarBright.current, target.starBrightness, LERP_SPEED);
 
-      const rAmp = curRibbonAmp.current;
-      const rSpd = curRibbonSpd.current;
+      // Ribbon vars kept for when ribbons are re-enabled
+      // const rAmp = curRibbonAmp.current;
+      // const rSpd = curRibbonSpd.current;
       const ringPulse = curRingPulse.current;
       const glowSz = curGlowSize.current;
       const starBr = curStarBright.current;
 
       const maxLen = Math.max(w, h) * 0.85;
-      const ribbons = ribbonsRef.current;
-
-      // -- Glow canvas: ribbons for bloom --
-      glowCtx!.clearRect(0, 0, w, h);
-      for (let i = 0; i < ribbons.length; i++) {
-        drawRibbon(glowCtx!, cx, cy, ribbons[i], time, rAmp, rSpd, maxLen);
-      }
+      // const ribbons = ribbonsRef.current;
 
       // -- Main canvas --
       ctx!.clearRect(0, 0, w, h);
@@ -314,50 +323,39 @@ export function TechnoBackground({ intensity }: TechnoBackgroundProps): React.JS
         const twinkle = (Math.sin(time * s.speed + s.phase) + 1) * 0.5;
         ctx!.globalAlpha = s.brightness * twinkle * starBr;
         ctx!.fillStyle = '#c8d0ff';
-        ctx!.beginPath();
-        ctx!.arc(s.x, s.y, s.size, 0, TAU);
-        ctx!.fill();
+        drawSparkle(ctx!, s.x, s.y, s.size);
       }
       ctx!.globalAlpha = 1;
 
-      // Concentric rings
+      // Radiating rings -- expand outward slowly then fade and reset
+      const ringMaxR = maxLen * 1.2;
+      ctx!.strokeStyle = 'hsla(260, 70%, 60%, 1)';
       for (let i = 0; i < RING_COUNT; i++) {
-        const baseRadius = (i + 1) * maxLen * 0.28;
-        const pulse = Math.sin(time * 0.8 + i * 1.5) * ringPulse;
-        const radius = baseRadius * (1 + pulse * 0.08);
-        const alpha = 0.12 + pulse * 0.08;
+        const phase = ((time * 0.08 * ringPulse + i / RING_COUNT) % 1);
+        const radius = phase * ringMaxR;
+        const alpha = (1 - phase) * 0.15;
         ctx!.globalAlpha = alpha;
-        ctx!.strokeStyle = 'hsla(260, 70%, 60%, 1)';
-        ctx!.lineWidth = 2;
+        ctx!.lineWidth = 1.5 * (1 - phase);
         ctx!.beginPath();
         ctx!.arc(cx, cy, radius, 0, TAU);
         ctx!.stroke();
       }
       ctx!.globalAlpha = 1;
 
-      // Bloom layer 1: tight glow
-      ctx!.filter = 'blur(18px)';
-      ctx!.globalAlpha = 1.0;
-      ctx!.drawImage(glowCanvas, 0, 0, w, h, 0, 0, w, h);
+      // Bloom passes skipped -- re-enable with ribbons
+      // ctx!.filter = 'blur(18px)';
+      // ctx!.globalAlpha = 1.0;
+      // ctx!.drawImage(glowCanvas, 0, 0, w, h, 0, 0, w, h);
+      // ctx!.filter = 'blur(40px)';
+      // ctx!.globalAlpha = 0.7;
+      // ctx!.drawImage(glowCanvas, 0, 0, w, h, 0, 0, w, h);
+      // ctx!.filter = 'blur(80px)';
+      // ctx!.globalAlpha = 0.4;
+      // ctx!.drawImage(glowCanvas, 0, 0, w, h, 0, 0, w, h);
+      // ctx!.filter = 'none';
+      // ctx!.globalAlpha = 1;
 
-      // Bloom layer 2: medium spread
-      ctx!.filter = 'blur(40px)';
-      ctx!.globalAlpha = 0.7;
-      ctx!.drawImage(glowCanvas, 0, 0, w, h, 0, 0, w, h);
-
-      // Bloom layer 3: wide ambient wash
-      ctx!.filter = 'blur(80px)';
-      ctx!.globalAlpha = 0.4;
-      ctx!.drawImage(glowCanvas, 0, 0, w, h, 0, 0, w, h);
-
-      // Reset filter and alpha after bloom passes
-      ctx!.filter = 'none';
-      ctx!.globalAlpha = 1;
-
-      // Sharp ribbons on top
-      for (let i = 0; i < ribbons.length; i++) {
-        drawRibbon(ctx!, cx, cy, ribbons[i], time, rAmp, rSpd, maxLen);
-      }
+      // Sharp ribbons disabled for preview
 
       // Gravitational orb -- slow, deep, controlled breath
       const breathe = 1 + Math.sin(time * 0.4) * 0.04;

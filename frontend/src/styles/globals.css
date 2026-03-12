@@ -8,10 +8,10 @@
   --color-card-hover: #333333;
   --color-border: #333333;
   --color-input: #333333;
-  --color-ring: #1DB954;
+  --color-ring: #5B8DEF;
 
-  --color-primary: #1DB954;
-  --color-primary-hover: #1ED760;
+  --color-primary: #5B8DEF;
+  --color-primary-hover: #7BA4F7;
   --color-primary-foreground: #FFFFFF;
 
   --color-secondary: #282828;
@@ -20,7 +20,7 @@
   --color-muted: #727272;
   --color-muted-foreground: #B3B3B3;
 
-  --color-success: #1DB954;
+  --color-success: #5B8DEF;
   --color-destructive: #E34040;
 
   --radius-lg: 0.5rem;

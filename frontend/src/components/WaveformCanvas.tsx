@@ -64,11 +64,12 @@ export function WaveformCanvas({
   peaks,
   playhead = 0,
   onSeek,
-  accentColor = '#1DB954',
+  accentColor = '#5B8DEF',
   baseColor = '#404040',
   className = '',
 }: WaveformCanvasProps): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const resizeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -79,9 +80,19 @@ export function WaveformCanvas({
     };
     draw();
 
-    const observer = new ResizeObserver(draw);
+    const observer = new ResizeObserver(() => {
+      if (resizeTimerRef.current !== null) {
+        clearTimeout(resizeTimerRef.current);
+      }
+      resizeTimerRef.current = setTimeout(draw, 100);
+    });
     observer.observe(canvas);
-    return () => observer.disconnect();
+    return () => {
+      if (resizeTimerRef.current !== null) {
+        clearTimeout(resizeTimerRef.current);
+      }
+      observer.disconnect();
+    };
   }, [peaks, playhead, accentColor, baseColor]);
 
   const handleClick = useCallback(

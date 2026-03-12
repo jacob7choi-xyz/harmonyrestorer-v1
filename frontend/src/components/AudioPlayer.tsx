@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { memo, useEffect } from 'react';
 import { Play, Pause } from 'lucide-react';
 import { useAudioPlayback } from '../hooks/useAudioPlayback';
 import { WaveformCanvas } from './WaveformCanvas';
@@ -18,11 +18,11 @@ function formatTime(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-export function AudioPlayer({
+function AudioPlayerInner({
   label,
   src,
   peaks,
-  accentColor = '#1DB954',
+  accentColor = '#5B8DEF',
   onPlay,
   onPause,
 }: AudioPlayerProps): React.JSX.Element {
@@ -74,7 +74,7 @@ export function AudioPlayer({
       <button
         onClick={handlePlayPause}
         disabled={!src}
-        className="w-10 h-10 rounded-full bg-[#1DB954] hover:bg-[#1ED760] hover:scale-105 disabled:bg-[#333333] disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center"
+        className="w-10 h-10 rounded-full bg-[#5B8DEF] hover:bg-[#7BA4F7] hover:scale-105 disabled:bg-[#333333] disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center"
         aria-label={state.isPlaying ? 'Pause' : 'Play'}
       >
         {state.isPlaying ? (
@@ -88,3 +88,5 @@ export function AudioPlayer({
     </div>
   );
 }
+
+export const AudioPlayer = memo(AudioPlayerInner);

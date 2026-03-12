@@ -25,7 +25,7 @@ export function ComparisonView({
         label="Enhanced"
         src={enhancedSrc}
         peaks={enhancedPeaks}
-        accentColor="#1DB954"
+        accentColor="#5B8DEF"
       />
     </div>
   );
