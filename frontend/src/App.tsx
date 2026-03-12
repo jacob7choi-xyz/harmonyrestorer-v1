@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Download, Loader2, RotateCcw } from 'lucide-react';
+import { Download, Loader2, RotateCcw, Github, Linkedin, Instagram, Youtube } from 'lucide-react';
 import { uploadAudio, pollUntilDone, getDownloadUrl } from './api/client';
 import { UploadArea } from './components/UploadArea';
 import { AudioPlayer } from './components/AudioPlayer';
@@ -303,7 +303,27 @@ export default function HarmonyRestorer(): React.JSX.Element {
         )}
 
         <footer className="text-center mt-16 pt-8 border-t border-[#282828]">
-          <p className="text-[#B3B3B3] text-sm font-medium">Powered by UVR AI denoising</p>
+          <p className="text-[#B3B3B3] text-sm font-medium mb-6">Powered by UVR AI denoising</p>
+
+          <div className="flex items-center justify-center gap-12 mb-6">
+            <a href="https://github.com/jacob7choi-xyz" target="_blank" rel="noopener noreferrer" aria-label="GitHub" className="text-[#727272] hover:text-white transition-colors">
+              <Github className="w-5 h-5" />
+            </a>
+            <a href="https://www.linkedin.com/in/jacobjchoi/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" className="text-[#727272] hover:text-white transition-colors">
+              <Linkedin className="w-5 h-5" />
+            </a>
+            <a href="https://x.com/jacob7choii" target="_blank" rel="noopener noreferrer" aria-label="X" className="text-[#727272] hover:text-white transition-colors">
+              <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>
+            </a>
+            <a href="https://www.instagram.com/jacob7choi/" target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="text-[#727272] hover:text-white transition-colors">
+              <Instagram className="w-5 h-5" />
+            </a>
+            <a href="https://youtube.com/@jacob7choi?si=QUGG9m33dLDOHoxM" target="_blank" rel="noopener noreferrer" aria-label="YouTube" className="text-[#727272] hover:text-white transition-colors">
+              <Youtube className="w-5 h-5" />
+            </a>
+          </div>
+
+          <p className="text-[#727272] text-xs">&copy; 2026 <a href="https://jacobjchoi.xyz/" target="_blank" rel="noopener noreferrer" className="underline hover:text-white transition-colors">Jacob J. Choi</a></p>
         </footer>
       </div>
     </div>
