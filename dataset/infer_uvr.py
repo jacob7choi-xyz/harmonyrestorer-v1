@@ -120,11 +120,14 @@ def restore_file(
             f"No denoised output for {input_path.name}. Files in temp dir: {existing}"
         )
 
+    # Resample UVR output back to 16 kHz mono to match clean references
+    audio, sr = librosa.load(str(denoised), sr=_TARGET_SR, mono=True)
+
     # Atomic write: temp file then rename to avoid corrupt files on crash
     tmp_fd, tmp_path = tempfile.mkstemp(suffix=".wav", dir=output_path.parent)
     os.close(tmp_fd)
     try:
-        shutil.move(str(denoised), tmp_path)
+        sf.write(tmp_path, audio, _TARGET_SR, subtype="FLOAT")
         Path(tmp_path).rename(output_path)
     except BaseException:
         Path(tmp_path).unlink(missing_ok=True)
