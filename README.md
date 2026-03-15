@@ -5,7 +5,7 @@ AI-powered audio denoising. Upload noisy audio, get clean audio back.
 - **Model**: UVR-DeNoise from [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui) via [audio-separator](https://github.com/karaokenerds/python-audio-separator)
 - **Formats**: WAV, MP3, FLAC, OGG, M4A, AAC (max 50 MB, 10 minutes)
 - **Stack**: FastAPI + React/TypeScript, Docker-ready
-- **Tests**: 251 passing (backend 54, dataset 113, frontend 84)
+- **Tests**: 265 passing (backend 54, dataset 127, frontend 84)
 
 ## Quick Start
 
@@ -121,7 +121,7 @@ The `_archive/` folder contains a from-scratch implementation of **1D Operationa
 
 ### Benchmark Results
 
-Trained 100 epochs on Tesla T4 (~51 hours, ~$41 GCP). Model operates at 16kHz mono. Evaluated on 131,027 noisy/clean pairs:
+Trained 100 epochs on Tesla T4 (~51 hours, ~$48 GCP). Model operates at 16kHz mono. Evaluated on 131,027 noisy/clean pairs:
 
 | Metric   | Mean  | Median |
 |----------|-------|--------|
