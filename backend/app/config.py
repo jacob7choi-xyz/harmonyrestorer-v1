@@ -24,7 +24,11 @@ class Settings:
         self.max_audio_duration_seconds = int(
             os.getenv("MAX_AUDIO_DURATION_SECONDS", str(10 * 60))  # 10 minutes
         )
+        self.denoiser_engine = os.getenv("DENOISER_ENGINE", "opgan")  # "opgan" or "uvr"
         self.uvr_model_name = os.getenv("UVR_MODEL_NAME", "UVR-DeNoise.pth")
+        self.opgan_checkpoint = Path(
+            os.getenv("OPGAN_CHECKPOINT", str(self.base_dir.parent / "checkpoints" / "final.pt"))
+        )
 
         # Security
         self.max_upload_bytes = int(os.getenv("MAX_UPLOAD_BYTES", str(50 * 1024 * 1024)))
