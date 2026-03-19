@@ -6,6 +6,7 @@ import { AudioPlayer } from './components/AudioPlayer';
 import { WaveformCanvas } from './components/WaveformCanvas';
 import { ComparisonView } from './components/ComparisonView';
 import { TechnoBackground } from './components/TechnoBackground';
+import { Analytics } from '@vercel/analytics/react';
 import { useAudioDecoder, computePeaks } from './hooks/useAudioDecoder';
 import type { ProcessingStatus, WizardStep } from './types';
 
@@ -326,6 +327,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
           <p className="text-[#727272] text-xs">&copy; {new Date().getFullYear()} <a href="https://jacobjchoi.xyz/" target="_blank" rel="noopener noreferrer" className="underline hover:text-white transition-colors">Jacob J. Choi</a></p>
         </footer>
       </div>
+      <Analytics />
     </div>
   );
 }

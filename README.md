@@ -121,7 +121,7 @@ The `_archive/` folder contains a from-scratch implementation of **1D Operationa
 
 ### Benchmark Results
 
-Trained 100 epochs on Tesla T4 (~51 hours, ~$48 GCP). Model operates at 16kHz mono. Evaluated on 131,027 noisy/clean pairs:
+Trained 100 epochs on Tesla T4 (~51 hours, ~$100 total GCP). Model operates at 16kHz mono. Evaluated on 131,027 noisy/clean pairs:
 
 | Metric   | Mean  | Median |
 |----------|-------|--------|
@@ -129,7 +129,17 @@ Trained 100 epochs on Tesla T4 (~51 hours, ~$48 GCP). Model operates at 16kHz mo
 | PESQ     | 4.04  | 4.28   |
 | STOI     | 0.960 | 0.989  |
 
-See [docs/benchmarks.md](docs/benchmarks.md) for details. The production API currently uses pretrained UVR models pending head-to-head comparison.
+### UVR Baseline
+
+UVR-DeNoise.pth evaluated on the same 146,195 files (resampled to 16kHz mono for fair comparison):
+
+| Metric   | OpGAN  | UVR   | Delta       |
+|----------|--------|-------|-------------|
+| SDR (dB) | **23.74** | 11.86 | +11.88 dB |
+| PESQ     | **4.04**  | 3.72  | +0.32     |
+| STOI     | **0.960** | 0.953 | +0.007    |
+
+OpGAN outperforms UVR across all metrics. See [docs/benchmarks.md](docs/benchmarks.md) for details.
 
 ## Roadmap
 
@@ -141,8 +151,8 @@ See [docs/benchmarks.md](docs/benchmarks.md) for details. The production API cur
 - [x] Build/acquire paired training dataset (146,200 pairs from 14 composers)
 - [x] Train OpGAN (100 epochs on T4)
 - [x] Benchmark OpGAN (SDR 23.74 dB, PESQ 4.04, STOI 0.960)
-- [ ] Benchmark UVR on same dataset for head-to-head comparison
-- [ ] Swap in OpGAN if it outperforms UVR
+- [x] Benchmark UVR on same dataset for head-to-head comparison
+- [ ] Swap in OpGAN (outperforms UVR by ~12 dB SDR)
 
 ## License
 
