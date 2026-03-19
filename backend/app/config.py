@@ -24,7 +24,11 @@ class Settings:
         self.max_audio_duration_seconds = int(
             os.getenv("MAX_AUDIO_DURATION_SECONDS", str(10 * 60))  # 10 minutes
         )
-        self.denoiser_engine = os.getenv("DENOISER_ENGINE", "opgan")  # "opgan" or "uvr"
+        self.denoiser_engine = os.getenv("DENOISER_ENGINE", "opgan")
+        if self.denoiser_engine not in ("opgan", "uvr"):
+            raise ValueError(
+                f"Invalid DENOISER_ENGINE={self.denoiser_engine!r}, must be 'opgan' or 'uvr'"
+            )
         self.uvr_model_name = os.getenv("UVR_MODEL_NAME", "UVR-DeNoise.pth")
         self.opgan_checkpoint = Path(
             os.getenv("OPGAN_CHECKPOINT", str(self.base_dir.parent / "checkpoints" / "final.pt"))

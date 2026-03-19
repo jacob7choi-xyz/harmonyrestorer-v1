@@ -137,6 +137,10 @@ explicit_package_bases = true
 mypy_path = "backend"
 exclude = ["external_tools", "_archive", "tests"]
 
+[[tool.mypy.overrides]]
+module = "app._archive.*"
+follow_imports = "skip"
+
 [tool.pytest.ini_options]
 testpaths = ["backend/tests", "dataset/tests"]
 pythonpath = ["backend", "."]
@@ -152,7 +156,7 @@ filterwarnings = [
 
 [tool.coverage.run]
 source = ["backend"]
-omit = ["*/tests/*", "external_tools/*"]
+omit = ["*/tests/*", "external_tools/*", "backend/app/_archive/*"]
 
 [tool.coverage.report]
 exclude_lines = [

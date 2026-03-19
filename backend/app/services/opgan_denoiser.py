@@ -9,18 +9,15 @@ from __future__ import annotations
 
 import logging
 import os
-import sys
 import tempfile
+import time
 from pathlib import Path
 
 import librosa
 import numpy as np
 import soundfile as sf
 import torch
-
-# Import OpGAN generator from archive
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from _archive.op_gan import OpGANGenerator  # noqa: E402
+from app._archive.op_gan import OpGANGenerator
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +54,8 @@ def _chunk_audio(audio: np.ndarray) -> list[tuple[int, np.ndarray]]:
         else:
             remaining = total - start
             if remaining <= _OVERLAP and chunks:
+                # Tail is too short to justify a new chunk -- the previous
+                # chunk's overlap already covers this region
                 break
             padded = np.zeros(_FRAME_LEN, dtype=np.float32)
             padded[:remaining] = audio[start:]
@@ -223,7 +222,13 @@ class OpGANDenoiserService:
             logger.debug("Resampling from %dHz to %dHz", sr, _TARGET_SR)
             audio = librosa.resample(audio, orig_sr=sr, target_sr=_TARGET_SR)
 
+        start_time = time.perf_counter()
         restored = self._restore_audio(audio)
+        elapsed = time.perf_counter() - start_time
+
+        # Release GPU memory between jobs
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
 
         # Write to temp file then atomic rename
         output_name = f"{input_path.stem}_opgan.wav"
@@ -240,5 +245,12 @@ class OpGANDenoiserService:
             Path(tmp_path).unlink(missing_ok=True)
             raise
 
-        logger.info("Denoised output: %s", output_path)
+        duration = len(audio) / _TARGET_SR
+        logger.info(
+            "Denoised %s (%.1fs audio in %.2fs, %.1fx realtime)",
+            input_path.name,
+            duration,
+            elapsed,
+            duration / max(elapsed, 0.001),
+        )
         return output_path

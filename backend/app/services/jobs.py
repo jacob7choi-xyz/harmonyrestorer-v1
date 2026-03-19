@@ -25,19 +25,20 @@ class JobManager:
 
     def _get_denoiser(self) -> DenoiserService | OpGANDenoiserService:
         """Lazy-load the denoiser singleton based on configured engine."""
-        if self._denoiser is None:
-            if settings.denoiser_engine == "opgan":
-                self._denoiser = OpGANDenoiserService(
-                    output_dir=settings.processed_dir,
-                    checkpoint_path=settings.opgan_checkpoint,
-                )
-                logger.info("OpGAN Denoiser initialized")
-            else:
-                self._denoiser = DenoiserService(
-                    output_dir=settings.processed_dir,
-                    model_name=settings.uvr_model_name,
-                )
-                logger.info("UVR Denoiser initialized")
+        with self._lock:
+            if self._denoiser is None:
+                if settings.denoiser_engine == "opgan":
+                    self._denoiser = OpGANDenoiserService(
+                        output_dir=settings.processed_dir,
+                        checkpoint_path=settings.opgan_checkpoint,
+                    )
+                    logger.info("OpGAN Denoiser initialized")
+                else:
+                    self._denoiser = DenoiserService(
+                        output_dir=settings.processed_dir,
+                        model_name=settings.uvr_model_name,
+                    )
+                    logger.info("UVR Denoiser initialized")
         return self._denoiser
 
     @property
