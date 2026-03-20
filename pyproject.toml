@@ -92,7 +92,6 @@ exclude = '''
     | \.venv
     | __pycache__
     | external_tools
-    | _archive
     | \.pytest_cache
 )/
 '''
@@ -105,7 +104,6 @@ exclude = [
     ".venv",
     "__pycache__",
     "external_tools",
-    "_archive",
     ".pytest_cache",
 ]
 
@@ -126,7 +124,7 @@ ignore = [
 [tool.isort]
 profile = "black"
 line_length = 100
-skip = ["external_tools", "_archive", ".venv"]
+skip = ["external_tools", ".venv"]
 
 [tool.mypy]
 python_version = "3.11"
@@ -135,11 +133,11 @@ warn_unused_ignores = true
 ignore_missing_imports = true
 explicit_package_bases = true
 mypy_path = "backend"
-exclude = ["external_tools", "_archive", "tests"]
+exclude = ["external_tools", "tests"]
 
 [[tool.mypy.overrides]]
-module = "app._archive.*"
-follow_imports = "skip"
+module = "app.models.*"
+warn_return_any = false
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests", "dataset/tests"]
@@ -148,7 +146,7 @@ python_files = ["test_*.py"]
 python_functions = ["test_*"]
 asyncio_mode = "auto"
 addopts = "-v --tb=short"
-norecursedirs = ["_archive", "external_tools", "node_modules", ".git"]
+norecursedirs = ["external_tools", "node_modules", ".git"]
 filterwarnings = [
     "ignore::DeprecationWarning",
     "ignore::UserWarning",
@@ -156,7 +154,7 @@ filterwarnings = [
 
 [tool.coverage.run]
 source = ["backend"]
-omit = ["*/tests/*", "external_tools/*", "backend/app/_archive/*"]
+omit = ["*/tests/*", "external_tools/*"]
 
 [tool.coverage.report]
 exclude_lines = [

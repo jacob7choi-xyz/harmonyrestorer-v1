@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import math
+import threading
 
 import torch
 import torch.nn as nn
@@ -45,6 +46,8 @@ class OptimizedSelfONN(nn.Module):
         gradient_clip_value: float = 1.0,
     ) -> None:
         super().__init__()
+        if q < 1:
+            raise ValueError(f"q must be >= 1, got {q}")
         self.input_size = input_size
         self.output_size = output_size
         self.q = q
@@ -93,9 +96,7 @@ class OptimizedSelfONN(nn.Module):
         wx = torch.clamp(wx, -10.0, 10.0)
 
         batch_size = x.size(0)
-        outputs = torch.empty(
-            batch_size, self.output_size, self.q, device=x.device, dtype=x.dtype
-        )
+        outputs = torch.empty(batch_size, self.output_size, self.q, device=x.device, dtype=x.dtype)
 
         outputs[:, :, 0] = wx[:, :, 0]  # Linear
         outputs[:, :, 1] = torch.sin(wx[:, :, 1])
@@ -112,10 +113,8 @@ class OptimizedSelfONN(nn.Module):
         operator_weights = F.softmax(self.operator_probs, dim=1)
 
         if not self.training:
-            operator_weights = operator_weights * self.operator_mask.float()
-            operator_weights = operator_weights / (
-                operator_weights.sum(dim=1, keepdim=True) + 1e-8
-            )
+            operator_weights = operator_weights * self.operator_mask.float()  # type: ignore[operator]
+            operator_weights = operator_weights / (operator_weights.sum(dim=1, keepdim=True) + 1e-8)
 
         return operator_weights
 
@@ -147,13 +146,18 @@ class OptimizedSelfONN(nn.Module):
 
         with torch.no_grad():
             operator_weights = F.softmax(self.operator_probs, dim=1)
-            self.operator_mask = operator_weights > threshold
+            new_mask = operator_weights > threshold
 
             # Ensure at least one operator per neuron is active
             for i in range(self.output_size):
-                if not self.operator_mask[i].any():
+                if not new_mask[i].any():
                     best_op = torch.argmax(operator_weights[i])
-                    self.operator_mask[i, best_op] = True
+                    new_mask[i, best_op] = True
+
+            self.operator_mask.copy_(new_mask)  # type: ignore[operator]
+            pruned = int((~self.operator_mask).sum().item())  # type: ignore[operator]
+            total = self.output_size * self.q
+            logger.info("Pruned %d/%d operators (threshold=%.3f)", pruned, total, threshold)
 
     def get_operator_usage(self) -> torch.Tensor:
         """Return current operator usage probabilities [output_size, q]."""
@@ -189,6 +193,8 @@ class OptimizedConv1DSelfONN(nn.Module):
         gradient_clip_value: float = 1.0,
     ) -> None:
         super().__init__()
+        if q < 1:
+            raise ValueError(f"q must be >= 1, got {q}")
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.kernel_size = kernel_size
@@ -206,7 +212,8 @@ class OptimizedConv1DSelfONN(nn.Module):
         # Operator probabilities: [out_channels, q]
         self.operator_probs = nn.Parameter(torch.empty(out_channels, q))
 
-        # Inference cache
+        # Inference cache (lock protects concurrent read/write)
+        self._cache_lock = threading.Lock()
         self.register_buffer("_operator_weights_cache", None)
         self.register_buffer("_cache_valid", torch.tensor(False))
 
@@ -224,16 +231,20 @@ class OptimizedConv1DSelfONN(nn.Module):
 
     def _get_operator_weights(self) -> torch.Tensor:
         """Cached softmax over operator probs (cache valid only at inference)."""
-        if not self.training and self._cache_valid:
-            return self._operator_weights_cache
+        if self.training:
+            return F.softmax(self.operator_probs, dim=1)
 
-        weights = F.softmax(self.operator_probs, dim=1)
+        # Fast path: cache already populated (lock-free, safe under CPython GIL)
+        if self._cache_valid:
+            return self._operator_weights_cache  # type: ignore[has-type]
 
-        if not self.training:
+        with self._cache_lock:
+            if self._cache_valid:
+                return self._operator_weights_cache  # type: ignore[has-type]
+            weights = F.softmax(self.operator_probs, dim=1)
             self._operator_weights_cache = weights.detach()
-            self._cache_valid.fill_(True)
-
-        return weights
+            self._cache_valid.fill_(True)  # type: ignore[operator]
+            return weights
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass: per-operator conv -> weighted sum -> clamp."""
@@ -278,9 +289,9 @@ class OptimizedConv1DSelfONN(nn.Module):
     def invalidate_cache(self) -> None:
         """Invalidate operator weights cache."""
         if hasattr(self, "_cache_valid"):
-            self._cache_valid.fill_(False)
+            self._cache_valid.fill_(False)  # type: ignore[operator]
 
-    def train(self, mode: bool = True) -> "OptimizedConv1DSelfONN":
+    def train(self, mode: bool = True) -> OptimizedConv1DSelfONN:
         """Override to invalidate cache when entering training mode."""
         super().train(mode)
         if mode:

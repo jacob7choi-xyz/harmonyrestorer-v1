@@ -42,9 +42,6 @@ weights/
 # External tools (not needed — we use audio-separator pip package)
 external_tools/
 
-# Archive
-backend/app/_archive/
-
 # Misc
 wandb/
 mlruns/

@@ -8,20 +8,20 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 import soundfile as sf
+from app.models.chunking import chunk_audio, overlap_add
 from app.services.opgan_denoiser import (
+    _BATCH_SIZE,
     OpGANDenoiserService,
-    _chunk_audio,
-    _overlap_add,
 )
 
 
 class TestChunkAudio:
-    """Tests for the _chunk_audio function."""
+    """Tests for the chunk_audio function."""
 
     def test_short_audio_is_zero_padded(self) -> None:
         """Audio shorter than frame length is zero-padded."""
         audio = np.ones(1000, dtype=np.float32)
-        chunks = _chunk_audio(audio)
+        chunks = chunk_audio(audio)
 
         assert len(chunks) == 1
         start, frame = chunks[0]
@@ -33,7 +33,7 @@ class TestChunkAudio:
     def test_exact_frame_length(self) -> None:
         """Audio exactly one frame long produces one chunk."""
         audio = np.ones(32_000, dtype=np.float32)
-        chunks = _chunk_audio(audio)
+        chunks = chunk_audio(audio)
 
         assert len(chunks) == 1
         assert chunks[0][0] == 0
@@ -41,12 +41,12 @@ class TestChunkAudio:
     def test_empty_audio_raises(self) -> None:
         """Empty audio raises ValueError."""
         with pytest.raises(ValueError, match="empty"):
-            _chunk_audio(np.array([], dtype=np.float32))
+            chunk_audio(np.array([], dtype=np.float32))
 
     def test_long_audio_produces_overlapping_chunks(self) -> None:
         """Audio longer than one frame produces multiple overlapping chunks."""
         audio = np.ones(64_000, dtype=np.float32)
-        chunks = _chunk_audio(audio)
+        chunks = chunk_audio(audio)
 
         assert len(chunks) >= 2
         # Second chunk should start before end of first chunk (overlap)
@@ -54,12 +54,12 @@ class TestChunkAudio:
 
 
 class TestOverlapAdd:
-    """Tests for the _overlap_add function."""
+    """Tests for the overlap_add function."""
 
     def test_single_chunk_trimmed(self) -> None:
         """Single chunk is trimmed to original length."""
         frame = np.ones(32_000, dtype=np.float32)
-        result = _overlap_add([(0, frame)], 1000)
+        result = overlap_add([(0, frame)], 1000)
 
         assert len(result) == 1000
         assert np.all(result == 1.0)
@@ -67,10 +67,83 @@ class TestOverlapAdd:
     def test_preserves_constant_signal(self) -> None:
         """Overlap-add of constant signal should remain constant."""
         audio = np.ones(64_000, dtype=np.float32)
-        chunks = _chunk_audio(audio)
-        result = _overlap_add(chunks, 64_000)
+        chunks = chunk_audio(audio)
+        result = overlap_add(chunks, 64_000)
 
         np.testing.assert_allclose(result, 1.0, atol=1e-6)
+
+
+class TestRestoreAudio:
+    """Tests for _restore_audio behavior."""
+
+    @patch("app.services.opgan_denoiser.OpGANGenerator")
+    @patch("app.services.opgan_denoiser.torch.load")
+    def test_output_is_clamped(
+        self, mock_load: MagicMock, mock_gen_cls: MagicMock, tmp_path: Path
+    ) -> None:
+        """Generator output exceeding [-1, 1] is clamped."""
+        import torch
+
+        mock_load.return_value = {"generator_state_dict": {}, "epoch": 1}
+        mock_gen = mock_gen_cls.return_value
+        mock_gen.to.return_value = mock_gen
+        mock_gen.eval.return_value = mock_gen
+
+        def amplify(tensor: torch.Tensor) -> torch.Tensor:
+            return tensor * 5.0  # push well beyond [-1, 1]
+
+        mock_gen.__call__ = amplify
+        mock_gen.side_effect = amplify
+
+        checkpoint = tmp_path / "model.pt"
+        checkpoint.write_bytes(b"fake")
+        service = OpGANDenoiserService(output_dir=tmp_path, checkpoint_path=checkpoint)
+        service._generator = mock_gen
+        service._device = torch.device("cpu")
+
+        audio = np.random.randn(16_000).astype(np.float32) * 0.5
+        result = service._restore_audio(audio)
+
+        assert result.max() <= 1.0
+        assert result.min() >= -1.0
+
+    @patch("app.services.opgan_denoiser.OpGANGenerator")
+    @patch("app.services.opgan_denoiser.torch.load")
+    def test_batched_inference(
+        self, mock_load: MagicMock, mock_gen_cls: MagicMock, tmp_path: Path
+    ) -> None:
+        """Long audio is processed in batches, not one frame at a time."""
+        import torch
+
+        mock_load.return_value = {"generator_state_dict": {}, "epoch": 1}
+        mock_gen = mock_gen_cls.return_value
+        mock_gen.to.return_value = mock_gen
+        mock_gen.eval.return_value = mock_gen
+
+        call_shapes: list[tuple[int, ...]] = []
+
+        def track_calls(tensor: torch.Tensor) -> torch.Tensor:
+            call_shapes.append(tuple(tensor.shape))
+            return tensor
+
+        mock_gen.__call__ = track_calls
+        mock_gen.side_effect = track_calls
+
+        checkpoint = tmp_path / "model.pt"
+        checkpoint.write_bytes(b"fake")
+        service = OpGANDenoiserService(output_dir=tmp_path, checkpoint_path=checkpoint)
+        service._generator = mock_gen
+        service._device = torch.device("cpu")
+
+        # Audio long enough to produce more than _BATCH_SIZE chunks
+        samples = (_BATCH_SIZE + 2) * 32_000
+        audio = np.random.randn(samples).astype(np.float32) * 0.1
+        service._restore_audio(audio)
+
+        # First call should be a full batch
+        assert call_shapes[0][0] == _BATCH_SIZE
+        # All calls should use batched [B, 1, frame_len] shape
+        assert all(s[1] == 1 for s in call_shapes)
 
 
 class TestOpGANDenoiserInit:

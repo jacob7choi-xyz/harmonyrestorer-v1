@@ -27,15 +27,14 @@ import numpy as np
 import soundfile as sf
 import torch
 
-# Import OpGAN components from archive
+# Import OpGAN components from backend
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
-from app._archive.op_gan import OpGANGenerator  # noqa: E402
+from app.models.chunking import chunk_audio, overlap_add  # noqa: E402
+from app.models.op_gan import OpGANGenerator  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
 _EXPECTED_SR = 16_000
-_FRAME_LEN = 32_000  # 2 seconds at 16kHz
-_OVERLAP = 1600  # 100ms overlap for crossfade (5% of frame)
 
 
 def _load_generator(checkpoint_path: Path, device: torch.device) -> OpGANGenerator:
@@ -70,91 +69,6 @@ def _load_generator(checkpoint_path: Path, device: torch.device) -> OpGANGenerat
     return generator
 
 
-def _chunk_audio(audio: np.ndarray) -> list[tuple[int, np.ndarray]]:
-    """Split audio into overlapping frames for processing.
-
-    Args:
-        audio: 1D float32 array of audio samples.
-
-    Returns:
-        List of (start_index, frame) tuples.
-    """
-    total = len(audio)
-    if total == 0:
-        raise ValueError("Audio is empty (zero samples)")
-
-    if total <= _FRAME_LEN:
-        padded = np.zeros(_FRAME_LEN, dtype=np.float32)
-        padded[:total] = audio
-        return [(0, padded)]
-
-    step = _FRAME_LEN - _OVERLAP
-    chunks = []
-
-    for start in range(0, total, step):
-        end = start + _FRAME_LEN
-        if end <= total:
-            chunks.append((start, audio[start:end]))
-        else:
-            remaining = total - start
-            if remaining <= _OVERLAP and chunks:
-                # Tail is too short to justify a new chunk -- skip it,
-                # the previous chunk's overlap already covers this region
-                break
-            padded = np.zeros(_FRAME_LEN, dtype=np.float32)
-            padded[:remaining] = audio[start:]
-            chunks.append((start, padded))
-            break
-
-    return chunks
-
-
-def _overlap_add(chunks: list[tuple[int, np.ndarray]], original_length: int) -> np.ndarray:
-    """Reassemble processed chunks using overlap-add with linear crossfade.
-
-    Only interior overlap regions get crossfaded. The first chunk keeps
-    its original start, and the last chunk keeps its original end.
-
-    Args:
-        chunks: List of (start_index, processed_frame) tuples.
-        original_length: Length of the original audio to trim to.
-
-    Returns:
-        Reconstructed audio as 1D float32 array.
-    """
-    if len(chunks) == 1:
-        start, frame = chunks[0]
-        return frame[:original_length].copy()
-
-    output = np.zeros(original_length, dtype=np.float32)
-    weights = np.zeros(original_length, dtype=np.float32)
-    last_idx = len(chunks) - 1
-
-    for i, (start, frame) in enumerate(chunks):
-        end = min(start + len(frame), original_length)
-        length = end - start
-
-        window = np.ones(length, dtype=np.float32)
-        if _OVERLAP > 0:
-            fade_len = min(_OVERLAP, length)
-            # First chunk: no fade-in, only fade-out
-            # Last chunk: only fade-in, no fade-out
-            # Middle chunks: both fade-in and fade-out
-            if i > 0:
-                window[:fade_len] *= np.linspace(0, 1, fade_len, dtype=np.float32)
-            if i < last_idx:
-                window[-fade_len:] *= np.linspace(1, 0, fade_len, dtype=np.float32)
-
-        output[start:end] += frame[:length] * window
-        weights[start:end] += window
-
-    # Avoid division by zero
-    nonzero = weights > 0
-    output[nonzero] /= weights[nonzero]
-
-    return output
-
-
 @torch.no_grad()
 def restore_audio(
     generator: OpGANGenerator,
@@ -175,7 +89,7 @@ def restore_audio(
         Restored audio as 1D float32 array, same length as input.
     """
     original_length = len(audio)
-    chunks = _chunk_audio(audio)
+    chunks = chunk_audio(audio)
 
     processed = []
     for start, frame in chunks:
@@ -183,7 +97,7 @@ def restore_audio(
         restored = generator(tensor)
         processed.append((start, restored.squeeze(0).squeeze(0).cpu().numpy()))
 
-    return _overlap_add(processed, original_length)
+    return overlap_add(processed, original_length)
 
 
 def restore_file(
@@ -220,7 +134,7 @@ def restore_file(
     os.close(tmp_fd)
     try:
         sf.write(tmp_path, restored, _EXPECTED_SR)
-        Path(tmp_path).rename(output_path)
+        Path(tmp_path).replace(output_path)
     except BaseException:
         Path(tmp_path).unlink(missing_ok=True)
         raise
@@ -317,6 +231,9 @@ def main() -> None:
             except Exception as e:
                 logger.error("Failed to restore %s: %s", wav_file.name, e, exc_info=True)
                 failed += 1
+
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
             if (i + 1) % 1000 == 0:
                 logger.info("Progress: %d/%d files", i + 1, len(remaining))

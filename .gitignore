@@ -85,11 +85,11 @@ datasets_cache/
 # Checkpoint directories
 checkpoints/
 weights/
-models/
+/models/
 
 # Benchmark artifacts
 samples/
-opgan_metrics.json
+metrics/
 
 # Training data (downloaded/generated audio)
 data/

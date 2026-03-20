@@ -9,6 +9,7 @@ the first layer for feature extraction, with standard convolutions for speed.
 from __future__ import annotations
 
 import logging
+from collections import deque
 
 import torch
 import torch.nn as nn
@@ -29,19 +30,16 @@ class OpGANGenerator(nn.Module):
         Final: Standard conv + Tanh (bounded output)
 
     Args:
-        input_length: Expected input length in samples (default 32000 = 2s @ 16kHz).
         q: Operator count per Self-ONN neuron.
         gradient_clip_value: Max gradient norm for clip_gradients().
     """
 
     def __init__(
         self,
-        input_length: int = 32000,
         q: int = 3,
         gradient_clip_value: float = 1.0,
     ) -> None:
         super().__init__()
-        self.input_length = input_length
         self.q = q
         self.gradient_clip_value = gradient_clip_value
 
@@ -158,7 +156,7 @@ class OpGANGenerator(nn.Module):
         torch.nn.utils.clip_grad_norm_(self.parameters(), self.gradient_clip_value)
         for module in self.modules():
             if hasattr(module, "clip_gradients") and module is not self:
-                module.clip_gradients()
+                module.clip_gradients()  # type: ignore[operator]
 
     def get_operator_usage_summary(self) -> dict[str, torch.Tensor]:
         """Return mean operator usage per encoder/decoder layer."""
@@ -182,19 +180,16 @@ class OpGANDiscriminator(nn.Module):
     Remaining layers use standard convolutions for computational efficiency.
 
     Args:
-        input_length: Expected input length in samples.
         q: Operator count for the Self-ONN layer.
         gradient_clip_value: Max gradient norm for clip_gradients().
     """
 
     def __init__(
         self,
-        input_length: int = 32000,
         q: int = 2,
         gradient_clip_value: float = 1.0,
     ) -> None:
         super().__init__()
-        self.input_length = input_length
         self.q = q
         self.gradient_clip_value = gradient_clip_value
 
@@ -385,13 +380,21 @@ class GradientHealthMonitor:
     Args:
         max_grad_norm: Clip threshold.
         log_frequency: Log every N steps.
+        max_history: Max entries in gradient history (oldest dropped first).
     """
 
-    def __init__(self, max_grad_norm: float = 1.0, log_frequency: int = 10) -> None:
+    _DEFAULT_MAX_HISTORY = 10_000
+
+    def __init__(
+        self,
+        max_grad_norm: float = 1.0,
+        log_frequency: int = 10,
+        max_history: int = _DEFAULT_MAX_HISTORY,
+    ) -> None:
         self.max_grad_norm = max_grad_norm
         self.log_frequency = log_frequency
         self.step_count = 0
-        self.gradient_history: list[dict[str, float | int]] = []
+        self.gradient_history: deque[dict[str, float | int]] = deque(maxlen=max_history)
 
     def check_and_clip_gradients(self, model: nn.Module, model_name: str = "") -> float:
         """Check gradient health, clip if needed, and log periodically.

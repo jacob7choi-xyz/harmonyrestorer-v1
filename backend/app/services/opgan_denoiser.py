@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import os
 import tempfile
+import threading
 import time
 from pathlib import Path
 
@@ -17,91 +18,13 @@ import librosa
 import numpy as np
 import soundfile as sf
 import torch
-from app._archive.op_gan import OpGANGenerator
+from app.models.chunking import chunk_audio, overlap_add
+from app.models.op_gan import OpGANGenerator
 
 logger = logging.getLogger(__name__)
 
 _TARGET_SR = 16_000
-_FRAME_LEN = 32_000  # 2 seconds at 16kHz
-_OVERLAP = 1600  # 100ms overlap for crossfade
-
-
-def _chunk_audio(audio: np.ndarray) -> list[tuple[int, np.ndarray]]:
-    """Split audio into overlapping frames for processing.
-
-    Args:
-        audio: 1D float32 array of audio samples.
-
-    Returns:
-        List of (start_index, frame) tuples.
-    """
-    total = len(audio)
-    if total == 0:
-        raise ValueError("Audio is empty (zero samples)")
-
-    if total <= _FRAME_LEN:
-        padded = np.zeros(_FRAME_LEN, dtype=np.float32)
-        padded[:total] = audio
-        return [(0, padded)]
-
-    step = _FRAME_LEN - _OVERLAP
-    chunks = []
-
-    for start in range(0, total, step):
-        end = start + _FRAME_LEN
-        if end <= total:
-            chunks.append((start, audio[start:end]))
-        else:
-            remaining = total - start
-            if remaining <= _OVERLAP and chunks:
-                # Tail is too short to justify a new chunk -- the previous
-                # chunk's overlap already covers this region
-                break
-            padded = np.zeros(_FRAME_LEN, dtype=np.float32)
-            padded[:remaining] = audio[start:]
-            chunks.append((start, padded))
-            break
-
-    return chunks
-
-
-def _overlap_add(chunks: list[tuple[int, np.ndarray]], original_length: int) -> np.ndarray:
-    """Reassemble processed chunks using overlap-add with linear crossfade.
-
-    Args:
-        chunks: List of (start_index, processed_frame) tuples.
-        original_length: Length of the original audio to trim to.
-
-    Returns:
-        Reconstructed audio as 1D float32 array.
-    """
-    if len(chunks) == 1:
-        start, frame = chunks[0]
-        return frame[:original_length].copy()
-
-    output = np.zeros(original_length, dtype=np.float32)
-    weights = np.zeros(original_length, dtype=np.float32)
-    last_idx = len(chunks) - 1
-
-    for i, (start, frame) in enumerate(chunks):
-        end = min(start + len(frame), original_length)
-        length = end - start
-
-        window = np.ones(length, dtype=np.float32)
-        if _OVERLAP > 0:
-            fade_len = min(_OVERLAP, length)
-            if i > 0:
-                window[:fade_len] *= np.linspace(0, 1, fade_len, dtype=np.float32)
-            if i < last_idx:
-                window[-fade_len:] *= np.linspace(1, 0, fade_len, dtype=np.float32)
-
-        output[start:end] += frame[:length] * window
-        weights[start:end] += window
-
-    nonzero = weights > 0
-    output[nonzero] /= weights[nonzero]
-
-    return output
+_BATCH_SIZE = 8  # frames per GPU batch
 
 
 class OpGANDenoiserService:
@@ -121,6 +44,7 @@ class OpGANDenoiserService:
         self.output_dir = Path(output_dir).resolve()
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.checkpoint_path = Path(checkpoint_path).resolve()
+        self._lock = threading.Lock()
         self._generator: OpGANGenerator | None = None
         self._device: torch.device | None = None
 
@@ -147,7 +71,14 @@ class OpGANDenoiserService:
             FileNotFoundError: If checkpoint doesn't exist.
             KeyError: If checkpoint is missing generator_state_dict.
         """
-        if self._generator is None:
+        if self._generator is not None:
+            return self._generator, self._device  # type: ignore[return-value]
+
+        with self._lock:
+            # Re-check after acquiring lock (double-checked locking)
+            if self._generator is not None:
+                return self._generator, self._device
+
             if not self.checkpoint_path.exists():
                 raise FileNotFoundError(f"Checkpoint not found: {self.checkpoint_path}")
 
@@ -165,15 +96,18 @@ class OpGANDenoiserService:
             generator.to(device)
             generator.eval()
 
-            self._generator = generator
             self._device = device
+            self._generator = generator
             logger.info("OpGAN model loaded (epoch %d)", checkpoint.get("epoch", -1))
 
-        return self._generator, self._device  # type: ignore[return-value]
+        return self._generator, self._device
 
     @torch.no_grad()
     def _restore_audio(self, audio: np.ndarray) -> np.ndarray:
         """Restore a single audio signal using the trained generator.
+
+        Frames are batched for GPU throughput. Output is clamped to [-1, 1]
+        to prevent clipping artifacts in the output WAV.
 
         Args:
             audio: 1D float32 array at 16kHz.
@@ -183,15 +117,26 @@ class OpGANDenoiserService:
         """
         generator, device = self._get_generator()
         original_length = len(audio)
-        chunks = _chunk_audio(audio)
+        chunks = chunk_audio(audio)
 
+        total_batches = (len(chunks) + _BATCH_SIZE - 1) // _BATCH_SIZE
         processed = []
-        for start, frame in chunks:
-            tensor = torch.from_numpy(frame).unsqueeze(0).unsqueeze(0).to(device)
-            restored = generator(tensor)
-            processed.append((start, restored.squeeze(0).squeeze(0).cpu().numpy()))
+        for batch_idx, batch_start in enumerate(range(0, len(chunks), _BATCH_SIZE)):
+            batch = chunks[batch_start : batch_start + _BATCH_SIZE]
+            logger.debug("Batch %d/%d (%d frames)", batch_idx + 1, total_batches, len(batch))
+            frames = (
+                torch.stack([torch.from_numpy(frame) for _, frame in batch]).unsqueeze(1).to(device)
+            )  # [B, 1, frame_len]
 
-        return _overlap_add(processed, original_length)
+            restored = generator(frames)  # [B, 1, frame_len]
+
+            for i, (start, _) in enumerate(batch):
+                out = restored[i].squeeze(0).cpu().numpy()
+                processed.append((start, out))
+
+        result = overlap_add(processed, original_length)
+        np.clip(result, -1.0, 1.0, out=result)
+        return result
 
     def denoise(self, input_path: Path) -> Path:
         """Run OpGAN denoising on *input_path* and return the cleaned output path.
@@ -240,7 +185,7 @@ class OpGANDenoiserService:
         os.close(tmp_fd)
         try:
             sf.write(tmp_path, restored, _TARGET_SR)
-            Path(tmp_path).rename(output_path)
+            Path(tmp_path).replace(output_path)
         except BaseException:
             Path(tmp_path).unlink(missing_ok=True)
             raise

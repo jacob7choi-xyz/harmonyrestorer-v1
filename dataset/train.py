@@ -17,16 +17,18 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
+import tempfile
 import time
 from pathlib import Path
 
 import torch
 from torch.utils.data import DataLoader, random_split
 
-# Import OpGAN components from archive
+# Import OpGAN components from backend
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
-from app._archive.op_gan import (  # noqa: E402
+from app.models.op_gan import (  # noqa: E402
     GradientHealthMonitor,
     OpGANDiscriminator,
     OpGANGenerator,
@@ -72,7 +74,7 @@ def _save_checkpoint(
     best_val_loss: float,
     scaler: torch.amp.GradScaler | None = None,
 ) -> None:
-    """Save training checkpoint."""
+    """Save training checkpoint atomically via temp file + rename."""
     path.parent.mkdir(parents=True, exist_ok=True)
     data: dict = {
         "epoch": epoch,
@@ -84,7 +86,14 @@ def _save_checkpoint(
     }
     if scaler is not None:
         data["scaler_state_dict"] = scaler.state_dict()
-    torch.save(data, path)
+    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".pt", dir=path.parent)
+    os.close(tmp_fd)
+    try:
+        torch.save(data, tmp_path)
+        Path(tmp_path).replace(path)
+    except BaseException:
+        Path(tmp_path).unlink(missing_ok=True)
+        raise
     logger.info("Saved checkpoint: %s (epoch %d)", path, epoch)
 
 
@@ -103,14 +112,17 @@ def _load_checkpoint(
         Tuple of (start_epoch, best_val_loss).
     """
     checkpoint = torch.load(path, map_location=device, weights_only=True)
-    generator.load_state_dict(checkpoint["generator_state_dict"])
-    discriminator.load_state_dict(checkpoint["discriminator_state_dict"])
-    optimizer_g.load_state_dict(checkpoint["optimizer_g_state_dict"])
-    optimizer_d.load_state_dict(checkpoint["optimizer_d_state_dict"])
+    try:
+        generator.load_state_dict(checkpoint["generator_state_dict"])
+        discriminator.load_state_dict(checkpoint["discriminator_state_dict"])
+        optimizer_g.load_state_dict(checkpoint["optimizer_g_state_dict"])
+        optimizer_d.load_state_dict(checkpoint["optimizer_d_state_dict"])
+        epoch = checkpoint["epoch"]
+        best_val_loss = checkpoint["best_val_loss"]
+    except KeyError as e:
+        raise ValueError(f"Corrupt checkpoint {path}, missing key: {e}") from e
     if scaler is not None and "scaler_state_dict" in checkpoint:
         scaler.load_state_dict(checkpoint["scaler_state_dict"])
-    epoch = checkpoint["epoch"]
-    best_val_loss = checkpoint["best_val_loss"]
     logger.info("Resumed from checkpoint: %s (epoch %d, best_val=%.4f)", path, epoch, best_val_loss)
     return epoch, best_val_loss
 
@@ -306,8 +318,8 @@ def train(
     )
 
     # --- Models ---
-    generator = OpGANGenerator(input_length=32000, q=3).to(device)
-    discriminator = OpGANDiscriminator(input_length=32000, q=2).to(device)
+    generator = OpGANGenerator(q=3).to(device)
+    discriminator = OpGANDiscriminator(q=2).to(device)
     criterion = OpGANLoss(lambda_temporal=10, lambda_spectral=5)
 
     gen_params = sum(p.numel() for p in generator.parameters())
@@ -339,6 +351,11 @@ def train(
             device,
             scaler=scaler,
         )
+        if start_epoch >= epochs:
+            logger.error(
+                "Resume epoch (%d) >= target epochs (%d), nothing to train", start_epoch, epochs
+            )
+            return
 
     # --- Training ---
     grad_monitor = GradientHealthMonitor(max_grad_norm=_MAX_GRAD_NORM, log_frequency=100)
@@ -521,6 +538,20 @@ def main() -> None:
     )
 
     args = parser.parse_args()
+
+    # Validate arguments
+    if args.epochs <= 0:
+        parser.error("--epochs must be positive")
+    if args.batch_size <= 0:
+        parser.error("--batch-size must be positive")
+    if args.lr_gen <= 0 or args.lr_disc <= 0:
+        parser.error("Learning rates must be positive")
+    if not (0 < args.val_split < 1):
+        parser.error("--val-split must be between 0 and 1 (exclusive)")
+    if args.log_interval <= 0:
+        parser.error("--log-interval must be positive")
+    if not args.pairs.exists():
+        parser.error(f"Pairs directory not found: {args.pairs}")
 
     logging.basicConfig(
         level=logging.INFO,
