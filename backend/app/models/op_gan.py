@@ -31,17 +31,14 @@ class OpGANGenerator(nn.Module):
 
     Args:
         q: Operator count per Self-ONN neuron.
-        gradient_clip_value: Max gradient norm for clip_gradients().
     """
 
     def __init__(
         self,
         q: int = 3,
-        gradient_clip_value: float = 1.0,
     ) -> None:
         super().__init__()
         self.q = q
-        self.gradient_clip_value = gradient_clip_value
 
         # Encoder (downsampling)
         self.enc1 = Conv1DSelfONN(1, 16, kernel_size=5, stride=2, padding=2, q=q)
@@ -105,13 +102,14 @@ class OpGANGenerator(nn.Module):
 
         bottleneck_out = self.bottleneck(enc5_out)
 
-        # Decoder: upsample + skip connections
+        # Decoder: upsample + skip connections (trim to match encoder sizes)
         dec1_out = F.interpolate(
             self.leaky_relu(self.dec1(bottleneck_out)),
             scale_factor=2,
             mode="linear",
             align_corners=False,
         )
+        dec1_out = dec1_out[:, :, : enc4_out.size(2)]
         dec1_out = self.dropout(dec1_out)
 
         skip4 = torch.cat([dec1_out, enc4_out], dim=1)
@@ -121,6 +119,7 @@ class OpGANGenerator(nn.Module):
             mode="linear",
             align_corners=False,
         )
+        dec2_out = dec2_out[:, :, : enc3_out.size(2)]
         dec2_out = self.dropout(dec2_out)
 
         skip3 = torch.cat([dec2_out, enc3_out], dim=1)
@@ -130,6 +129,7 @@ class OpGANGenerator(nn.Module):
             mode="linear",
             align_corners=False,
         )
+        dec3_out = dec3_out[:, :, : enc2_out.size(2)]
         dec3_out = self.dropout(dec3_out)
 
         skip2 = torch.cat([dec3_out, enc2_out], dim=1)
@@ -139,6 +139,7 @@ class OpGANGenerator(nn.Module):
             mode="linear",
             align_corners=False,
         )
+        dec4_out = dec4_out[:, :, : enc1_out.size(2)]
 
         skip1 = torch.cat([dec4_out, enc1_out], dim=1)
         final_input = F.interpolate(
@@ -151,27 +152,6 @@ class OpGANGenerator(nn.Module):
         restored = self.final_conv(final_input)
         return restored  # final_conv ends with Tanh, already in [-1, 1]
 
-    def clip_gradients(self) -> None:
-        """Clip gradients for all parameters and Self-ONN sublayers."""
-        torch.nn.utils.clip_grad_norm_(self.parameters(), self.gradient_clip_value)
-        for module in self.modules():
-            if hasattr(module, "clip_gradients") and module is not self:
-                module.clip_gradients()  # type: ignore[operator]
-
-    def get_operator_usage_summary(self) -> dict[str, torch.Tensor]:
-        """Return mean operator usage per encoder/decoder layer."""
-        usage: dict[str, torch.Tensor] = {}
-
-        for i, layer in enumerate([self.enc1, self.enc2, self.enc3, self.enc4, self.enc5], 1):
-            if hasattr(layer, "operator_probs"):
-                usage[f"enc{i}"] = F.softmax(layer.operator_probs, dim=1).mean(dim=0)
-
-        for i, layer in enumerate([self.dec1, self.dec2, self.dec3, self.dec4], 1):
-            if hasattr(layer, "operator_probs"):
-                usage[f"dec{i}"] = F.softmax(layer.operator_probs, dim=1).mean(dim=0)
-
-        return usage
-
 
 class OpGANDiscriminator(nn.Module):
     """PatchGAN-style discriminator with Self-ONN first layer.
@@ -181,17 +161,14 @@ class OpGANDiscriminator(nn.Module):
 
     Args:
         q: Operator count for the Self-ONN layer.
-        gradient_clip_value: Max gradient norm for clip_gradients().
     """
 
     def __init__(
         self,
         q: int = 2,
-        gradient_clip_value: float = 1.0,
     ) -> None:
         super().__init__()
         self.q = q
-        self.gradient_clip_value = gradient_clip_value
 
         # Self-ONN for first-layer feature extraction
         self.conv1 = Conv1DSelfONN(1, 32, kernel_size=4, stride=2, padding=1, q=q)
@@ -247,14 +224,10 @@ class OpGANDiscriminator(nn.Module):
         x = self.conv2(x)  # [batch, 64, 8000]
         x = self.conv3(x)  # [batch, 128, 4000]
         x = self.conv4(x)  # [batch, 256, 2000]
-        x = self.conv5(x)  # [batch, 256, 2000]
-        x = self.conv6(x)  # [batch, 1, 1000]
+        x = self.conv5(x)  # [batch, 256, 1999] (k=4, s=1, p=1)
+        x = self.conv6(x)  # [batch, 1, 999] (k=4, s=2, p=1)
 
         return x
-
-    def clip_gradients(self) -> None:
-        """Clip gradients for stable training."""
-        torch.nn.utils.clip_grad_norm_(self.parameters(), self.gradient_clip_value)
 
 
 class OpGANLoss(nn.Module):
@@ -284,6 +257,7 @@ class OpGANLoss(nn.Module):
 
         self.mse_loss = nn.MSELoss()
         self.l1_loss = nn.L1Loss()
+        self.register_buffer("_hann_window", torch.hann_window(n_fft))
 
     def temporal_loss(self, generated: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         """L1 loss in the time domain."""
@@ -291,7 +265,7 @@ class OpGANLoss(nn.Module):
 
     def spectral_loss(self, generated: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         """L1 loss on STFT magnitudes."""
-        window = torch.hann_window(self.n_fft, device=generated.device)
+        window: torch.Tensor = self._hann_window  # type: ignore[assignment]
 
         gen_stft = torch.stft(
             generated.squeeze(1),
@@ -408,31 +382,17 @@ class GradientHealthMonitor:
         """
         self.step_count += 1
 
-        total_norm = 0.0
-        param_count = 0
-        max_grad = 0.0
-
-        for param in model.parameters():
-            if param.grad is not None:
-                param_norm = param.grad.data.norm(2).item()
-                total_norm += param_norm**2
-                max_grad = max(max_grad, param_norm)
-                param_count += 1
-
-        total_norm = total_norm**0.5
+        # clip_grad_norm_ returns the pre-clip total norm, avoiding a redundant pass
+        total_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), self.max_grad_norm).item()
 
         if self.step_count % self.log_frequency == 0:
             logger.info(
-                "Step %d %s: grad_norm=%.2e, max_grad=%.2e",
+                "Step %d %s: grad_norm=%.2e",
                 self.step_count,
                 model_name,
                 total_norm,
-                max_grad,
             )
-
-        if total_norm > self.max_grad_norm:
-            torch.nn.utils.clip_grad_norm_(model.parameters(), self.max_grad_norm)
-            if self.step_count % self.log_frequency == 0:
+            if total_norm > self.max_grad_norm:
                 logger.info(
                     "  Gradients clipped from %.2e to %.1f",
                     total_norm,
@@ -441,15 +401,13 @@ class GradientHealthMonitor:
 
         if total_norm > 1000:
             logger.warning("Very large gradients detected: %.2e", total_norm)
-        elif total_norm < 1e-8 and param_count > 0:
+        elif total_norm < 1e-8:
             logger.warning("Very small gradients detected: %.2e", total_norm)
 
         self.gradient_history.append(
             {
                 "step": self.step_count,
                 "total_norm": total_norm,
-                "max_grad": max_grad,
-                "param_count": param_count,
             }
         )
 

@@ -40,35 +40,6 @@ _DEFAULT_COLLECTIONS = [
 ]
 
 
-def list_audio_files(identifier: str) -> list[dict[str, str]]:
-    """List audio files in an Internet Archive item.
-
-    Args:
-        identifier: Archive.org item identifier.
-
-    Returns:
-        List of dicts with 'name' and 'size' keys for each audio file.
-    """
-    try:
-        item = ia.get_item(identifier)
-    except Exception as e:
-        logger.error("Failed to fetch item %s: %s", identifier, e)
-        return []
-
-    audio_files = []
-    for f in item.files:
-        name = f.get("name", "")
-        if Path(name).suffix.lower() in _AUDIO_EXTENSIONS:
-            audio_files.append(
-                {
-                    "name": name,
-                    "size": f.get("size", "0"),
-                }
-            )
-
-    return audio_files
-
-
 def download_item(
     identifier: str,
     output_dir: Path,

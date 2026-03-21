@@ -218,7 +218,7 @@ class TestOpGANDenoise:
         input_path = tmp_path / "test.wav"
         self._make_wav(input_path)
 
-        with pytest.raises(FileNotFoundError, match="Checkpoint not found"):
+        with pytest.raises(FileNotFoundError, match="checkpoint not found"):
             service.denoise(input_path)
 
     @patch("app.services.opgan_denoiser.OpGANGenerator")

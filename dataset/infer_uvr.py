@@ -121,7 +121,7 @@ def restore_file(
         )
 
     # Resample UVR output back to 16 kHz mono to match clean references
-    audio, sr = librosa.load(str(denoised), sr=_TARGET_SR, mono=True)
+    audio, _ = librosa.load(str(denoised), sr=_TARGET_SR, mono=True)
 
     # Atomic write: temp file then rename to avoid corrupt files on crash
     tmp_fd, tmp_path = tempfile.mkstemp(suffix=".wav", dir=output_path.parent)

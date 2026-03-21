@@ -1,8 +1,8 @@
 """Audio denoising service using trained OpGAN model.
 
 Loads a trained OpGAN checkpoint and restores noisy audio using
-overlap-add chunking. Resamples input to 16kHz mono and output
-back to the original sample rate.
+overlap-add chunking. Resamples input to 16kHz mono for processing;
+output is always written at 16kHz.
 """
 
 from __future__ import annotations
@@ -31,7 +31,8 @@ class OpGANDenoiserService:
     """Audio denoising using trained OpGAN model.
 
     Lazily loads the checkpoint on first call. Resamples input audio to
-    16kHz mono for processing, then writes the restored output at 16kHz.
+    16kHz mono for processing. Output is always 16kHz regardless of the
+    original sample rate.
     """
 
     def __init__(self, output_dir: Path, checkpoint_path: Path) -> None:
@@ -80,19 +81,24 @@ class OpGANDenoiserService:
                 return self._generator, self._device
 
             if not self.checkpoint_path.exists():
-                raise FileNotFoundError(f"Checkpoint not found: {self.checkpoint_path}")
+                raise FileNotFoundError(f"OpGAN checkpoint not found: {self.checkpoint_path.name}")
 
             logger.info("Loading OpGAN model from %s...", self.checkpoint_path)
             device = self._select_device()
             checkpoint = torch.load(self.checkpoint_path, map_location=device, weights_only=True)
 
-            generator = OpGANGenerator()
+            generator = OpGANGenerator(q=3)
+            # Filter cache buffers from older checkpoints that registered them
             state_dict = {
                 k: v
                 for k, v in checkpoint["generator_state_dict"].items()
                 if not k.endswith(("_operator_weights_cache", "_cache_valid"))
             }
-            generator.load_state_dict(state_dict, strict=False)
+            load_result = generator.load_state_dict(state_dict, strict=False)
+            if load_result.missing_keys:
+                logger.warning("Checkpoint missing keys: %s", load_result.missing_keys)
+            if load_result.unexpected_keys:
+                logger.warning("Checkpoint unexpected keys: %s", load_result.unexpected_keys)
             generator.to(device)
             generator.eval()
 
@@ -142,13 +148,13 @@ class OpGANDenoiserService:
         """Run OpGAN denoising on *input_path* and return the cleaned output path.
 
         Loads the audio, resamples to 16kHz mono, runs inference, and
-        writes the restored output to the output directory.
+        writes the restored output at 16kHz to the output directory.
 
         Args:
             input_path: Path to the input audio file.
 
         Returns:
-            Path to the denoised output file.
+            Path to the denoised output file (always 16kHz WAV).
 
         Raises:
             FileNotFoundError: If input file or checkpoint doesn't exist.
@@ -179,7 +185,7 @@ class OpGANDenoiserService:
         output_name = f"{input_path.stem}_opgan.wav"
         output_path = (self.output_dir / output_name).resolve()
         if not output_path.is_relative_to(self.output_dir):
-            raise RuntimeError(f"Output escapes output_dir: {output_path}")
+            raise RuntimeError("Output path escapes output directory")
 
         tmp_fd, tmp_path = tempfile.mkstemp(suffix=".wav", dir=self.output_dir)
         os.close(tmp_fd)

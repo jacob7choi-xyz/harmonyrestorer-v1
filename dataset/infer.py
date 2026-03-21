@@ -55,13 +55,18 @@ def _load_generator(checkpoint_path: Path, device: torch.device) -> OpGANGenerat
         raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
     checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=True)
-    generator = OpGANGenerator()
+    generator = OpGANGenerator(q=3)
+    # Filter cache buffers from older checkpoints that registered them
     state_dict = {
         k: v
         for k, v in checkpoint["generator_state_dict"].items()
         if not k.endswith(("_operator_weights_cache", "_cache_valid"))
     }
-    generator.load_state_dict(state_dict, strict=False)
+    load_result = generator.load_state_dict(state_dict, strict=False)
+    if load_result.missing_keys:
+        logger.warning("Checkpoint missing keys: %s", load_result.missing_keys)
+    if load_result.unexpected_keys:
+        logger.warning("Checkpoint unexpected keys: %s", load_result.unexpected_keys)
     generator.to(device)
     generator.eval()
 
@@ -208,7 +213,9 @@ def main() -> None:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         restore_file(generator, args.input, args.output, device)
     else:
-        wav_files = sorted(args.input_dir.glob("*.wav"))
+        wav_files = sorted(
+            p for p in args.input_dir.iterdir() if p.suffix.lower() == ".wav"
+        )
         if not wav_files:
             logger.error("No WAV files found in %s", args.input_dir)
             sys.exit(1)
@@ -216,8 +223,8 @@ def main() -> None:
         args.output_dir.mkdir(parents=True, exist_ok=True)
 
         # Skip files that already exist (allows resuming interrupted runs)
-        existing_names = {p.name for p in args.output_dir.glob("*.wav")}
-        remaining = [f for f in wav_files if f.name not in existing_names]
+        existing_names = {p.name.lower() for p in args.output_dir.iterdir() if p.suffix.lower() == ".wav"}
+        remaining = [f for f in wav_files if f.name.lower() not in existing_names]
         skipped = len(wav_files) - len(remaining)
         if skipped:
             logger.info("Skipping %d already-processed files", skipped)
@@ -232,7 +239,7 @@ def main() -> None:
                 logger.error("Failed to restore %s: %s", wav_file.name, e, exc_info=True)
                 failed += 1
 
-            if torch.cuda.is_available():
+            if torch.cuda.is_available() and (i + 1) % 100 == 0:
                 torch.cuda.empty_cache()
 
             if (i + 1) % 1000 == 0:
