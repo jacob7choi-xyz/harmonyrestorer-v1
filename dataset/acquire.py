@@ -129,7 +129,7 @@ def download_item(
             # Move from IA's nested structure to flat output
             ia_path = output_dir / "_tmp_ia" / identifier / filename
             if ia_path.exists():
-                ia_path.rename(output_path)
+                ia_path.replace(output_path)
                 downloaded += 1
             else:
                 logger.warning("Expected file not found after download: %s", ia_path)

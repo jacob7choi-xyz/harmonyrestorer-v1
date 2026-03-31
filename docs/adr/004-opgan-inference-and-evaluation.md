@@ -73,11 +73,27 @@ Both models are evaluated on the same 146,200-file dataset using identical metri
 
 ### Out-of-Distribution Test (William Primrose recording)
 
-The model was tested on a real historical recording (44.1 kHz MP3, ~3:30 duration). Results: the model did not generalize well to real analog noise, producing audible artifacts rather than clean output. This is expected -- the model was trained on synthetic noise only and has never seen real tape/vinyl degradation patterns. Future work should include real noise samples in the training data.
+Both models were tested on a real 1940s historical recording: William Primrose performing Tchaikovsky's "None but the Lonely Heart" (44.1 kHz stereo MP3, ~3:02 duration). This recording contains authentic analog noise (tape hiss, vinyl degradation) that neither model was trained on.
 
-### UVR Baseline
+| Model | Result |
+|-------|--------|
+| OpGAN | Output sounds nearly identical to the original. The model barely changed the audio -- it could not identify or remove the real analog noise, which differs from the synthetic noise patterns in its training data. |
+| UVR | Extracted subtle tape hiss (audible in the separated noise stem as a steady "ssss"), but left the rest of the recording largely unchanged. The denoised output sounds similar to the original with slightly reduced background hiss in the first few seconds. |
 
-Pending -- `infer_uvr.py` is written and tested locally, awaiting GCP VM availability to run on the full dataset.
+Neither model is effective for real historical recordings. The synthetic noise pipeline (tape hiss, vinyl crackle, mains hum, HF rolloff, tape saturation) does not produce noise patterns similar enough to actual 1940s analog degradation. Future work should include real analog noise samples in the training data.
+
+### UVR Baseline (2026-03-18)
+
+| Metric | Mean | Std | Median |
+|--------|------|-----|--------|
+| SDR (dB) | 11.86 | 6.52 | 11.42 |
+| PESQ | 3.72 | 0.93 | 4.14 |
+| STOI | 0.953 | 0.079 | 0.985 |
+
+- 131,013 files evaluated, 15,182 skipped (quiet frames)
+- UVR is out-of-distribution (not trained on this dataset), making this a fairer test of generalization
+- OpGAN wins across all in-distribution metrics: +11.88 dB SDR, +0.32 PESQ, +0.007 STOI
+- Caveat: OpGAN's advantage is inflated by in-distribution evaluation; real-world gap would be narrower
 
 ## Consequences
 

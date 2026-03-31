@@ -128,7 +128,7 @@ def restore_file(
     os.close(tmp_fd)
     try:
         sf.write(tmp_path, audio, _TARGET_SR, subtype="FLOAT")
-        Path(tmp_path).rename(output_path)
+        Path(tmp_path).replace(output_path)
     except BaseException:
         Path(tmp_path).unlink(missing_ok=True)
         raise
