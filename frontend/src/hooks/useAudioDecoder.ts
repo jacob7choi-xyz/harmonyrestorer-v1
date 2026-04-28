@@ -29,11 +29,7 @@ export function useAudioDecoder(
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!file) {
-      setWaveform(null);
-      setError(null);
-      return;
-    }
+    if (!file) return;
 
     let cancelled = false;
 
@@ -63,7 +59,8 @@ export function useAudioDecoder(
     return () => { cancelled = true; };
   }, [file, peakCount]);
 
-  return { waveform, error };
+  // When file is null, treat state as reset regardless of what's stored
+  return { waveform: file ? waveform : null, error: file ? error : null };
 }
 
 // Export for testing
