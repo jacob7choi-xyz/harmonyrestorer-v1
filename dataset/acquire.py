@@ -24,6 +24,8 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
+import tempfile
 from pathlib import Path
 
 import internetarchive as ia
@@ -318,13 +320,23 @@ def acquire_from_manifest(
 
         try:
             logger.info("Downloading: %s", filename)
-            with urllib.request.urlopen(url, timeout=120) as resp:
-                output_path.write_bytes(resp.read())
+            tmp_fd, tmp_path = tempfile.mkstemp(
+                prefix=f".{Path(filename).stem}.",
+                suffix=f"{Path(filename).suffix}.tmp",
+                dir=output_dir,
+            )
+            os.close(tmp_fd)
+            try:
+                with urllib.request.urlopen(url, timeout=120) as resp:
+                    with open(tmp_path, "wb") as f:
+                        f.write(resp.read())
+                Path(tmp_path).replace(output_path)
+            except BaseException:
+                Path(tmp_path).unlink(missing_ok=True)
+                raise
             downloaded += 1
         except (urllib.error.URLError, OSError) as e:
             logger.error("Download failed: %s: %s", url, e)
-            if output_path.exists():
-                output_path.unlink()
 
     logger.info("Downloaded %d files from manifest", downloaded)
     return downloaded

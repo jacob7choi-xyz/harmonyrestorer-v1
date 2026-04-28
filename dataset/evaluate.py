@@ -16,6 +16,8 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
+import tempfile
 from pathlib import Path
 
 import numpy as np
@@ -267,8 +269,17 @@ def main() -> None:
 
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)
-        with open(args.output, "w") as f:
-            json.dump(results, f, indent=2)
+        tmp_fd, tmp_path = tempfile.mkstemp(
+            prefix=f".{args.output.stem}.", suffix=".json.tmp", dir=args.output.parent
+        )
+        os.close(tmp_fd)
+        try:
+            with open(tmp_path, "w") as f:
+                json.dump(results, f, indent=2)
+            Path(tmp_path).replace(args.output)
+        except BaseException:
+            Path(tmp_path).unlink(missing_ok=True)
+            raise
         logger.info("Saved metrics to %s", args.output)
 
 

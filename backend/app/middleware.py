@@ -42,9 +42,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self.window_seconds: int = settings.rate_limit_window_seconds
         self._requests: dict[str, list[float]] = defaultdict(list)
 
-    async def dispatch(
-        self, request: Request, call_next: RequestResponseEndpoint
-    ) -> Response:
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         """Rate limit POST /api/v1/denoise by client IP.
 
         Args:

@@ -187,10 +187,12 @@ class OpGANDenoiserService:
         if not output_path.is_relative_to(self.output_dir):
             raise RuntimeError("Output path escapes output directory")
 
-        tmp_fd, tmp_path = tempfile.mkstemp(suffix=".wav", dir=self.output_dir)
+        tmp_fd, tmp_path = tempfile.mkstemp(
+            prefix=f".{input_path.stem}_opgan.", suffix=".wav.tmp", dir=self.output_dir
+        )
         os.close(tmp_fd)
         try:
-            sf.write(tmp_path, restored, _TARGET_SR)
+            sf.write(tmp_path, restored, _TARGET_SR, format="WAV")
             Path(tmp_path).replace(output_path)
         except BaseException:
             Path(tmp_path).unlink(missing_ok=True)

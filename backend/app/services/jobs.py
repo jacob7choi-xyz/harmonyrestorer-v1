@@ -1,7 +1,6 @@
 """Job management service."""
 
 import logging
-import shutil
 import threading
 from datetime import UTC, datetime
 from pathlib import Path
@@ -103,7 +102,7 @@ class JobManager:
             output_path = denoiser.denoise(input_path)
 
             final_path = settings.processed_dir / f"{job_id}_denoised.wav"
-            shutil.move(str(output_path), str(final_path))
+            Path(output_path).replace(final_path)
 
             processing_time = (datetime.now(UTC) - start_time).total_seconds()
             with self._lock:

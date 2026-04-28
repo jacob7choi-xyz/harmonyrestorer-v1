@@ -32,6 +32,52 @@ def test_upload_returns_job_id(client, mock_denoiser):
     assert data["status"] == "queued"
 
 
+def test_upload_leaves_no_temp_files(client, mock_denoiser):
+    """Atomic upload write: no .tmp files survive after a successful upload.
+
+    The upload is written via temp file + atomic rename. The background task
+    (run synchronously by TestClient) then deletes the renamed file. This test
+    proves no partial .tmp files are left behind at any stage.
+    """
+    before_tmp = set(settings.upload_dir.glob("*.tmp"))
+
+    r = client.post(
+        "/api/v1/denoise",
+        files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
+    )
+    assert r.status_code == 200
+
+    new_tmp = set(settings.upload_dir.glob("*.tmp")) - before_tmp
+    assert not new_tmp, f"Orphaned temp files after upload: {[f.name for f in new_tmp]}"
+
+
+def test_upload_write_failure_cleans_up_temp_file(client):
+    """If the atomic rename fails, the temp file is deleted and 500 is returned."""
+    from pathlib import Path
+    from unittest.mock import patch
+
+    before_tmp = set(settings.upload_dir.glob("*.tmp"))
+
+    original_replace = Path.replace
+
+    def fail_on_tmp(self, target):  # type: ignore[no-untyped-def]
+        if str(self).endswith(".tmp"):
+            raise OSError("simulated disk error")
+        return original_replace(self, target)
+
+    with patch.object(Path, "replace", fail_on_tmp):
+        r = client.post(
+            "/api/v1/denoise",
+            files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
+        )
+
+    assert r.status_code == 500
+    assert "Failed to save file" in r.json()["detail"]
+
+    new_tmp = set(settings.upload_dir.glob("*.tmp")) - before_tmp
+    assert not new_tmp, f"Orphaned temp files after write failure: {[f.name for f in new_tmp]}"
+
+
 def test_upload_rejects_unsupported_format(client):
     r = client.post(
         "/api/v1/denoise",

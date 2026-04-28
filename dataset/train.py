@@ -86,7 +86,7 @@ def _save_checkpoint(
     }
     if scaler is not None:
         data["scaler_state_dict"] = scaler.state_dict()
-    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".pt", dir=path.parent)
+    tmp_fd, tmp_path = tempfile.mkstemp(prefix=f".{path.stem}.", suffix=".pt.tmp", dir=path.parent)
     os.close(tmp_fd)
     try:
         torch.save(data, tmp_path)
@@ -377,8 +377,17 @@ def train(
         "mixed_precision": use_amp,
     }
     config_path = checkpoint_dir / "train_config.json"
-    with open(config_path, "w") as f:
-        json.dump(config, f, indent=2)
+    tmp_fd, tmp_path = tempfile.mkstemp(
+        prefix=".train_config.", suffix=".json.tmp", dir=checkpoint_dir
+    )
+    os.close(tmp_fd)
+    try:
+        with open(tmp_path, "w") as f:
+            json.dump(config, f, indent=2)
+        Path(tmp_path).replace(config_path)
+    except BaseException:
+        Path(tmp_path).unlink(missing_ok=True)
+        raise
 
     logger.info("Starting training for %d epochs (from epoch %d)", epochs, start_epoch)
 

@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
+import tempfile
 from pathlib import Path
 
 import librosa
@@ -157,7 +159,16 @@ def preprocess_directory(
         stem = file_path.stem
         for i, frame in enumerate(frames):
             frame_path = output_dir / f"{stem}__frame_{i:04d}.wav"
-            sf.write(frame_path, frame, sr, subtype="FLOAT")
+            tmp_fd, tmp_path = tempfile.mkstemp(
+                prefix=f".{stem}_frame_{i:04d}.", suffix=".wav.tmp", dir=output_dir
+            )
+            os.close(tmp_fd)
+            try:
+                sf.write(tmp_path, frame, sr, format="WAV", subtype="FLOAT")
+                Path(tmp_path).replace(frame_path)
+            except BaseException:
+                Path(tmp_path).unlink(missing_ok=True)
+                raise
 
         total_frames += len(frames)
         logger.info(

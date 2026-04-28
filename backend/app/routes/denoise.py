@@ -2,6 +2,8 @@
 
 import io
 import logging
+import os
+import tempfile
 import uuid
 from pathlib import Path
 
@@ -111,11 +113,17 @@ async def denoise_audio(
     job_id = str(uuid.uuid4())
     input_path = settings.upload_dir / f"{job_id}{file_ext}"
 
+    tmp_fd, tmp_path_str = tempfile.mkstemp(
+        prefix=f".{job_id}.", suffix=f"{file_ext}.tmp", dir=settings.upload_dir
+    )
+    os.close(tmp_fd)
     try:
-        with open(input_path, "wb") as f:
+        with open(tmp_path_str, "wb") as f:
             f.write(content)
+        Path(tmp_path_str).replace(input_path)
         logger.info("Saved upload %s (%d bytes)", job_id, len(content))
     except Exception as err:
+        Path(tmp_path_str).unlink(missing_ok=True)
         logger.exception("Failed to save upload %s", job_id)
         raise HTTPException(status_code=500, detail="Failed to save file") from err
 

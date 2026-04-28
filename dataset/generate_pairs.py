@@ -14,6 +14,8 @@ import argparse
 import dataclasses
 import json
 import logging
+import os
+import tempfile
 from pathlib import Path
 
 import soundfile as sf
@@ -98,7 +100,16 @@ def generate_pairs(
         # Copy clean frame to output
         clean_dest = clean_out / clean_path.name
         if not clean_dest.exists():
-            sf.write(clean_dest, clean_audio, sr, subtype="FLOAT")
+            tmp_fd, tmp_path = tempfile.mkstemp(
+                prefix=f".{clean_path.stem}.", suffix=".wav.tmp", dir=clean_out
+            )
+            os.close(tmp_fd)
+            try:
+                sf.write(tmp_path, clean_audio, sr, format="WAV", subtype="FLOAT")
+                Path(tmp_path).replace(clean_dest)
+            except BaseException:
+                Path(tmp_path).unlink(missing_ok=True)
+                raise
 
         # Generate noisy variants
         for v in range(variants_per_frame):
@@ -115,7 +126,16 @@ def generate_pairs(
             noisy_path = noisy_out / f"{variant_name}.wav"
             meta_path = meta_out / f"{variant_name}.json"
 
-            sf.write(noisy_path, noisy_audio, sr, subtype="FLOAT")
+            tmp_fd, tmp_path = tempfile.mkstemp(
+                prefix=f".{variant_name}.", suffix=".wav.tmp", dir=noisy_out
+            )
+            os.close(tmp_fd)
+            try:
+                sf.write(tmp_path, noisy_audio, sr, format="WAV", subtype="FLOAT")
+                Path(tmp_path).replace(noisy_path)
+            except BaseException:
+                Path(tmp_path).unlink(missing_ok=True)
+                raise
 
             # Save degradation params for reproducibility
             meta = {
@@ -124,13 +144,22 @@ def generate_pairs(
                 "seed": variant_seed,
                 "params": dataclasses.asdict(params),
             }
+            tmp_fd, tmp_path = tempfile.mkstemp(
+                prefix=f".{variant_name}.", suffix=".json.tmp", dir=meta_out
+            )
+            os.close(tmp_fd)
+            meta_written = False
             try:
-                with open(meta_path, "w") as f:
+                with open(tmp_path, "w") as f:
                     json.dump(meta, f, indent=2)
+                Path(tmp_path).replace(meta_path)
+                meta_written = True
             except OSError as e:
+                Path(tmp_path).unlink(missing_ok=True)
                 logger.error("Failed to write metadata %s: %s", meta_path, e)
 
-            total_pairs += 1
+            if meta_written:
+                total_pairs += 1
 
             if total_pairs % 500 == 0:
                 logger.info("Generated %d pairs so far...", total_pairs)
