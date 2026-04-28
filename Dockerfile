@@ -7,12 +7,12 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends ffmpeg libsndfile1 curl && \
     rm -rf /var/lib/apt/lists/*
 
-# PyTorch CPU — separate layer for caching (largest download)
+# PyTorch CPU: separate layer for caching (largest download)
 RUN pip install --no-cache-dir \
     torch torchaudio \
     --index-url https://download.pytorch.org/whl/cpu
 
-# Project dependencies — install before copying code for layer caching.
+# Project dependencies: install before copying code for layer caching.
 # Create a stub package so `pip install .` resolves deps from pyproject.toml.
 COPY pyproject.toml ./
 RUN mkdir -p backend/app && \
@@ -36,4 +36,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--forwarded-allow-ips=*"]

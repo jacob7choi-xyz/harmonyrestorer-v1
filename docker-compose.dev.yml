@@ -1,0 +1,11 @@
+# Local development extras. Not loaded automatically.
+# Opt in explicitly:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# Publishes the backend port directly so you can hit the API from a browser or
+# Postman without going through Nginx. Never use this in production: it bypasses
+# Nginx, CORS headers, and rate limiting.
+services:
+  backend:
+    ports:
+      - "8000:8000"
