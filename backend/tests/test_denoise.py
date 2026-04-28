@@ -1,6 +1,6 @@
 """Tests for the denoise API endpoints."""
 
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 from app.config import settings
@@ -178,6 +178,60 @@ def test_download_not_completed(client):
 def test_download_invalid_uuid(client):
     r = client.get("/api/v1/download/not-a-valid-uuid")
     assert r.status_code == 400
+
+
+# --- Duration validation ---
+
+
+class TestDurationValidation:
+    """Tests for audio duration gate in the upload endpoint."""
+
+    def test_wav_exceeding_max_duration_returns_400(
+        self, client, mock_denoiser, monkeypatch
+    ) -> None:
+        """WAV longer than the configured limit is rejected with 400."""
+        mock_info = Mock()
+        mock_info.duration = settings.max_audio_duration_seconds + 1
+        monkeypatch.setattr("app.routes.denoise.sf.info", lambda _: mock_info)
+
+        r = client.post(
+            "/api/v1/denoise",
+            files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
+        )
+        assert r.status_code == 400
+        assert "too long" in r.json()["detail"].lower()
+
+    def test_wav_within_max_duration_succeeds(self, client, mock_denoiser, monkeypatch) -> None:
+        """WAV within the duration limit is accepted."""
+        mock_info = Mock()
+        mock_info.duration = settings.max_audio_duration_seconds - 1
+        monkeypatch.setattr("app.routes.denoise.sf.info", lambda _: mock_info)
+
+        r = client.post(
+            "/api/v1/denoise",
+            files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
+        )
+        assert r.status_code == 200
+
+    def test_sf_info_exception_is_swallowed_and_upload_proceeds(
+        self, client, mock_denoiser, monkeypatch
+    ) -> None:
+        """If sf.info raises (corrupt/truncated WAV), the duration check is
+        skipped and the upload proceeds rather than returning an error.
+
+        This covers the bare except-Exception branch in denoise.py that
+        logs a warning and allows through files whose duration cannot be read.
+        """
+        monkeypatch.setattr(
+            "app.routes.denoise.sf.info",
+            Mock(side_effect=RuntimeError("corrupt header")),
+        )
+
+        r = client.post(
+            "/api/v1/denoise",
+            files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
+        )
+        assert r.status_code == 200
 
 
 def test_download_after_job_cleanup(client, mock_denoiser):

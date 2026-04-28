@@ -1,5 +1,6 @@
 """Tests for security features: rate limiting, error sanitization, input validation."""
 
+import time
 from unittest.mock import patch
 
 from app.config import settings
@@ -108,6 +109,41 @@ def test_rate_limiter_returns_429_after_limit(client, mock_denoiser):
     )
     assert r.status_code == 429
     assert "Too many requests" in r.json()["detail"]
+
+
+def test_rate_limit_window_expiry_allows_new_requests(client, mock_denoiser) -> None:
+    """After the rate-limit window expires, stale timestamps are pruned and
+    the client can upload again without a server restart.
+
+    Covers the sliding-window prune branch in middleware.py:
+        active = [t for t in self._requests[ip] if t > cutoff]
+    """
+    limit = settings.rate_limit_max_requests
+    window = settings.rate_limit_window_seconds
+
+    # Fill the bucket to exhaustion
+    for i in range(limit):
+        r = client.post(
+            "/api/v1/denoise",
+            files={"file": (f"t{i}.wav", SMALL_WAV, "audio/wav")},
+        )
+        assert r.status_code == 200, f"Request {i + 1} should succeed before limit"
+
+    r = client.post(
+        "/api/v1/denoise",
+        files={"file": ("over.wav", SMALL_WAV, "audio/wav")},
+    )
+    assert r.status_code == 429
+
+    # Advance time past the window so all stored timestamps are stale
+    future = time.time() + window + 1
+    with patch("app.middleware.time.time", return_value=future):
+        r = client.post(
+            "/api/v1/denoise",
+            files={"file": ("renewed.wav", SMALL_WAV, "audio/wav")},
+        )
+
+    assert r.status_code == 200, "Request after window expiry must succeed"
 
 
 # --- Stack trace suppression ---

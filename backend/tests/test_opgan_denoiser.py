@@ -163,6 +163,30 @@ class TestOpGANDenoiserInit:
         assert service._generator is None
 
 
+class TestGetGenerator:
+    """Tests for lazy model loading in _get_generator."""
+
+    def test_generator_remains_none_after_failed_load(self, tmp_path: Path) -> None:
+        """_generator stays None when checkpoint loading fails so callers can retry.
+
+        If _generator were set before the load completes, a crash mid-load would
+        cache bad state and prevent any recovery without a server restart.
+        This proves the double-checked locking pattern only sets _generator
+        after a fully successful load.
+        """
+        service = OpGANDenoiserService(
+            output_dir=tmp_path / "output",
+            checkpoint_path=tmp_path / "nonexistent.pt",
+        )
+
+        with pytest.raises(FileNotFoundError):
+            service._get_generator()
+
+        assert (
+            service._generator is None
+        ), "_generator must stay None after a failed load so the next call retries"
+
+
 class TestOpGANDenoise:
     """Tests for the denoise method."""
 

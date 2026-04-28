@@ -204,3 +204,25 @@ class TestOverlapAdd:
         result_energy = np.sum(result**2)
         # Energy should be very close (within 1%)
         np.testing.assert_allclose(result_energy, original_energy, rtol=0.01)
+
+    def test_zero_weight_positions_are_zero_not_nan(self) -> None:
+        """Positions with no chunk coverage stay 0 and do not become NaN.
+
+        Directly exercises the nonzero-mask guard in overlap_add:
+            nonzero = weights > 0
+            output[nonzero] /= weights[nonzero]
+        Without this guard, positions where weights == 0 would produce NaN
+        via 0.0 / 0.0. Chunk boundaries at the fade edges (linspace extremes
+        that hit exactly 0.0) are also covered by this guard.
+        """
+        frame = np.ones(FRAME_LEN, dtype=np.float32)
+        # Two chunks covering [0, FRAME_LEN) and [FRAME_LEN, 2*FRAME_LEN).
+        # original_length extends to 3*FRAME_LEN; positions [2*FRAME_LEN, 3*FRAME_LEN)
+        # receive no contribution from any chunk, leaving weights == 0 there.
+        chunks = [(0, frame), (FRAME_LEN, frame)]
+        original_length = FRAME_LEN * 3
+
+        result = overlap_add(chunks, original_length)
+
+        assert not np.any(np.isnan(result)), "Zero-weight positions must be 0, not NaN"
+        np.testing.assert_array_equal(result[FRAME_LEN * 2 :], 0.0)
