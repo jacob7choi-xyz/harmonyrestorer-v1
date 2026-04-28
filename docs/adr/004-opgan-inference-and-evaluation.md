@@ -15,7 +15,7 @@ After training the OpGAN for 100 epochs on 146,200 noisy/clean pairs, we needed 
 3. Compare OpGAN against UVR (the production baseline) on the same dataset
 4. Test on out-of-distribution audio (real historical recordings vs. synthetic noise)
 
-The model operates at 16 kHz mono -- a constraint inherited from the training data pipeline (ADR-002). Any input at a different sample rate or channel count must be converted before inference and evaluation.
+The model operates at 16 kHz mono, a constraint inherited from the training data pipeline (ADR-002). Any input at a different sample rate or channel count must be converted before inference and evaluation.
 
 ## Decision
 
@@ -51,7 +51,7 @@ The model operates at 16 kHz mono -- a constraint inherited from the training da
 
 **File matching**: restored files are matched to clean references by stem name. Noisy variants (`frame__v00.wav`) are mapped back to their base clean frame (`frame.wav`).
 
-**Failure handling**: files that fail evaluation (silent frames, PESQ "No utterances detected" on quiet passages) are skipped and counted. The OpGAN benchmark skipped 15,168 of 146,200 files (10.4%) -- all quiet classical music frames where PESQ requires minimum signal energy. This 89.6% coverage is acceptable and documented.
+**Failure handling**: files that fail evaluation (silent frames, PESQ "No utterances detected" on quiet passages) are skipped and counted. The OpGAN benchmark skipped 15,168 of 146,200 files (10.4%), all quiet classical music frames where PESQ requires minimum signal energy. This 89.6% coverage is acceptable and documented.
 
 ### Comparison Methodology
 
@@ -77,7 +77,7 @@ Both models were tested on a real 1940s historical recording: William Primrose p
 
 | Model | Result |
 |-------|--------|
-| OpGAN | Output sounds nearly identical to the original. The model barely changed the audio -- it could not identify or remove the real analog noise, which differs from the synthetic noise patterns in its training data. |
+| OpGAN | Output sounds nearly identical to the original. The model barely changed the audio; it could not identify or remove the real analog noise, which differs from the synthetic noise patterns in its training data. |
 | UVR | Extracted subtle tape hiss (audible in the separated noise stem as a steady "ssss"), but left the rest of the recording largely unchanged. The denoised output sounds similar to the original with slightly reduced background hiss in the first few seconds. |
 
 Neither model is effective for real historical recordings. The synthetic noise pipeline (tape hiss, vinyl crackle, mains hum, HF rolloff, tape saturation) does not produce noise patterns similar enough to actual 1940s analog degradation. Future work should include real analog noise samples in the training data.
@@ -105,13 +105,13 @@ Neither model is effective for real historical recordings. The synthetic noise p
 - Same evaluation pipeline works for both OpGAN and UVR, ensuring fair comparison
 
 **Negative:**
-- 16 kHz mono limitation means the model cannot restore high-frequency content above 8 kHz -- production use requires either training at higher sample rates or a super-resolution post-processing step (see AudioSR in references.md)
-- In-distribution evaluation inflates metrics -- real-world performance will be lower
+- 16 kHz mono limitation means the model cannot restore high-frequency content above 8 kHz. Production use requires either training at higher sample rates or a super-resolution post-processing step (see AudioSR in references.md).
+- In-distribution evaluation inflates metrics; real-world performance will be lower
 - PESQ is a speech metric used as a proxy for music quality; no standard music-specific perceptual metric exists
 
 **Neutral:**
 - librosa is now a runtime dependency for inference (was previously only needed for preprocessing)
-- Checkpoint loading requires filtering Self-ONN cache keys -- a quirk of the library, not a design flaw
+- Checkpoint loading requires filtering Self-ONN cache keys, a quirk of the library, not a design flaw
 
 ## Alternatives Considered
 

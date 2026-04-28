@@ -78,7 +78,7 @@ describe('App (HarmonyRestorer)', () => {
     vi.useRealTimers();
   });
 
-  // -- Static render tests (no fake timers needed) --
+  // Static render tests (no fake timers needed)
 
   it('renders the heading and subtitle', () => {
     render(<App />);
@@ -102,7 +102,7 @@ describe('App (HarmonyRestorer)', () => {
     expect(screen.getByText(/powered by uvr ai denoising/i)).toBeInTheDocument();
   });
 
-  // -- File selection tests (need fake timers for duration check) --
+  // File selection tests (need fake timers for duration check)
 
   it('enables the Enhance button after selecting a file', async () => {
     vi.useFakeTimers();
@@ -121,7 +121,7 @@ describe('App (HarmonyRestorer)', () => {
     expect(screen.getByText('my_track.wav')).toBeInTheDocument();
   });
 
-  // -- Processing flow tests (fake timers for file select, real timers for async flow) --
+  // Processing flow tests (fake timers for file select, real timers for async flow)
 
   it('runs the full processing flow: upload, poll, complete', async () => {
     mockUpload.mockResolvedValue({

@@ -410,8 +410,8 @@ def train(
         # Log progress
         if (epoch + 1) % log_interval == 0 or epoch == start_epoch:
             logger.info(
-                "Epoch %d/%d (%.1fs) -- "
-                "Train: G=%.4f (adv=%.4f, temp=%.4f, spec=%.4f) D=%.4f -- "
+                "Epoch %d/%d (%.1fs) | "
+                "Train: G=%.4f (adv=%.4f, temp=%.4f, spec=%.4f) D=%.4f | "
                 "Val: G=%.4f D=%.4f",
                 epoch + 1,
                 epochs,

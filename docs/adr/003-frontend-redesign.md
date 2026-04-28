@@ -1,4 +1,4 @@
-# ADR-003: Frontend Redesign — Spotify-esque Wizard with Animated Background
+# ADR-003: Frontend Redesign: Spotify-esque Wizard with Animated Background
 
 **Date:** 2026-03-12
 
@@ -80,8 +80,8 @@ Full-viewport `<canvas>` element behind all content, rendered at 60fps via `requ
 
 ### Negative
 - **Canvas animation** consumes GPU cycles continuously (mitigated: `requestAnimationFrame` pauses in hidden tabs)
-- **No SSR** — canvas animation is client-only, not relevant for this SPA but limits future SSR adoption
-- **Ribbon code stashed** — dead code in the bundle until re-enabled or removed
+- **No SSR**: canvas animation is client-only, not relevant for this SPA but limits future SSR adoption
+- **Ribbon code stashed**: dead code in the bundle until re-enabled or removed
 
 ### Neutral
 - Accent color change from green to blue is purely aesthetic, no functional impact

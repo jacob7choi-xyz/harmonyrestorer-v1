@@ -158,7 +158,7 @@ function computeRibbonPoints(
     const wave3 = Math.sin(t * 1.8 + frac * 8 + ribbon.phaseOffset * 0.7) * amplitude * 0.2;
     const displacement = (wave1 + wave2 + wave3) * maxLen * 0.2;
 
-    // Wider envelope -- peaks earlier, fades more gradually
+    // Wider envelope: peaks earlier, fades more gradually
     const env = Math.pow(Math.sin(frac * Math.PI), 0.7) * (1 - frac * 0.2);
     const halfWidth = baseWidth * env * 0.5;
 
@@ -232,7 +232,7 @@ function drawRibbon(
 
     ctx.beginPath();
     smoothPath(ctx, out.upper);
-    // Traverse lower edge in reverse -- avoids allocating a reversed copy
+    // Traverse lower edge in reverse (avoids allocating a reversed copy)
     const lower = out.lower;
     for (let i = lower.length - 1; i >= 0; i--) {
       ctx.lineTo(lower[i].x, lower[i].y);
@@ -243,7 +243,7 @@ function drawRibbon(
   }
 }
 
-// Suppress unused warnings -- ribbon code kept for re-enabling
+// Suppress unused warnings; ribbon code kept for re-enabling
 void generateRibbons;
 void drawRibbon;
 
@@ -313,7 +313,7 @@ export function TechnoBackground({ intensity }: TechnoBackgroundProps): React.JS
       const maxLen = Math.max(w, h) * 0.85;
       // const ribbons = ribbonsRef.current;
 
-      // -- Main canvas --
+      // Main canvas
       ctx!.clearRect(0, 0, w, h);
 
       // Star field
@@ -327,7 +327,7 @@ export function TechnoBackground({ intensity }: TechnoBackgroundProps): React.JS
       }
       ctx!.globalAlpha = 1;
 
-      // Radiating rings -- expand outward slowly then fade and reset
+      // Radiating rings: expand outward slowly then fade and reset
       const ringMaxR = maxLen * 1.2;
       ctx!.strokeStyle = 'hsla(260, 70%, 60%, 1)';
       for (let i = 0; i < RING_COUNT; i++) {
@@ -342,7 +342,7 @@ export function TechnoBackground({ intensity }: TechnoBackgroundProps): React.JS
       }
       ctx!.globalAlpha = 1;
 
-      // Bloom passes skipped -- re-enable with ribbons
+      // Bloom passes skipped; re-enable with ribbons
       // ctx!.filter = 'blur(18px)';
       // ctx!.globalAlpha = 1.0;
       // ctx!.drawImage(glowCanvas, 0, 0, w, h, 0, 0, w, h);
@@ -357,11 +357,11 @@ export function TechnoBackground({ intensity }: TechnoBackgroundProps): React.JS
 
       // Sharp ribbons disabled for preview
 
-      // Gravitational orb -- slow, deep, controlled breath
+      // Gravitational orb: slow, deep, controlled breath
       const breathe = 1 + Math.sin(time * 0.4) * 0.04;
       const orbR = maxLen * 0.2 * glowSz * breathe;
 
-      // Layer 1: massive gravity well -- you feel it before you see it
+      // Layer 1: massive gravity well. You feel it before you see it.
       const wellR = orbR * 6;
       const wellGrad = ctx!.createRadialGradient(cx, cy, 0, cx, cy, wellR);
       wellGrad.addColorStop(0, 'hsla(220, 80%, 60%, 0.25)');
@@ -391,7 +391,7 @@ export function TechnoBackground({ intensity }: TechnoBackgroundProps): React.JS
       ctx!.fillStyle = coreGrad;
       ctx!.fillRect(cx - orbR, cy - orbR, orbR * 2, orbR * 2);
 
-      // Subtle vignette -- just darken the very edges
+      // Subtle vignette: just darken the very edges
       const vig = ctx!.createRadialGradient(cx, cy, w * 0.3, cx, h * 0.5, w * 0.95);
       vig.addColorStop(0, 'rgba(0, 0, 0, 0)');
       vig.addColorStop(0.7, 'rgba(0, 0, 0, 0.1)');

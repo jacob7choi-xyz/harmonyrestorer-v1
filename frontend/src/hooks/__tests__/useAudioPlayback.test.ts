@@ -200,7 +200,7 @@ describe('useAudioPlayback', () => {
     it('does nothing when audioRef is null', () => {
       const { result } = renderHook(() => useAudioPlayback(null));
 
-      // No mock audio attached -- audioRef.current is null
+      // No mock audio attached; audioRef.current is null
       act(() => {
         result.current.seek(0.5);
       });

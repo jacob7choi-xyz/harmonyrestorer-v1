@@ -81,7 +81,7 @@ export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAr
         if (settled) return;
         settled = true;
         cleanup();
-        // Can't read duration -- let the backend validate
+        // Can't read duration; let the backend validate
         resolve(true);
       });
     });
@@ -187,7 +187,7 @@ export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAr
             </div>
             <div>
               <p className="text-xl font-medium text-white mb-2">Drop audio file here</p>
-              <p className="text-sm text-[#B3B3B3]">or tap to browse -- WAV, FLAC, MP3, OGG, M4A, AAC</p>
+              <p className="text-sm text-[#B3B3B3]">or tap to browse. WAV, FLAC, MP3, OGG, M4A, AAC</p>
             </div>
           </>
         )}

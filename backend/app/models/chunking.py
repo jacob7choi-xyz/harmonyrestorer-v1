@@ -43,7 +43,7 @@ def chunk_audio(audio: np.ndarray) -> list[tuple[int, np.ndarray]]:
         else:
             remaining = total - start
             if remaining <= OVERLAP and chunks:
-                # Tail is too short to justify a new chunk -- the previous
+                # Tail is too short to justify a new chunk; the previous
                 # chunk's overlap already covers this region
                 break
             padded = np.zeros(FRAME_LEN, dtype=np.float32)

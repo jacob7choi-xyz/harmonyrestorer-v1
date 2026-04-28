@@ -9,7 +9,7 @@ interface UseAudioPlaybackReturn {
   audioRef: React.RefObject<HTMLAudioElement | null>;
 }
 
-/** Threshold in seconds -- only update state when currentTime drifts this far. */
+/** Threshold in seconds. Only update state when currentTime drifts this far. */
 const TIME_UPDATE_THRESHOLD = 0.03;
 
 export function useAudioPlayback(src: string | null): UseAudioPlaybackReturn {

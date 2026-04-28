@@ -76,7 +76,7 @@ class TestChunkAudio:
         audio = np.ones(length, dtype=np.float32)
         chunks = chunk_audio(audio)
 
-        # Should only have 2 chunks -- the short tail is skipped
+        # Should only have 2 chunks; the short tail is skipped
         assert len(chunks) == 2
 
     def test_tail_longer_than_overlap_gets_padded_chunk(self) -> None:
@@ -145,7 +145,7 @@ class TestOverlapAdd:
         )
 
         chunks = chunk_audio(original)
-        # Identity "processing" -- pass chunks through unchanged
+        # Identity "processing": pass chunks through unchanged
         result = overlap_add(chunks, length)
 
         # In non-overlap regions the signal should be exact; in crossfade

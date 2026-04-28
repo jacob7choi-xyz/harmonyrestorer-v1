@@ -1,4 +1,4 @@
-# ADR-001: Enterprise Refactor — Monolith to Modular Architecture
+# ADR-001: Enterprise Refactor: Monolith to Modular Architecture
 
 **Date:** 2026-01-07 (approximate, reconstructed from git history)
 
@@ -8,7 +8,7 @@
 
 ## Context
 
-HarmonyRestorer started as a single-file FastAPI prototype (`main.py`) with all logic — routes, services, config, schemas — in one place. The frontend was a monolithic 600-line `App.tsx`. As the project matured past proof-of-concept, several problems emerged:
+HarmonyRestorer started as a single-file FastAPI prototype (`main.py`) with all logic (routes, services, config, schemas) in one place. The frontend was a monolithic 600-line `App.tsx`. As the project matured past proof-of-concept, several problems emerged:
 
 - **Maintainability:** Single-file backend made it hard to reason about responsibilities or test individual components.
 - **Security:** No file size limits, no CORS restrictions, no rate limiting, no input validation. Stack traces leaked to users.
@@ -77,17 +77,17 @@ GitHub Actions workflow with parallel backend + frontend jobs. Backend: black, i
 - **Fully containerized** with health checks and resource limits
 - **CI/CD pipeline** catches regressions on every push
 - **Security baseline** established (file limits, CORS, rate limiting, error sanitization)
-- **Frontend functional** — actually talks to the backend now
+- **Frontend functional**: actually talks to the backend now
 
 ### Negative
-- **In-memory job storage** retained (MVP trade-off — production needs Redis/Postgres)
-- **Single-worker concurrency** — no Celery/RQ, one job processes at a time
-- **Test coverage misleading** — 85% line coverage but DenoiserService mocked entirely, zero concurrency tests
-- **Rate limiter in-memory** — resets on restart, no distributed support
+- **In-memory job storage** retained (MVP trade-off; production needs Redis/Postgres)
+- **Single-worker concurrency**: no Celery/RQ, one job processes at a time
+- **Test coverage misleading**: 85% line coverage but DenoiserService mocked entirely, zero concurrency tests
+- **Rate limiter in-memory**: resets on restart, no distributed support
 
 ### Neutral
 - OpGAN code archived but still in repo (may revisit for custom training)
-- `_archive/` excluded from all tooling — invisible to linters, type checkers, tests
+- `_archive/` excluded from all tooling, invisible to linters, type checkers, tests
 
 ## Alternatives Considered
 

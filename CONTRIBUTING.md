@@ -78,9 +78,9 @@ python -m dataset.acquire --output data/raw/ --max-tracks 200 --formats .flac
 ```
 
 Useful flags:
-- `--formats .flac` -- Only download FLAC files (skip MP3/OGG duplicates)
-- `--exclude goldberg bach` -- Skip files matching keywords (case-insensitive)
-- `--max-tracks 50` -- Limit download count (useful for testing)
+- `--formats .flac`: Only download FLAC files (skip MP3/OGG duplicates)
+- `--exclude goldberg bach`: Skip files matching keywords (case-insensitive)
+- `--max-tracks 50`: Limit download count (useful for testing)
 
 ### 3. Preprocess to training frames
 

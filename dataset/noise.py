@@ -28,7 +28,7 @@ def tape_hiss(
 ) -> np.ndarray:
     """Generate frequency-shaped noise resembling analog tape hiss.
 
-    Real tape hiss is not white noise -- it rolls off at low frequencies
+    Real tape hiss is not white noise; it rolls off at low frequencies
     and has a characteristic "shhh" quality closer to pink noise.
 
     Args:

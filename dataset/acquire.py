@@ -72,7 +72,7 @@ def download_item(
         logger.error("Failed to fetch item %s: %s", identifier, e)
         return 0
 
-    # Filter to audio files only, then exclude keywords -- all before downloading
+    # Filter to audio files only, then exclude keywords (all before downloading)
     exclude_lower = [kw.lower() for kw in (exclude_keywords or [])]
     audio_files = [
         f
@@ -322,7 +322,7 @@ def acquire_from_manifest(
                 output_path.write_bytes(resp.read())
             downloaded += 1
         except (urllib.error.URLError, OSError) as e:
-            logger.error("Download failed: %s -- %s", url, e)
+            logger.error("Download failed: %s: %s", url, e)
             if output_path.exists():
                 output_path.unlink()
 

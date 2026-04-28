@@ -1,4 +1,4 @@
-"""HarmonyRestorer v1 — FastAPI application."""
+"""HarmonyRestorer v1: FastAPI application."""
 
 import asyncio
 import json
