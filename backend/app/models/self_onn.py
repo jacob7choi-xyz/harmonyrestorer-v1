@@ -129,7 +129,7 @@ class OptimizedConv1DSelfONN(nn.Module):
         # Apply operator nonlinearities per slice
         outputs = torch.zeros_like(conv_out)
         for q_idx in range(self.q):
-            outputs[:, q_idx] = self._OPERATOR_FNS[q_idx](conv_out[:, q_idx])  # type: ignore[operator]
+            outputs[:, q_idx] = self._OPERATOR_FNS[q_idx](conv_out[:, q_idx])
 
         # Weighted sum: [batch, q, out_channels, length] -> [batch, out_channels, length]
         operator_weights = self._get_operator_weights()  # [out_channels, q]

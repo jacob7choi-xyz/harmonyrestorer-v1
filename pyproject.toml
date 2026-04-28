@@ -11,15 +11,15 @@ requires-python = ">=3.11"
 
 dependencies = [
     # FastAPI Stack
-    "fastapi~=0.135.0",
-    "uvicorn[standard]~=0.41.0",
-    "python-multipart~=0.0.22",
+    "fastapi~=0.136.0",
+    "uvicorn[standard]~=0.46.0",
+    "python-multipart~=0.0.26",
 
     # Audio Processing (audio-separator pulls in its own audio deps)
-    "audio-separator[cpu]~=0.41.0",
+    "audio-separator[cpu]~=0.44.0",
 
     # Config & Utilities
-    "pydantic~=2.12.0",
+    "pydantic~=2.13.0",
     "python-dotenv~=1.2.0",
     "psutil~=7.2.0",
 ]
@@ -49,7 +49,7 @@ dev = [
     # Linting & Formatting
     "black~=26.3.0",
     "ruff~=0.15.0",
-    "mypy~=1.19.0",
+    "mypy~=1.20.0",
     "isort~=8.0.0",
 
     # Security Scanning
