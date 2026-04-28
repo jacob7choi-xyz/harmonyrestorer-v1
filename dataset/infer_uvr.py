@@ -129,7 +129,7 @@ def restore_file(
     try:
         sf.write(tmp_path, audio, _TARGET_SR, subtype="FLOAT")
         Path(tmp_path).replace(output_path)
-    except BaseException:
+    except BaseException:  # broad: catches Ctrl+C so temp file is removed before re-raising
         Path(tmp_path).unlink(missing_ok=True)
         raise
 

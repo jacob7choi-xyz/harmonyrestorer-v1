@@ -166,7 +166,7 @@ def preprocess_directory(
             try:
                 sf.write(tmp_path, frame, sr, format="WAV", subtype="FLOAT")
                 Path(tmp_path).replace(frame_path)
-            except BaseException:
+            except BaseException:  # broad: catches Ctrl+C so temp file is removed before re-raising
                 Path(tmp_path).unlink(missing_ok=True)
                 raise
 

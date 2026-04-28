@@ -277,7 +277,7 @@ def main() -> None:
             with open(tmp_path, "w") as f:
                 json.dump(results, f, indent=2)
             Path(tmp_path).replace(args.output)
-        except BaseException:
+        except BaseException:  # broad: catches Ctrl+C so temp file is removed before re-raising
             Path(tmp_path).unlink(missing_ok=True)
             raise
         logger.info("Saved metrics to %s", args.output)

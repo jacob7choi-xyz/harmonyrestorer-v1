@@ -70,7 +70,7 @@ def download_item(
 
     try:
         item = ia.get_item(identifier)
-    except Exception as e:
+    except Exception as e:  # internetarchive does not expose a stable exception hierarchy; broad catch is intentional
         logger.error("Failed to fetch item %s: %s", identifier, e)
         return 0
 
@@ -136,7 +136,7 @@ def download_item(
             else:
                 logger.warning("Expected file not found after download: %s", ia_path)
 
-        except Exception as e:
+        except Exception as e:  # internetarchive does not expose a stable exception hierarchy; broad catch is intentional
             logger.error("Download failed for %s: %s", filename, e)
             if output_path.exists():
                 output_path.unlink()
@@ -176,7 +176,7 @@ def search_and_download(
 
     try:
         search_iter = ia.search_items(query)
-    except Exception as e:
+    except Exception as e:  # internetarchive does not expose a stable exception hierarchy; broad catch is intentional
         logger.error("Search failed: %s", e)
         return 0
 
@@ -331,7 +331,7 @@ def acquire_from_manifest(
                     with open(tmp_path, "wb") as f:
                         f.write(resp.read())
                 Path(tmp_path).replace(output_path)
-            except BaseException:
+            except BaseException:  # broad: catches Ctrl+C so temp file is removed before re-raising
                 Path(tmp_path).unlink(missing_ok=True)
                 raise
             downloaded += 1

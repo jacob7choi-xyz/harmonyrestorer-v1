@@ -91,7 +91,7 @@ def _save_checkpoint(
     try:
         torch.save(data, tmp_path)
         Path(tmp_path).replace(path)
-    except BaseException:
+    except BaseException:  # broad: catches Ctrl+C so temp file is removed before re-raising
         Path(tmp_path).unlink(missing_ok=True)
         raise
     logger.info("Saved checkpoint: %s (epoch %d)", path, epoch)
@@ -385,7 +385,7 @@ def train(
         with open(tmp_path, "w") as f:
             json.dump(config, f, indent=2)
         Path(tmp_path).replace(config_path)
-    except BaseException:
+    except BaseException:  # broad: catches Ctrl+C so temp file is removed before re-raising
         Path(tmp_path).unlink(missing_ok=True)
         raise
 

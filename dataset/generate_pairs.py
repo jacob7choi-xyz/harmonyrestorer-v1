@@ -107,7 +107,7 @@ def generate_pairs(
             try:
                 sf.write(tmp_path, clean_audio, sr, format="WAV", subtype="FLOAT")
                 Path(tmp_path).replace(clean_dest)
-            except BaseException:
+            except BaseException:  # broad: catches Ctrl+C so temp file is removed before re-raising
                 Path(tmp_path).unlink(missing_ok=True)
                 raise
 
@@ -133,7 +133,7 @@ def generate_pairs(
             try:
                 sf.write(tmp_path, noisy_audio, sr, format="WAV", subtype="FLOAT")
                 Path(tmp_path).replace(noisy_path)
-            except BaseException:
+            except BaseException:  # broad: catches Ctrl+C so temp file is removed before re-raising
                 Path(tmp_path).unlink(missing_ok=True)
                 raise
 
