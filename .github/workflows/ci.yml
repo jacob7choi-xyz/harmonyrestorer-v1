@@ -48,7 +48,9 @@ jobs:
         run: bandit -r backend/app/ -x backend/app/_archive/ -q
 
       - name: Dependency audit (pip-audit)
-        run: pip-audit
+        # CVE-2026-3219 affects pip itself with no fix version available upstream;
+        # ignored until a patched pip release is published.
+        run: pip-audit --ignore-vuln CVE-2026-3219
 
       - name: Tests with coverage
         run: pytest backend/tests/ -v --tb=short --cov=backend/app --cov-fail-under=80
