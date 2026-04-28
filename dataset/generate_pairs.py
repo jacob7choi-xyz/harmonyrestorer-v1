@@ -148,18 +148,17 @@ def generate_pairs(
                 prefix=f".{variant_name}.", suffix=".json.tmp", dir=meta_out
             )
             os.close(tmp_fd)
-            meta_written = False
             try:
                 with open(tmp_path, "w") as f:
                     json.dump(meta, f, indent=2)
                 Path(tmp_path).replace(meta_path)
-                meta_written = True
             except OSError as e:
                 Path(tmp_path).unlink(missing_ok=True)
-                logger.error("Failed to write metadata %s: %s", meta_path, e)
+                noisy_path.unlink(missing_ok=True)
+                logger.error("Failed to write metadata for %s: %s", variant_name, e)
+                raise
 
-            if meta_written:
-                total_pairs += 1
+            total_pairs += 1
 
             if total_pairs % 500 == 0:
                 logger.info("Generated %d pairs so far...", total_pairs)

@@ -194,7 +194,7 @@ class OpGANDenoiserService:
         try:
             sf.write(tmp_path, restored, _TARGET_SR, format="WAV")
             Path(tmp_path).replace(output_path)
-        except BaseException:
+        except Exception:
             Path(tmp_path).unlink(missing_ok=True)
             raise
 

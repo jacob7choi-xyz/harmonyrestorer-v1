@@ -51,31 +51,31 @@ def test_upload_leaves_no_temp_files(client, mock_denoiser):
     assert not new_tmp, f"Orphaned temp files after upload: {[f.name for f in new_tmp]}"
 
 
-def test_upload_write_failure_cleans_up_temp_file(client):
-    """If the atomic rename fails, the temp file is deleted and 500 is returned."""
+def test_upload_write_failure_cleans_up_temp_file(client, monkeypatch):
+    """If the atomic rename fails, no traces remain in the upload dir and 500 is returned."""
     from pathlib import Path
-    from unittest.mock import patch
 
-    before_tmp = set(settings.upload_dir.glob("*.tmp"))
+    before = set(settings.upload_dir.iterdir())
 
     original_replace = Path.replace
 
-    def fail_on_tmp(self, target):  # type: ignore[no-untyped-def]
-        if str(self).endswith(".tmp"):
-            raise OSError("simulated disk error")
+    def fail_replace(self, target):  # type: ignore[no-untyped-def]
+        if self.parent == settings.upload_dir and str(self).endswith(".tmp"):
+            raise OSError("simulated atomic rename failure")
         return original_replace(self, target)
 
-    with patch.object(Path, "replace", fail_on_tmp):
-        r = client.post(
-            "/api/v1/denoise",
-            files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
-        )
+    monkeypatch.setattr(Path, "replace", fail_replace)
+
+    r = client.post(
+        "/api/v1/denoise",
+        files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
+    )
+
+    after = set(settings.upload_dir.iterdir())
 
     assert r.status_code == 500
     assert "Failed to save file" in r.json()["detail"]
-
-    new_tmp = set(settings.upload_dir.glob("*.tmp")) - before_tmp
-    assert not new_tmp, f"Orphaned temp files after write failure: {[f.name for f in new_tmp]}"
+    assert after == before, f"Upload dir changed after write failure: {after - before}"
 
 
 def test_upload_rejects_unsupported_format(client):
