@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import type { WaveformData } from '../types';
 
-const DEFAULT_PEAK_COUNT = 200;
+export const DEFAULT_PEAK_COUNT = 200;
 
 function computePeaks(channelData: Float32Array, peakCount: number): Float32Array {
   const peaks = new Float32Array(peakCount);

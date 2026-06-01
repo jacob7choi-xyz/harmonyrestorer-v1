@@ -3,6 +3,7 @@
 import asyncio
 import json
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
@@ -20,6 +21,7 @@ class JSONFormatter(logging.Formatter):
     """Structured JSON log formatter for production environments."""
 
     def format(self, record: logging.LogRecord) -> str:
+        """Format a log record as a JSON string."""
         log_entry = {
             "timestamp": datetime.now(UTC).isoformat(),
             "level": record.levelname,
@@ -60,14 +62,15 @@ async def _cleanup_loop() -> None:
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan management."""
     logger.info("HarmonyRestorer v1 starting up")
-    logger.info(f"Upload directory: {settings.upload_dir}")
-    logger.info(f"Processed directory: {settings.processed_dir}")
+    logger.info("Upload directory: %s", settings.upload_dir)
+    logger.info("Processed directory: %s", settings.processed_dir)
     logger.info(
-        f"Job TTL: {settings.job_ttl_seconds}s, "
-        f"cleanup every {settings.cleanup_interval_seconds}s"
+        "Job TTL: %ss, cleanup every %ss",
+        settings.job_ttl_seconds,
+        settings.cleanup_interval_seconds,
     )
 
     cleanup_task = asyncio.create_task(_cleanup_loop())

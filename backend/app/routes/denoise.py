@@ -120,6 +120,7 @@ async def denoise_audio(
     try:
         with open(tmp_path_str, "wb") as f:
             f.write(content)
+            os.fsync(f.fileno())
         Path(tmp_path_str).replace(input_path)
         logger.info("Saved upload %s (%d bytes)", job_id, len(content))
     except Exception as err:

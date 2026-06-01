@@ -16,6 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import math
 import os
 import tempfile
 from pathlib import Path
@@ -47,7 +48,7 @@ def compute_sdr(clean: np.ndarray, restored: np.ndarray) -> float:
     signal_power = np.sum(clean**2)
     noise_power = np.sum(noise**2)
     if noise_power < 1e-10:
-        return float("inf")
+        return 60.0
     return float(10.0 * np.log10(signal_power / noise_power))
 
 
@@ -190,7 +191,7 @@ def evaluate_directory(
         raise RuntimeError("No files successfully evaluated")
 
     # Aggregate statistics
-    sdrs = [r["sdr"] for r in results]
+    sdrs = [r["sdr"] for r in results if math.isfinite(r["sdr"])]
     pesqs = [r["pesq"] for r in results]
     stois = [r["stoi"] for r in results]
 

@@ -40,6 +40,8 @@ def tape_hiss(
     Returns:
         Noise signal normalized to unit peak.
     """
+    if length == 0:
+        return np.zeros(0, dtype=np.float32)
     if rng is None:
         rng = np.random.default_rng()
 

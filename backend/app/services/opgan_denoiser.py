@@ -193,6 +193,8 @@ class OpGANDenoiserService:
         os.close(tmp_fd)
         try:
             sf.write(tmp_path, restored, _TARGET_SR, format="WAV")
+            with open(tmp_path, "rb") as _f:
+                os.fsync(_f.fileno())
             Path(tmp_path).replace(output_path)
         except Exception:
             Path(tmp_path).unlink(missing_ok=True)

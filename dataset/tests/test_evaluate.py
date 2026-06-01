@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 
 import numpy as np
@@ -35,19 +36,19 @@ def _write_wav(path: Path, data: np.ndarray, sr: int = _SR) -> None:
 class TestComputeSdr:
     """Tests for compute_sdr."""
 
-    def test_identical_signals_return_inf(self) -> None:
-        """Identical clean and restored signals should give infinite SDR."""
+    def test_identical_signals_return_clamped_max(self) -> None:
+        """Identical clean and restored signals should give the clamped max SDR (60 dB)."""
         signal = _sine()
         result = compute_sdr(signal, signal)
-        assert result == float("inf")
+        assert result == 60.0
 
-    def test_zero_noise_returns_inf(self) -> None:
-        """When noise power is below the epsilon threshold, SDR should be inf."""
+    def test_zero_noise_returns_clamped_max(self) -> None:
+        """When noise power is below the epsilon threshold, SDR should be clamped to 60 dB."""
         signal = _sine()
         # Add negligible noise well below 1e-10 threshold
         restored = signal + np.float32(1e-12)
         result = compute_sdr(signal, restored)
-        assert result == float("inf")
+        assert result == 60.0
 
     def test_known_sdr_value(self) -> None:
         """Adding noise at known power should produce predictable SDR.
@@ -206,7 +207,7 @@ class TestEvaluatePair:
 
         result = evaluate_pair(clean_path, restored_path)
         assert "sdr" in result
-        assert result["sdr"] == float("inf")  # identical signals
+        assert result["sdr"] == 60.0  # identical signals, clamped to max SDR
 
     def test_handles_length_mismatch(self, tmp_path: Path) -> None:
         """Files of different lengths should be trimmed to the shorter one."""
@@ -220,8 +221,8 @@ class TestEvaluatePair:
 
         result = evaluate_pair(clean_path, restored_path)
         assert "sdr" in result
-        # Same signal content in the overlapping region, should be inf
-        assert result["sdr"] == float("inf")
+        # Same signal content in the overlapping region, clamped to max SDR
+        assert result["sdr"] == 60.0
 
 
 class TestEvaluateDirectory:
@@ -380,14 +381,14 @@ class TestEvaluateDirectory:
         assert result["summary"]["count"] == 1
         assert result["summary"]["skipped"] == 1
 
-    def test_inf_sdr_in_summary_does_not_crash(self, tmp_path: Path) -> None:
-        """Identical files produce inf SDR; summary aggregation should not crash."""
+    def test_clamped_sdr_in_summary_is_finite(self, tmp_path: Path) -> None:
+        """Identical files produce max SDR (60 dB); summary stats should be finite and JSON-safe."""
         clean_dir = tmp_path / "clean"
         restored_dir = tmp_path / "restored"
         clean_dir.mkdir()
         restored_dir.mkdir()
 
-        # All identical pairs -> inf SDR
+        # All identical pairs -> SDR clamped to 60.0
         for i in range(2):
             signal = _sine(freq=440.0 + i * 100)
             _write_wav(clean_dir / f"frame{i}.wav", signal)
@@ -396,7 +397,8 @@ class TestEvaluateDirectory:
         result = evaluate_directory(restored_dir, clean_dir)
         summary = result["summary"]
         assert summary["count"] == 2
-        assert summary["sdr_mean"] == float("inf")
+        assert summary["sdr_mean"] == 60.0
+        assert math.isfinite(summary["sdr_mean"])
 
     def test_returns_correct_summary_statistics(self, tmp_path: Path) -> None:
         """Summary should contain mean, std, and median for all three metrics."""

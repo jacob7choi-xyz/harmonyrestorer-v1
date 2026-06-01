@@ -66,11 +66,11 @@ export async function pollUntilDone(
   intervalMs = 1500,
 ): Promise<JobStatusResponse> {
   return new Promise((resolve, reject) => {
-    let timeoutId: ReturnType<typeof setTimeout>;
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
     const startTime = Date.now();
 
     const cleanup = (): void => {
-      clearTimeout(timeoutId);
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
       if (signal) signal.removeEventListener('abort', onAbort);
     };
 

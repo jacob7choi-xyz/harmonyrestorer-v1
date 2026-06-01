@@ -55,6 +55,18 @@ jobs:
       - name: Tests with coverage
         run: pytest backend/tests/ -v --tb=short --cov=backend/app --cov-fail-under=80
 
+      - name: Test dataset scripts
+        run: pytest dataset/tests/ -v --tb=short
+
+      - name: Lint dataset scripts
+        run: |
+          black --check dataset/
+          isort --check dataset/
+          ruff check dataset/
+
+      - name: Secrets scan
+        run: detect-secrets scan
+
   frontend:
     runs-on: ubuntu-latest
     defaults:

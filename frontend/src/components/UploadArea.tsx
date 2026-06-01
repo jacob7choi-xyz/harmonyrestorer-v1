@@ -102,12 +102,12 @@ export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAr
     onFileSelect(file);
   };
 
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>): void => {
     e.preventDefault();
     setIsDragging(true);
   };
 
-  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>): void => {
     e.preventDefault();
     // Only clear drag state when leaving the component itself, not nested children
     if (!e.currentTarget.contains(e.relatedTarget as Node)) {
@@ -115,7 +115,7 @@ export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAr
     }
   };
 
-  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>): void => {
     e.preventDefault();
     setIsDragging(false);
     const files = e.dataTransfer.files;
@@ -124,20 +124,20 @@ export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAr
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const file = e.target.files?.[0];
     if (file) {
       validateAndSelect(file);
     }
   };
 
-  const handleClick = () => {
+  const handleClick = (): void => {
     if (!isProcessing) {
       fileInputRef.current?.click();
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>): void => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
       handleClick();
@@ -149,6 +149,7 @@ export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAr
       role="button"
       tabIndex={0}
       aria-label={currentFile ? `Selected: ${currentFile.name}. Press to change file.` : 'Upload audio file'}
+      aria-disabled={isProcessing}
       className={`rounded-xl p-8 text-center transition-all cursor-pointer border
         ${isDragging
           ? 'bg-[#5B8DEF]/10 border-[#5B8DEF]/50 scale-[1.02] backdrop-blur-md'

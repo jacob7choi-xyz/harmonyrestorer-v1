@@ -84,7 +84,7 @@ function AudioPlayerInner({
         )}
       </button>
 
-      <audio ref={audioRef} preload="metadata" className="hidden" />
+      <audio ref={audioRef} preload="metadata" className="hidden" aria-hidden="true" />
     </div>
   );
 }

@@ -15,8 +15,9 @@ dependencies = [
     "uvicorn[standard]~=0.46.0",
     "python-multipart~=0.0.26",
 
-    # Audio Processing (audio-separator pulls in its own audio deps)
+    # Audio Processing
     "audio-separator[cpu]~=0.44.0",
+    "librosa>=0.11.0",
 
     # Config & Utilities
     "pydantic~=2.13.0",

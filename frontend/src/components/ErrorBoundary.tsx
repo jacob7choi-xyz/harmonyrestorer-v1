@@ -7,20 +7,17 @@ interface Props {
 
 interface State {
   error: Error | null;
+  resetKey: number;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
-    this.state = { error: null };
+    this.state = { error: null, resetKey: 0 };
   }
 
-  static getDerivedStateFromError(error: Error): State {
+  static getDerivedStateFromError(error: Error): Partial<State> {
     return { error };
-  }
-
-  componentDidCatch(error: Error, errorInfo: React.ErrorInfo): void {
-    console.error('ErrorBoundary caught:', error, errorInfo);
   }
 
   render(): React.ReactNode {
@@ -32,7 +29,7 @@ export class ErrorBoundary extends Component<Props, State> {
             <h2 className="text-xl font-bold text-white mb-2">Something went wrong</h2>
             <p className="text-[#B3B3B3] mb-6">{this.state.error.message}</p>
             <button
-              onClick={() => this.setState({ error: null })}
+              onClick={() => this.setState(s => ({ error: null, resetKey: s.resetKey + 1 }))}
               className="bg-[#5B8DEF] hover:bg-[#7BA4F7] text-black font-bold py-3 px-6 rounded-full transition-colors"
             >
               Try Again
@@ -42,6 +39,6 @@ export class ErrorBoundary extends Component<Props, State> {
       );
     }
 
-    return this.props.children;
+    return <div key={this.state.resetKey}>{this.props.children}</div>;
   }
 }

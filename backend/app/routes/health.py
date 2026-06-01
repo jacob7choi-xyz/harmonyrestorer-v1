@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from app.config import settings
 from app.services.jobs import job_manager
 from fastapi import APIRouter
+from fastapi.responses import JSONResponse
 
 router = APIRouter(tags=["health"])
 
@@ -16,15 +17,15 @@ async def root() -> dict:
     return {
         "platform": "HarmonyRestorer v1",
         "version": "1.0.0",
-        "description": "AI-powered audio denoising using UVR",
+        "description": "AI-powered audio denoising using OpGAN",
         "status": "ready",
         "docs": "/api/docs",
         "supported_formats": sorted(settings.supported_formats),
     }
 
 
-@router.get("/health")
-async def health_check() -> dict:
+@router.get("/health", response_model=None)
+async def health_check() -> JSONResponse:
     """Health check with real system verification."""
     disk = shutil.disk_usage(settings.processed_dir)
     disk_free_mb = disk.free // (1024 * 1024)
@@ -35,7 +36,7 @@ async def health_check() -> dict:
     all_ok = disk_ok and dirs_ok
     status = "healthy" if all_ok else "degraded"
 
-    return {
+    payload = {
         "status": status,
         "timestamp": datetime.now(UTC).isoformat(),
         "checks": {
@@ -44,3 +45,4 @@ async def health_check() -> dict:
         },
         "jobs": job_manager.job_counts,
     }
+    return JSONResponse(content=payload, status_code=200 if all_ok else 503)

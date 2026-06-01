@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import math
 import threading
+from collections.abc import Callable
 
 import torch
 import torch.nn as nn
@@ -99,7 +100,7 @@ class OptimizedConv1DSelfONN(nn.Module):
             self._cache_valid = True
             return weights
 
-    _OPERATOR_FNS = [
+    _OPERATOR_FNS: list[Callable[[torch.Tensor], torch.Tensor]] = [
         lambda t: t,  # linear
         torch.sin,
         torch.cos,

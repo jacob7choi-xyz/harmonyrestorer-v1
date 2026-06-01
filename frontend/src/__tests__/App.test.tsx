@@ -99,7 +99,7 @@ describe('App (HarmonyRestorer)', () => {
 
   it('renders the footer', () => {
     render(<App />);
-    expect(screen.getByText(/powered by uvr ai denoising/i)).toBeInTheDocument();
+    expect(screen.getByText(/powered by opgan ai denoising/i)).toBeInTheDocument();
   });
 
   // File selection tests (need fake timers for duration check)

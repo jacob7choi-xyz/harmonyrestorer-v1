@@ -112,8 +112,16 @@ export function WaveformCanvas({
       ref={canvasRef}
       className={`w-full h-16 ${onSeek ? 'cursor-pointer' : ''} ${className}`}
       onClick={handleClick}
-      role="img"
-      aria-label="Audio waveform"
+      role={onSeek ? 'slider' : 'img'}
+      aria-label={onSeek ? 'Audio seek bar' : 'Audio waveform'}
+      aria-valuemin={onSeek ? 0 : undefined}
+      aria-valuemax={onSeek ? 100 : undefined}
+      aria-valuenow={onSeek && playhead !== undefined ? Math.round(playhead * 100) : undefined}
+      tabIndex={onSeek ? 0 : undefined}
+      onKeyDown={onSeek ? (e: React.KeyboardEvent<HTMLCanvasElement>): void => {
+        if (e.key === 'ArrowRight') onSeek(Math.min(1, (playhead ?? 0) + 0.05));
+        if (e.key === 'ArrowLeft') onSeek(Math.max(0, (playhead ?? 0) - 0.05));
+      } : undefined}
     />
   );
 }

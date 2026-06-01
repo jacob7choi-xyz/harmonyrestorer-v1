@@ -102,13 +102,13 @@ class JobManager:
             output_path = denoiser.denoise(input_path)
 
             final_path = settings.processed_dir / f"{job_id}_denoised.wav"
-            Path(output_path).replace(final_path)
-
             processing_time = (datetime.now(UTC) - start_time).total_seconds()
             with self._lock:
                 if job_id not in self._jobs:
                     logger.error("Job %s removed during processing", job_id)
+                    Path(output_path).unlink(missing_ok=True)
                     return
+                Path(output_path).replace(final_path)
                 job.status = JobStatusEnum.COMPLETED
                 job.progress = 100
                 job.message = "Denoising complete"

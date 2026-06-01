@@ -7,7 +7,7 @@ import { WaveformCanvas } from './components/WaveformCanvas';
 import { ComparisonView } from './components/ComparisonView';
 import { TechnoBackground } from './components/TechnoBackground';
 import { Analytics } from '@vercel/analytics/react';
-import { useAudioDecoder, computePeaks } from './hooks/useAudioDecoder';
+import { useAudioDecoder, computePeaks, DEFAULT_PEAK_COUNT } from './hooks/useAudioDecoder';
 import type { ProcessingStatus, WizardStep } from './types';
 
 const INITIAL_STATUS: ProcessingStatus = {
@@ -100,6 +100,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
 
       try {
         const res = await fetch(downloadUrl, { signal: controller.signal });
+        if (!res.ok) throw new Error(`Download failed: ${res.status}`);
         const blob = await res.blob();
         const enhUrl = URL.createObjectURL(blob);
         setEnhancedBlobUrl(enhUrl);
@@ -114,7 +115,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
           try {
             const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
             const channelData = audioBuffer.getChannelData(0);
-            setEnhancedPeaks(computePeaks(channelData, 200));
+            setEnhancedPeaks(computePeaks(channelData, DEFAULT_PEAK_COUNT));
           } finally {
             await audioCtx.close();
           }
@@ -122,6 +123,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
           console.warn('Failed to decode enhanced audio waveform:', err);
         }
       } catch (err) {
+        if (err instanceof Error && err.name === 'AbortError') throw err;
         console.warn('Failed to fetch enhanced audio for playback:', err);
       }
 
@@ -304,7 +306,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
         )}
 
         <footer className="text-center mt-16 pt-8 border-t border-[#282828]">
-          <p className="text-[#B3B3B3] text-sm font-medium mb-6">Powered by UVR AI denoising</p>
+          <p className="text-[#B3B3B3] text-sm font-medium mb-6">Powered by OpGAN AI denoising</p>
 
           <div className="flex items-center justify-center gap-12 mb-6">
             <a href="https://github.com/jacob7choi-xyz" target="_blank" rel="noopener noreferrer" aria-label="GitHub" className="text-[#727272] hover:text-white transition-colors">

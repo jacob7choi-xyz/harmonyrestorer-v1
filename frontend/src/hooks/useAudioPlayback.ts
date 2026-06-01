@@ -26,6 +26,7 @@ export function useAudioPlayback(src: string | null): UseAudioPlaybackReturn {
     const audio = audioRef.current;
     if (!audio || !src) return;
 
+    setState({ isPlaying: false, currentTime: 0, duration: 0 });
     audio.src = src;
     lastReportedTimeRef.current = 0;
 

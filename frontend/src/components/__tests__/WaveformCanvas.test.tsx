@@ -38,7 +38,7 @@ describe('WaveformCanvas', () => {
   it('has cursor-pointer class when onSeek is provided', () => {
     const peaks = new Float32Array([0.5]);
     render(<WaveformCanvas peaks={peaks} onSeek={vi.fn()} />);
-    const canvas = screen.getByRole('img');
+    const canvas = screen.getByRole('slider', { name: 'Audio seek bar' });
     expect(canvas.className).toContain('cursor-pointer');
   });
 
@@ -53,7 +53,7 @@ describe('WaveformCanvas', () => {
     const onSeek = vi.fn();
     const peaks = new Float32Array([0.5, 0.8]);
     render(<WaveformCanvas peaks={peaks} onSeek={onSeek} />);
-    const canvas = screen.getByRole('img');
+    const canvas = screen.getByRole('slider', { name: 'Audio seek bar' });
 
     vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
       left: 0, right: 200, top: 0, bottom: 64, width: 200, height: 64,
@@ -68,7 +68,7 @@ describe('WaveformCanvas', () => {
     const onSeek = vi.fn();
     const peaks = new Float32Array([0.5]);
     render(<WaveformCanvas peaks={peaks} onSeek={onSeek} />);
-    const canvas = screen.getByRole('img');
+    const canvas = screen.getByRole('slider', { name: 'Audio seek bar' });
 
     vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
       left: 100, right: 300, top: 0, bottom: 64, width: 200, height: 64,
