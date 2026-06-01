@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-
 from app.models.chunking import FRAME_LEN, OVERLAP, chunk_audio, overlap_add
 
 _STEP = FRAME_LEN - OVERLAP

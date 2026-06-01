@@ -70,7 +70,9 @@ def download_item(
 
     try:
         item = ia.get_item(identifier)
-    except Exception as e:  # internetarchive does not expose a stable exception hierarchy; broad catch is intentional
+    except (
+        Exception
+    ) as e:  # internetarchive does not expose a stable exception hierarchy; broad catch is intentional
         logger.error("Failed to fetch item %s: %s", identifier, e)
         return 0
 
@@ -136,7 +138,9 @@ def download_item(
             else:
                 logger.warning("Expected file not found after download: %s", ia_path)
 
-        except Exception as e:  # internetarchive does not expose a stable exception hierarchy; broad catch is intentional
+        except (
+            Exception
+        ) as e:  # internetarchive does not expose a stable exception hierarchy; broad catch is intentional
             logger.error("Download failed for %s: %s", filename, e)
             if output_path.exists():
                 output_path.unlink()
@@ -176,7 +180,9 @@ def search_and_download(
 
     try:
         search_iter = ia.search_items(query)
-    except Exception as e:  # internetarchive does not expose a stable exception hierarchy; broad catch is intentional
+    except (
+        Exception
+    ) as e:  # internetarchive does not expose a stable exception hierarchy; broad catch is intentional
         logger.error("Search failed: %s", e)
         return 0
 

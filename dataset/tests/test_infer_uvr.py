@@ -147,9 +147,7 @@ class TestRestoreFile:
         separator.separate.side_effect = fake_separate
         return separator
 
-    def test_produces_output_file(
-        self, noisy_wav: Path, temp_dir: Path, output_dir: Path
-    ) -> None:
+    def test_produces_output_file(self, noisy_wav: Path, temp_dir: Path, output_dir: Path) -> None:
         """Restore produces an output file at the expected path."""
         separator = self._make_separator(temp_dir)
         output_path = output_dir / "noisy.wav"
@@ -158,9 +156,7 @@ class TestRestoreFile:
 
         assert output_path.exists()
 
-    def test_output_is_16khz_mono(
-        self, noisy_wav: Path, temp_dir: Path, output_dir: Path
-    ) -> None:
+    def test_output_is_16khz_mono(self, noisy_wav: Path, temp_dir: Path, output_dir: Path) -> None:
         """Output file is resampled back to 16 kHz mono."""
         separator = self._make_separator(temp_dir)
         output_path = output_dir / "noisy.wav"

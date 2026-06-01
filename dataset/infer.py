@@ -213,9 +213,7 @@ def main() -> None:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         restore_file(generator, args.input, args.output, device)
     else:
-        wav_files = sorted(
-            p for p in args.input_dir.iterdir() if p.suffix.lower() == ".wav"
-        )
+        wav_files = sorted(p for p in args.input_dir.iterdir() if p.suffix.lower() == ".wav")
         if not wav_files:
             logger.error("No WAV files found in %s", args.input_dir)
             sys.exit(1)
@@ -223,7 +221,9 @@ def main() -> None:
         args.output_dir.mkdir(parents=True, exist_ok=True)
 
         # Skip files that already exist (allows resuming interrupted runs)
-        existing_names = {p.name.lower() for p in args.output_dir.iterdir() if p.suffix.lower() == ".wav"}
+        existing_names = {
+            p.name.lower() for p in args.output_dir.iterdir() if p.suffix.lower() == ".wav"
+        }
         remaining = [f for f in wav_files if f.name.lower() not in existing_names]
         skipped = len(wav_files) - len(remaining)
         if skipped:

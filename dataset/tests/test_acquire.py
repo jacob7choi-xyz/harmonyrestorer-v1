@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-import pytest
 
 from dataset.acquire import acquire_from_manifest
 
@@ -61,9 +60,9 @@ class TestAcquireFromManifest:
             acquire_from_manifest(manifest, output_dir)
 
         # The attack target must not be created
-        assert not (tmp_path / "evil.wav").exists(), (
-            "Path traversal must not write files outside output_dir"
-        )
+        assert not (
+            tmp_path / "evil.wav"
+        ).exists(), "Path traversal must not write files outside output_dir"
 
     def test_non_http_url_is_skipped(self, tmp_path: Path) -> None:
         """file:// and ftp:// URLs are rejected; urlopen is never called."""
