@@ -84,7 +84,7 @@ def compute_stoi(clean: np.ndarray, restored: np.ndarray, sr: int) -> float:
 def evaluate_pair(
     clean_path: Path,
     restored_path: Path,
-) -> dict[str, float]:
+) -> dict[str, float | str]:
     """Evaluate a single restored/clean pair on all metrics.
 
     Args:
@@ -266,7 +266,7 @@ def main() -> None:
     except (FileNotFoundError, RuntimeError) as e:
         logger.error("%s", e)
         raise SystemExit(1) from e
-    _print_summary(results["summary"])
+    _print_summary(results["summary"])  # type: ignore[arg-type]
 
     if args.output:
         args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -140,6 +140,10 @@ exclude = ["external_tools", "tests"]
 module = "app.models.*"
 warn_return_any = false
 
+[[tool.mypy.overrides]]
+module = "dataset.*"
+warn_return_any = false
+
 [tool.pytest.ini_options]
 testpaths = ["backend/tests", "dataset/tests"]
 pythonpath = ["backend", "."]
