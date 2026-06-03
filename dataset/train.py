@@ -21,19 +21,16 @@ import os
 import sys
 import tempfile
 import time
+from collections import deque
 from pathlib import Path
 
 import torch
+import torch.nn as nn
 from torch.utils.data import DataLoader, random_split
 
 # Import OpGAN components from backend
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
-from app.models.op_gan import (  # noqa: E402
-    GradientHealthMonitor,
-    OpGANDiscriminator,
-    OpGANGenerator,
-    OpGANLoss,
-)
+from app.models.op_gan import OpGANDiscriminator, OpGANGenerator  # noqa: E402
 
 from dataset.torch_dataset import AnalogAudioDataset  # noqa: E402
 
@@ -48,6 +45,203 @@ _DEFAULT_VAL_SPLIT = 0.1
 _DEFAULT_CHECKPOINT_DIR = Path("checkpoints")
 _DEFAULT_LOG_INTERVAL = 10
 _MAX_GRAD_NORM = 1.0
+
+
+class OpGANLoss(nn.Module):
+    """Composite loss combining adversarial, temporal (L1), and spectral (STFT) terms.
+
+    Uses label smoothing (0.9/0.1) for GAN stability.
+
+    Args:
+        lambda_temporal: Weight for L1 temporal loss.
+        lambda_spectral: Weight for STFT magnitude loss.
+        n_fft: FFT size for spectral loss.
+        hop_length: Hop size for spectral loss.
+    """
+
+    def __init__(
+        self,
+        lambda_temporal: float = 10,
+        lambda_spectral: float = 5,
+        n_fft: int = 128,
+        hop_length: int = 64,
+    ) -> None:
+        super().__init__()
+        self.lambda_temporal = lambda_temporal
+        self.lambda_spectral = lambda_spectral
+        self.n_fft = n_fft
+        self.hop_length = hop_length
+
+        self.mse_loss = nn.MSELoss()
+        self.l1_loss = nn.L1Loss()
+        self.register_buffer("_hann_window", torch.hann_window(n_fft))
+
+    def temporal_loss(self, generated: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """L1 loss in the time domain."""
+        return self.l1_loss(generated, target)
+
+    def spectral_loss(self, generated: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """L1 loss on STFT magnitudes."""
+        window: torch.Tensor = self._hann_window  # type: ignore[assignment]
+
+        gen_stft = torch.stft(
+            generated.squeeze(1),
+            n_fft=self.n_fft,
+            hop_length=self.hop_length,
+            window=window,
+            return_complex=True,
+            normalized=True,
+        )
+        target_stft = torch.stft(
+            target.squeeze(1),
+            n_fft=self.n_fft,
+            hop_length=self.hop_length,
+            window=window,
+            return_complex=True,
+            normalized=True,
+        )
+
+        gen_mag = torch.abs(gen_stft) + 1e-8
+        target_mag = torch.abs(target_stft) + 1e-8
+
+        return self.l1_loss(gen_mag, target_mag)
+
+    def generator_loss(
+        self,
+        discriminator_output: torch.Tensor,
+        generated: torch.Tensor,
+        target: torch.Tensor,
+    ) -> tuple[torch.Tensor, dict[str, float]]:
+        """Compute generator loss: adversarial + temporal + spectral.
+
+        Args:
+            discriminator_output: Discriminator scores for generated audio.
+            generated: Generator output.
+            target: Ground truth clean audio.
+
+        Returns:
+            Tuple of (total_loss, loss_breakdown_dict).
+        """
+        real_labels = torch.ones_like(discriminator_output) * 0.9
+        adversarial_loss = self.mse_loss(discriminator_output, real_labels)
+
+        temporal = self.temporal_loss(generated, target)
+        spectral = self.spectral_loss(generated, target)
+
+        total_loss = (
+            adversarial_loss + self.lambda_temporal * temporal + self.lambda_spectral * spectral
+        )
+
+        return total_loss, {
+            "adversarial": adversarial_loss.item(),
+            "temporal": temporal.item(),
+            "spectral": spectral.item(),
+            "total": total_loss.item(),
+        }
+
+    def discriminator_loss(
+        self,
+        real_output: torch.Tensor,
+        fake_output: torch.Tensor,
+    ) -> torch.Tensor:
+        """Compute discriminator loss with label smoothing.
+
+        Args:
+            real_output: Discriminator scores for real audio.
+            fake_output: Discriminator scores for generated audio.
+
+        Returns:
+            Total discriminator loss.
+        """
+        real_labels = torch.ones_like(real_output) * 0.9
+        fake_labels = torch.zeros_like(fake_output) + 0.1
+
+        real_loss = self.mse_loss(real_output, real_labels)
+        fake_loss = self.mse_loss(fake_output, fake_labels)
+
+        return 0.5 * (real_loss + fake_loss)
+
+
+class GradientHealthMonitor:
+    """Monitor gradient norms and apply clipping during training.
+
+    Tracks gradient history for post-training analysis and warns on
+    pathological gradients (vanishing or exploding).
+
+    Args:
+        max_grad_norm: Clip threshold.
+        log_frequency: Log every N steps.
+        max_history: Max entries in gradient history (oldest dropped first).
+    """
+
+    _DEFAULT_MAX_HISTORY = 10_000
+
+    def __init__(
+        self,
+        max_grad_norm: float = 1.0,
+        log_frequency: int = 10,
+        max_history: int = _DEFAULT_MAX_HISTORY,
+    ) -> None:
+        self.max_grad_norm = max_grad_norm
+        self.log_frequency = log_frequency
+        self.step_count = 0
+        self.gradient_history: deque[dict[str, float | int]] = deque(maxlen=max_history)
+
+    def check_and_clip_gradients(self, model: nn.Module, model_name: str = "") -> float:
+        """Check gradient health, clip if needed, and log periodically.
+
+        Args:
+            model: The model to check.
+            model_name: Label for logging.
+
+        Returns:
+            Pre-clip gradient norm.
+        """
+        self.step_count += 1
+
+        # clip_grad_norm_ returns the pre-clip total norm, avoiding a redundant pass
+        total_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), self.max_grad_norm).item()
+
+        if self.step_count % self.log_frequency == 0:
+            logger.info(
+                "Step %d %s: grad_norm=%.2e",
+                self.step_count,
+                model_name,
+                total_norm,
+            )
+            if total_norm > self.max_grad_norm:
+                logger.info(
+                    "  Gradients clipped from %.2e to %.1f",
+                    total_norm,
+                    self.max_grad_norm,
+                )
+
+        if total_norm > 1000:
+            logger.warning("Very large gradients detected: %.2e", total_norm)
+        elif total_norm < 1e-8:
+            logger.warning("Very small gradients detected: %.2e", total_norm)
+
+        self.gradient_history.append(
+            {
+                "step": self.step_count,
+                "total_norm": total_norm,
+            }
+        )
+
+        return total_norm
+
+    def get_gradient_stats(self) -> dict[str, float]:
+        """Return summary statistics over gradient history."""
+        if not self.gradient_history:
+            return {}
+
+        norms = [h["total_norm"] for h in self.gradient_history]
+        return {
+            "mean_norm": sum(norms) / len(norms),
+            "max_norm": max(norms),
+            "min_norm": min(norms),
+            "recent_norm": norms[-1],
+        }
 
 
 def _select_device() -> torch.device:
