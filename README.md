@@ -144,6 +144,26 @@ UVR-DeNoise.pth evaluated on the same dataset (131,013 files evaluated, 15,182 s
 
 OpGAN outperforms UVR across all metrics. See [docs/benchmarks.md](docs/benchmarks.md) for details.
 
+## Samples
+
+Three before/after/restored triplets for each model. Click to listen in the browser.
+
+**OpGAN** (custom-trained, in-distribution):
+
+| Track | Noisy | Restored | Clean |
+|-------|-------|----------|-------|
+| Bach | [noisy](samples/opgan/noisy_bach.wav) | [restored](samples/opgan/restored_bach.wav) | [clean](samples/opgan/clean_bach.wav) |
+| Beethoven | [noisy](samples/opgan/noisy_beethoven.wav) | [restored](samples/opgan/restored_beethoven.wav) | [clean](samples/opgan/clean_beethoven.wav) |
+| Tchaikovsky | [noisy](samples/opgan/noisy_tchaikovsky.wav) | [restored](samples/opgan/restored_tchaikovsky.wav) | [clean](samples/opgan/clean_tchaikovsky.wav) |
+
+**UVR** (pretrained baseline, for comparison):
+
+| Track | Noisy | Restored | Clean |
+|-------|-------|----------|-------|
+| Bach | [noisy](samples/uvr/bach_noisy.wav) | [restored](samples/uvr/bach_restored.wav) | [clean](samples/uvr/bach_clean.wav) |
+| Beethoven | [noisy](samples/uvr/beethoven_noisy.wav) | [restored](samples/uvr/beethoven_restored.wav) | [clean](samples/uvr/beethoven_clean.wav) |
+| Mozart | [noisy](samples/uvr/mozart_noisy.wav) | [restored](samples/uvr/mozart_restored.wav) | [clean](samples/uvr/mozart_clean.wav) |
+
 ## Roadmap
 
 - [x] Working denoising API (UVR)
