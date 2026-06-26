@@ -40,10 +40,7 @@ jobs:
       - name: Dependency audit (pip-audit)
         # CVE-2026-3219 affects pip itself with no fix version available upstream;
         # ignored until a patched pip release is published.
-        # CVE-2025-58438 affects internetarchive 4.x; fix requires v5 which has breaking
-        # API changes. internetarchive is only used in dataset acquisition scripts (training
-        # is complete) and is not part of the production backend.
-        run: uv run pip-audit --ignore-vuln CVE-2026-3219 --ignore-vuln CVE-2025-58438
+        run: uv run pip-audit --ignore-vuln CVE-2026-3219
 
       - name: Tests with coverage
         run: uv run pytest backend/tests/ -v --tb=short --cov=backend/app --cov-fail-under=80

@@ -762,7 +762,7 @@ test = [
 requires-dist = [
     { name = "audio-separator", extras = ["cpu"], specifier = "~=0.44.0" },
     { name = "fastapi", specifier = "~=0.136.0" },
-    { name = "internetarchive", marker = "extra == 'dataset'", specifier = ">=4.0.0" },
+    { name = "internetarchive", marker = "extra == 'dataset'", specifier = ">=5.0.0" },
     { name = "librosa", specifier = ">=0.11.0" },
     { name = "numpy", marker = "extra == 'dataset'", specifier = ">=1.24.0,<2.4" },
     { name = "pesq", marker = "extra == 'eval'", specifier = ">=0.0.4" },

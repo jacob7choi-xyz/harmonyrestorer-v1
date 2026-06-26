@@ -27,7 +27,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dataset = [
-    "internetarchive>=4.0.0",
+    "internetarchive>=5.0.0",
     "numpy>=1.24.0,<2.4",
     "soundfile>=0.13.0",
     "scipy>=1.10.0",

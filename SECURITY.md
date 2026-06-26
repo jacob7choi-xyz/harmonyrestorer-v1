@@ -47,9 +47,8 @@ Dependencies are managed with [uv](https://github.com/astral-sh/uv) and pinned v
 | CVE | Package | Reason |
 |-----|---------|--------|
 | CVE-2026-3219 | pip | Affects pip itself; no patched version available upstream. Monitored for fix. |
-| CVE-2025-58438 | internetarchive 4.x | Fix requires v5 which has breaking API changes. `internetarchive` is used only in dataset acquisition scripts; training is complete and these scripts are not part of the production backend. |
 
-Both ignores are documented in `.github/workflows/ci.yml` and reviewed on each dependency update cycle. Neither affects the production backend attack surface as currently deployed.
+This ignore is documented in `.github/workflows/ci.yml` and reviewed on each dependency update cycle. It does not affect the production backend attack surface as currently deployed.
 
 ### JavaScript dependencies
 
