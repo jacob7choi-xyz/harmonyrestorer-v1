@@ -15,7 +15,7 @@ Please do not open a public GitHub issue for security vulnerabilities.
 Report vulnerabilities via one of the following:
 
 - **GitHub private advisory**: use the "Report a vulnerability" button on the [Security tab](https://github.com/jacob7choi-xyz/harmonyrestorer-v1/security/advisories/new)
-- **Email**: jchoi26@colby.edu
+- **Email**: jacob77choi@gmail.com
 
 Include a description of the issue, steps to reproduce, and potential impact. You can expect an acknowledgment within 72 hours and a resolution timeline within 14 days for confirmed issues.
 
