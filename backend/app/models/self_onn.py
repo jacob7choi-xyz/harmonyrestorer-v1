@@ -11,6 +11,7 @@ import logging
 import math
 import threading
 from collections.abc import Callable
+from typing import ClassVar
 
 import torch
 import torch.nn as nn
@@ -100,7 +101,7 @@ class OptimizedConv1DSelfONN(nn.Module):
             self._cache_valid = True
             return weights
 
-    _OPERATOR_FNS: list[Callable[[torch.Tensor], torch.Tensor]] = [
+    _OPERATOR_FNS: ClassVar[list[Callable[[torch.Tensor], torch.Tensor]]] = [
         lambda t: t,  # linear
         torch.sin,
         torch.cos,

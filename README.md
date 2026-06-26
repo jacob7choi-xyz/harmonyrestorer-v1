@@ -2,10 +2,10 @@
 
 AI-powered audio denoising. Upload noisy audio, get clean audio back.
 
-- **Model**: UVR-DeNoise from [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui) via [audio-separator](https://github.com/karaokenerds/python-audio-separator)
+- **Model**: Custom-trained OpGAN (1D Operational GAN), with UVR-DeNoise as fallback via [audio-separator](https://github.com/karaokenerds/python-audio-separator)
 - **Formats**: WAV, MP3, FLAC, OGG, M4A, AAC (max 50 MB, 10 minutes)
 - **Stack**: FastAPI + React/TypeScript, Docker-ready
-- **Tests**: 265 passing (backend 54, dataset 127, frontend 84)
+- **Tests**: 347 passing (backend 127, dataset 136, frontend 84)
 
 ## Quick Start
 
@@ -13,11 +13,10 @@ AI-powered audio denoising. Upload noisy audio, get clean audio back.
 git clone https://github.com/jacob7choi-xyz/harmonyrestorer-v1.git
 cd harmonyrestorer-v1
 
-conda env create -f environment.yml
-conda activate harmonyrestorer-v1
+uv sync --all-groups
 
 # Backend
-cd backend && uvicorn app.main:app --reload --port 8000
+uv run uvicorn app.main:app --reload --port 8000
 
 # Frontend (separate terminal)
 cd frontend && npm ci && npm run dev
@@ -50,10 +49,14 @@ backend/app/
 ├── routes/
 │   ├── health.py        # GET /, GET /health
 │   └── denoise.py       # Upload, status, download
+├── models/
+│   ├── op_gan.py        # OpGAN generator + discriminator
+│   ├── self_onn.py      # Self-ONN layers
+│   └── chunking.py      # Overlap-add chunking for arbitrary-length audio
 ├── services/
-│   ├── denoiser.py      # UVR wrapper, lazy model loading
-│   └── jobs.py          # JobManager, background processing
-└── _archive/            # OpGAN research code (see below)
+│   ├── opgan_denoiser.py  # OpGAN inference service (default)
+│   ├── denoiser.py        # UVR wrapper, lazy model loading (fallback)
+│   └── jobs.py            # JobManager, background processing
 
 frontend/src/
 ├── App.tsx              # Wizard orchestrator (upload/processing/complete)
@@ -80,7 +83,7 @@ docker compose up --build    # Start full stack
 docker compose down          # Stop
 ```
 
-Backend and frontend have independent Dockerfiles with non-root users, health checks, and resource limits.
+Both Dockerfiles use non-root users. The backend Dockerfile includes a health check; resource limits are configured in `docker-compose.yml`.
 
 ## Quality Gate
 
@@ -98,26 +101,26 @@ cd frontend && npm run type-check && npm run lint && npm run build && npm run te
 The `dataset/` package builds training data for the OpGAN from public domain classical recordings.
 
 ```bash
-pip install -e ".[dataset]"
+uv sync --group dataset
 
 # Download from Internet Archive (Musopen collection)
-python -m dataset.acquire --output data/raw/ --max-tracks 200 --formats .flac
+uv run python -m dataset.acquire --output data/raw/ --max-tracks 200 --formats .flac
 
 # Preprocess to 16kHz mono, 2-second frames
-python -m dataset.preprocess data/raw/ --output data/frames/
+uv run python -m dataset.preprocess data/raw/ --output data/clean_frames/
 
 # Generate noisy/clean training pairs (5 variants per frame, seeded for reproducibility)
-python -m dataset.generate_pairs data/frames/ --output data/pairs/ --seed 42
+uv run python -m dataset.generate_pairs data/clean_frames/ --output data/pairs/ --seed 42
 
 # Train OpGAN (CUDA GPU recommended, ~5-10 min/epoch on T4)
-python -m dataset.train --pairs data/pairs/ --epochs 100 --batch-size 16
+uv run python -m dataset.train --pairs data/pairs/ --epochs 100 --batch-size 16
 ```
 
 Current dataset: 145 tracks from 14 composers, 29,240 clean frames, 146,200 training pairs. Source audio is CC/public domain; noise is synthetically generated (tape hiss, vinyl crackle, mains hum, HF rolloff, tape saturation).
 
 ## OpGAN
 
-The `_archive/` folder contains a from-scratch implementation of **1D Operational GANs** based on [Kiranyaz et al. 2022](https://arxiv.org/abs/2212.14618). Training script at `dataset/train.py` supports CUDA mixed precision, checkpoint resume, and gradient health monitoring.
+From-scratch implementation of **1D Operational GANs** based on [Kiranyaz et al. 2022](https://arxiv.org/abs/2212.14618), living in `backend/app/models/`. Training script at `dataset/train.py` supports CUDA mixed precision, checkpoint resume, and gradient health monitoring.
 
 ### Benchmark Results
 
@@ -131,7 +134,7 @@ Trained 100 epochs on Tesla T4 (~51 hours, ~$100 total GCP). Model operates at 1
 
 ### UVR Baseline
 
-UVR-DeNoise.pth evaluated on the same 146,195 files (resampled to 16kHz mono for fair comparison):
+UVR-DeNoise.pth evaluated on the same dataset (131,013 files evaluated, 15,182 skipped for quiet frames, resampled to 16kHz mono for fair comparison):
 
 | Metric   | OpGAN  | UVR   | Delta       |
 |----------|--------|-------|-------------|
@@ -152,7 +155,7 @@ OpGAN outperforms UVR across all metrics. See [docs/benchmarks.md](docs/benchmar
 - [x] Train OpGAN (100 epochs on T4)
 - [x] Benchmark OpGAN (SDR 23.74 dB, PESQ 4.04, STOI 0.960)
 - [x] Benchmark UVR on same dataset for head-to-head comparison
-- [ ] Swap in OpGAN (outperforms UVR by ~12 dB SDR)
+- [x] Swap in OpGAN as default denoiser (outperforms UVR by ~12 dB SDR)
 
 ## License
 

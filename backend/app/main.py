@@ -7,14 +7,15 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
+
 from app.config import settings
 from app.exceptions import unhandled_exception_handler
 from app.middleware import RateLimitMiddleware
 from app.routes import router
 from app.services.jobs import job_manager
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZipMiddleware
 
 
 class JSONFormatter(logging.Formatter):

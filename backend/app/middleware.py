@@ -6,12 +6,13 @@ import logging
 import time
 from collections import defaultdict
 
-from app.config import settings
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
 from starlette.types import ASGIApp
+
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 

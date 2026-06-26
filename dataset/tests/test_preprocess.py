@@ -56,8 +56,8 @@ class TestLoadAndResample:
         result = load_and_resample(wav_path, target_sr=16000)
 
         assert result is not None
-        audio, sr = result
-        assert sr == 16000
+        audio, _sr = result
+        assert _sr == 16000
         assert len(audio) > 0
 
     def test_resamples_from_44100_to_16000(self, tmp_path: Path) -> None:
@@ -69,8 +69,8 @@ class TestLoadAndResample:
         result = load_and_resample(wav_path, target_sr=16000)
 
         assert result is not None
-        audio, sr = result
-        assert sr == 16000
+        audio, _sr = result
+        assert _sr == 16000
         expected_len = int(16000 * duration)
         assert abs(len(audio) - expected_len) <= 1
 
@@ -84,7 +84,7 @@ class TestLoadAndResample:
         result = load_and_resample(wav_path, target_sr=16000)
 
         assert result is not None
-        audio, sr = result
+        audio, _sr = result
         assert audio.ndim == 1
 
     def test_returns_none_for_missing_file(self, tmp_path: Path) -> None:

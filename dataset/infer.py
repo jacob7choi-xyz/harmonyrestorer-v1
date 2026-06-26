@@ -29,8 +29,8 @@ import torch
 
 # Import OpGAN components from backend
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
-from app.models.chunking import chunk_audio, overlap_add  # noqa: E402
-from app.models.op_gan import OpGANGenerator  # noqa: E402
+from app.models.chunking import chunk_audio, overlap_add
+from app.models.op_gan import OpGANGenerator
 
 logger = logging.getLogger(__name__)
 

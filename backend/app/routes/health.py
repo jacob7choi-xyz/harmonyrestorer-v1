@@ -3,10 +3,11 @@
 import shutil
 from datetime import UTC, datetime
 
-from app.config import settings
-from app.services.jobs import job_manager
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
+
+from app.config import settings
+from app.services.jobs import job_manager
 
 router = APIRouter(tags=["health"])
 

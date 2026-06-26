@@ -151,8 +151,7 @@ class AnalogAudioDataset(Dataset):
         audio, sr = sf.read(path, dtype="float32")
         if sr != self._expected_sr:
             raise ValueError(
-                f"Sample rate mismatch in {path.name}: "
-                f"expected {self._expected_sr} Hz, got {sr} Hz"
+                f"Sample rate mismatch in {path.name}: expected {self._expected_sr} Hz, got {sr} Hz"
             )
         return audio
 

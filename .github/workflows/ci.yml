@@ -9,43 +9,33 @@ on:
 jobs:
   backend:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: .
 
     steps:
       - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v6
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
         with:
           python-version: "3.11"
-          cache: pip
+          enable-cache: true
 
       - name: Install system dependencies
         run: sudo apt-get update && sudo apt-get install -y libsndfile1 ffmpeg
 
-      - name: Install PyTorch CPU
-        run: pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
-
       - name: Install project dependencies
-        run: |
-          pip install ".[dev,dataset,eval]"
-          pip install "filelock>=3.20.3"
+        run: uv sync --frozen --all-groups --all-extras
 
-      - name: Format check (black)
-        run: black --check backend/app/ backend/tests/
-
-      - name: Import sort check (isort)
-        run: isort --check backend/app/ backend/tests/
+      - name: Format check (ruff)
+        run: uv run ruff format --check backend/ dataset/
 
       - name: Lint (ruff)
-        run: ruff check backend/app/ backend/tests/
+        run: uv run ruff check backend/ dataset/
 
       - name: Type check (mypy)
-        run: mypy backend/app/
+        run: uv run mypy backend/app/
 
       - name: Security scan (bandit)
-        run: bandit -r backend/app/ -x backend/app/_archive/ -q
+        run: uv run bandit -r backend/app/ -q
 
       - name: Dependency audit (pip-audit)
         # CVE-2026-3219 affects pip itself with no fix version available upstream;
@@ -53,22 +43,16 @@ jobs:
         # CVE-2025-58438 affects internetarchive 4.x; fix requires v5 which has breaking
         # API changes. internetarchive is only used in dataset acquisition scripts (training
         # is complete) and is not part of the production backend.
-        run: pip-audit --ignore-vuln CVE-2026-3219 --ignore-vuln CVE-2025-58438
+        run: uv run pip-audit --ignore-vuln CVE-2026-3219 --ignore-vuln CVE-2025-58438
 
       - name: Tests with coverage
-        run: pytest backend/tests/ -v --tb=short --cov=backend/app --cov-fail-under=80
+        run: uv run pytest backend/tests/ -v --tb=short --cov=backend/app --cov-fail-under=80
 
       - name: Test dataset scripts
-        run: pytest dataset/tests/ -v --tb=short
-
-      - name: Lint dataset scripts
-        run: |
-          black --check dataset/
-          isort --check dataset/
-          ruff check dataset/
+        run: uv run pytest dataset/tests/ -v --tb=short
 
       - name: Secrets scan
-        run: detect-secrets scan
+        run: uv run detect-secrets scan
 
   frontend:
     runs-on: ubuntu-latest

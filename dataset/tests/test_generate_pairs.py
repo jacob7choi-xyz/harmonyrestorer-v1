@@ -224,6 +224,6 @@ class TestGeneratePairs:
 
         # Clean files should not have been rewritten
         for name in mtimes_before:
-            assert (
-                mtimes_before[name] == mtimes_after[name]
-            ), f"Clean file {name} was rewritten on second run"
+            assert mtimes_before[name] == mtimes_after[name], (
+                f"Clean file {name} was rewritten on second run"
+            )

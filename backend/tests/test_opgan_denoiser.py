@@ -182,9 +182,9 @@ class TestGetGenerator:
         with pytest.raises(FileNotFoundError):
             service._get_generator()
 
-        assert (
-            service._generator is None
-        ), "_generator must stay None after a failed load so the next call retries"
+        assert service._generator is None, (
+            "_generator must stay None after a failed load so the next call retries"
+        )
 
 
 class TestOpGANDenoise:

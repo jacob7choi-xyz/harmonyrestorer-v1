@@ -46,7 +46,7 @@ def load_and_resample(
         # librosa.load handles WAV, FLAC, OGG natively and MP3, M4A, AAC
         # via ffmpeg/audioread (unlike soundfile which only supports
         # libsndfile formats)
-        audio, sr = librosa.load(path, sr=target_sr, mono=True)
+        audio, _sr = librosa.load(path, sr=target_sr, mono=True)
     except Exception as e:
         logger.warning("Failed to load %s: %s", path.name, e)
         return None

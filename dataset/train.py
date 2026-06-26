@@ -30,9 +30,9 @@ from torch.utils.data import DataLoader, random_split
 
 # Import OpGAN components from backend
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
-from app.models.op_gan import OpGANDiscriminator, OpGANGenerator  # noqa: E402
+from app.models.op_gan import OpGANDiscriminator, OpGANGenerator
 
-from dataset.torch_dataset import AnalogAudioDataset  # noqa: E402
+from dataset.torch_dataset import AnalogAudioDataset
 
 logger = logging.getLogger(__name__)
 

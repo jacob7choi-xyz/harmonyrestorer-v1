@@ -337,6 +337,6 @@ class TestRandomDegradation:
 
         if signal_power > 0 and noise_power > 0:
             measured_snr = 10 * np.log10(signal_power / noise_power)
-            assert (
-                abs(measured_snr - params.hiss_snr_db) < 1.0
-            ), f"Measured SNR {measured_snr:.1f} dB vs requested {params.hiss_snr_db:.1f} dB"
+            assert abs(measured_snr - params.hiss_snr_db) < 1.0, (
+                f"Measured SNR {measured_snr:.1f} dB vs requested {params.hiss_snr_db:.1f} dB"
+            )
