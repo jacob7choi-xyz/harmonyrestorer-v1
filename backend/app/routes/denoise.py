@@ -7,6 +7,7 @@ import tempfile
 import uuid
 from pathlib import Path
 
+import librosa
 import soundfile as sf
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
@@ -25,6 +26,9 @@ _MAX_DURATION_MIN = settings.max_audio_duration_seconds / 60
 
 # Formats where soundfile can read duration from raw bytes
 _SOUNDFILE_FORMATS = {".wav", ".flac", ".ogg"}
+
+# Formats that need a file path for librosa to read duration
+_LIBROSA_FORMATS = {".mp3", ".m4a", ".aac"}
 
 # Magic byte signatures for supported audio formats
 _MAGIC_BYTES: dict[str, list[tuple[int, bytes]]] = {
@@ -55,6 +59,38 @@ def _validate_audio_magic(content: bytes, extension: str) -> bool:
         if len(content) >= end and content[offset:end] == magic:
             return True
     return False
+
+
+def _check_audio_duration(tmp_path: str, file_ext: str, content: bytes) -> None:
+    """Reject audio that exceeds the configured duration limit.
+
+    Uses soundfile for WAV/FLAC/OGG (reads from bytes in memory) and librosa
+    for MP3/M4A/AAC (requires a file path). Silently skips the check if the
+    duration cannot be read.
+
+    Args:
+        tmp_path: Path to the temporary file on disk (used for librosa formats).
+        file_ext: Lowercase file extension including dot (e.g. ".mp3").
+        content: Raw file bytes (used for soundfile formats).
+
+    Raises:
+        HTTPException: 400 if the audio duration exceeds the configured limit.
+    """
+    duration: float | None = None
+    try:
+        if file_ext in _SOUNDFILE_FORMATS:
+            duration = sf.info(io.BytesIO(content)).duration
+        elif file_ext in _LIBROSA_FORMATS:
+            duration = librosa.get_duration(path=tmp_path)
+    except Exception:
+        logger.warning("Could not read audio duration for %s file, skipping check", file_ext)
+        return
+
+    if duration is not None and duration > settings.max_audio_duration_seconds:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Audio too long ({duration:.0f}s). Max {_MAX_DURATION_MIN:.0f} minutes.",
+        )
 
 
 def _validate_job_id(job_id: str) -> None:
@@ -97,20 +133,6 @@ async def denoise_audio(
             detail=f"File content does not match {file_ext} format",
         )
 
-    # Validate audio duration for formats soundfile can parse
-    if file_ext in _SOUNDFILE_FORMATS:
-        try:
-            info = sf.info(io.BytesIO(content))
-            if info.duration > settings.max_audio_duration_seconds:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Audio too long ({info.duration:.0f}s). Max {_MAX_DURATION_MIN:.0f} minutes.",
-                )
-        except HTTPException:
-            raise
-        except Exception:
-            logger.warning("Could not read audio duration for %s file, skipping check", file_ext)
-
     job_id = str(uuid.uuid4())
     input_path = settings.upload_dir / f"{job_id}{file_ext}"
 
@@ -122,8 +144,12 @@ async def denoise_audio(
         with open(tmp_path_str, "wb") as f:
             f.write(content)
             os.fsync(f.fileno())
+        _check_audio_duration(tmp_path_str, file_ext, content)
         Path(tmp_path_str).replace(input_path)
         logger.info("Saved upload %s (%d bytes)", job_id, len(content))
+    except HTTPException:
+        Path(tmp_path_str).unlink(missing_ok=True)
+        raise
     except Exception as err:
         Path(tmp_path_str).unlink(missing_ok=True)
         logger.exception("Failed to save upload %s", job_id)

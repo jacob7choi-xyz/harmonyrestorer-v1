@@ -233,6 +233,22 @@ class TestDurationValidation:
         )
         assert r.status_code == 200
 
+    @pytest.mark.parametrize("ext", [".mp3", ".m4a", ".aac"])
+    def test_librosa_format_exceeding_max_duration_returns_400(
+        self, client, mock_denoiser, monkeypatch, ext: str
+    ) -> None:
+        """MP3/M4A/AAC files longer than the configured limit are rejected with 400."""
+        monkeypatch.setattr(
+            "librosa.get_duration",
+            Mock(return_value=float(settings.max_audio_duration_seconds + 1)),
+        )
+        r = client.post(
+            "/api/v1/denoise",
+            files={"file": (f"test{ext}", SAMPLE_BYTES[ext], "audio/octet-stream")},
+        )
+        assert r.status_code == 400
+        assert "too long" in r.json()["detail"].lower()
+
 
 def test_download_after_job_cleanup(client, mock_denoiser):
     """Download should return 404 after the job has been cleaned up."""
