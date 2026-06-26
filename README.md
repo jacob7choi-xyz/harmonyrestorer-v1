@@ -5,7 +5,7 @@ AI-powered audio denoising. Upload noisy audio, get clean audio back.
 - **Model**: Custom-trained OpGAN (1D Operational GAN), with UVR-DeNoise as fallback via [audio-separator](https://github.com/karaokenerds/python-audio-separator)
 - **Formats**: WAV, MP3, FLAC, OGG, M4A, AAC (max 50 MB, 10 minutes)
 - **Stack**: FastAPI + React/TypeScript, Docker-ready
-- **Tests**: 347 passing (backend 127, dataset 136, frontend 84)
+- **Tests**: 347 passing (backend 108, dataset 155, frontend 84)
 
 ## Quick Start
 
@@ -16,7 +16,7 @@ cd harmonyrestorer-v1
 uv sync --all-groups
 
 # Backend
-uv run uvicorn app.main:app --reload --port 8000
+cd backend && uv run uvicorn app.main:app --reload --port 8000
 
 # Frontend (separate terminal)
 cd frontend && npm ci && npm run dev
@@ -101,7 +101,7 @@ cd frontend && npm run type-check && npm run lint && npm run build && npm run te
 The `dataset/` package builds training data for the OpGAN from public domain classical recordings.
 
 ```bash
-uv sync --group dataset
+uv sync --extra dataset
 
 # Download from Internet Archive (Musopen collection)
 uv run python -m dataset.acquire --output data/raw/ --max-tracks 200 --formats .flac
