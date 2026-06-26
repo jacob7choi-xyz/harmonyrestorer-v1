@@ -17,7 +17,7 @@ Report vulnerabilities via one of the following:
 - **GitHub private advisory**: use the "Report a vulnerability" button on the [Security tab](https://github.com/jacob7choi-xyz/harmonyrestorer-v1/security/advisories/new)
 - **Email**: jacob77choi@gmail.com
 
-Include a description of the issue, steps to reproduce, and potential impact. You can expect an acknowledgment within 72 hours and a resolution timeline within 14 days for confirmed issues.
+Include a description of the issue, steps to reproduce, and potential impact. Expect an acknowledgment within 72 hours. A resolution timeline will be provided within 14 days of confirmation.
 
 ## Scope
 
@@ -30,9 +30,9 @@ In scope:
 
 Out of scope:
 
-- The Vercel-hosted frontend (report to Vercel directly for platform issues)
+- The hosted frontend code for this project is in scope; platform-level issues with Vercel itself are out of scope and should be reported to Vercel directly
 - The GCP training infrastructure (decommissioned after model training)
-- Denial-of-service via resource exhaustion beyond the implemented rate limits
+- Large-scale DoS attacks that exceed the documented rate limits and resource controls
 
 ## Supply Chain
 
@@ -49,7 +49,7 @@ Dependencies are managed with [uv](https://github.com/astral-sh/uv) and pinned v
 | CVE-2026-3219 | pip | Affects pip itself; no patched version available upstream. Monitored for fix. |
 | CVE-2025-58438 | internetarchive 4.x | Fix requires v5 which has breaking API changes. `internetarchive` is used only in dataset acquisition scripts; training is complete and these scripts are not part of the production backend. |
 
-Both ignores are documented in `.github/workflows/ci.yml` and reviewed on each dependency update cycle.
+Both ignores are documented in `.github/workflows/ci.yml` and reviewed on each dependency update cycle. Neither affects the production backend attack surface as currently deployed.
 
 ### JavaScript dependencies
 
