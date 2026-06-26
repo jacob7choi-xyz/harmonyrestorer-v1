@@ -89,8 +89,8 @@ Both Dockerfiles use non-root users. The backend Dockerfile includes a health ch
 
 ```bash
 # Backend + dataset
-cd backend && black --check . && isort --check . && ruff check . && mypy . && pytest -v
-cd .. && pytest dataset/tests/ -v
+cd backend && uv run ruff format --check . && uv run ruff check . && uv run mypy . && uv run pytest -v
+cd .. && uv run pytest dataset/tests/ -v
 
 # Frontend
 cd frontend && npm run type-check && npm run lint && npm run build && npm run test
