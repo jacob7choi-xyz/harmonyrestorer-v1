@@ -7,6 +7,8 @@ services:
       - "8000"
     env_file:
       - backend/.env
+    environment:
+      FORWARDED_ALLOW_IPS: "172.28.0.0/16"
     volumes:
       - uploads:/app/backend/uploads
       - processed:/app/backend/processed
@@ -16,6 +18,8 @@ services:
       timeout: 10s
       retries: 3
     restart: unless-stopped
+    networks:
+      - app_net
     deploy:
       resources:
         limits:
@@ -35,6 +39,8 @@ services:
       backend:
         condition: service_healthy
     restart: unless-stopped
+    networks:
+      - app_net
     deploy:
       resources:
         limits:
@@ -44,3 +50,9 @@ services:
 volumes:
   uploads:
   processed:
+
+networks:
+  app_net:
+    ipam:
+      config:
+        - subnet: "172.28.0.0/16"
