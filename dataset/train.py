@@ -514,7 +514,7 @@ def train(
     # --- Models ---
     generator = OpGANGenerator(q=3).to(device)
     discriminator = OpGANDiscriminator(q=2).to(device)
-    criterion = OpGANLoss(lambda_temporal=10, lambda_spectral=5)
+    criterion = OpGANLoss(lambda_temporal=10, lambda_spectral=5).to(device)
 
     gen_params = sum(p.numel() for p in generator.parameters())
     disc_params = sum(p.numel() for p in discriminator.parameters())
