@@ -49,7 +49,7 @@ jobs:
         run: uv run pytest dataset/tests/ -v --tb=short
 
       - name: Secrets scan
-        run: uv run detect-secrets scan
+        run: uv run detect-secrets-hook $(git ls-files)
 
   frontend:
     runs-on: ubuntu-latest
