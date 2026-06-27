@@ -21,7 +21,7 @@ HarmonyRestorer started as a single-file FastAPI prototype (`main.py`) with all 
 Execute an 8-phase enterprise refactor in a single session, committed as `6a7cc28` on the `develop` branch, then merged to `main`. Each phase built on the previous:
 
 ### Phase 1: Split main.py into modules
-Decomposed into `config.py`, `schemas.py`, `exceptions.py`, `middleware.py`, `routes/health.py`, `routes/denoise.py`, `services/denoiser.py`, `services/jobs.py`. Clean dependency flow: Routes → Services → Config → Schemas.
+Decomposed into `config.py`, `schemas.py`, `exceptions.py`, `middleware.py`, `routes/health.py`, `routes/denoise.py`, `services/denoiser.py`, `services/jobs.py`. Clean dependency flow: Routes -> Services -> Config -> Schemas.
 
 ### Phase 2: Security hardening
 - 50 MB file size limit enforced at upload
@@ -63,8 +63,8 @@ GitHub Actions workflow with parallel backend + frontend jobs. Backend: black, i
 - Additional tests: rate limiter 429, all 6 audio formats, stack trace suppression (30 tests total)
 
 ### Frontend Refactor (Tier 3, committed `b5d33eb`)
-- Split `App.tsx` → 7 files: `types.ts`, `api/client.ts`, 5 components
-- Wired real API calls (upload → poll status → download)
+- Split `App.tsx` into 7 files: `types.ts`, `api/client.ts`, 5 components
+- Wired real API calls (upload, poll status, download)
 - `ErrorBoundary` added
 - Removed 17 unused dependencies
 - Added ESLint config, `.env.example`
