@@ -8,6 +8,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+_VALID_LOG_LEVELS: frozenset[str] = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
+_VALID_LOG_FORMATS: frozenset[str] = frozenset({"text", "json"})
+
 
 class Settings:
     """Central configuration. Override any value via env vars or .env file."""
@@ -24,6 +27,8 @@ class Settings:
         self.max_audio_duration_seconds = int(
             os.getenv("MAX_AUDIO_DURATION_SECONDS", str(10 * 60))  # 10 minutes
         )
+        if self.max_audio_duration_seconds < 1:
+            raise ValueError("MAX_AUDIO_DURATION_SECONDS must be at least 1")
         self.denoiser_engine = os.getenv("DENOISER_ENGINE", "opgan")
         if self.denoiser_engine not in ("opgan", "uvr"):
             raise ValueError(
@@ -36,8 +41,14 @@ class Settings:
 
         # Security
         self.max_upload_bytes = int(os.getenv("MAX_UPLOAD_BYTES", str(50 * 1024 * 1024)))
+        if self.max_upload_bytes < 1:
+            raise ValueError("MAX_UPLOAD_BYTES must be at least 1")
         self.rate_limit_max_requests = int(os.getenv("RATE_LIMIT_MAX_REQUESTS", "10"))
+        if self.rate_limit_max_requests < 1:
+            raise ValueError("RATE_LIMIT_MAX_REQUESTS must be at least 1")
         self.rate_limit_window_seconds = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
+        if self.rate_limit_window_seconds < 1:
+            raise ValueError("RATE_LIMIT_WINDOW_SECONDS must be at least 1")
         self.cors_origins: list[str] = [
             o.strip()
             for o in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
@@ -48,10 +59,16 @@ class Settings:
         self.min_disk_bytes: int = int(
             os.getenv("MIN_DISK_BYTES", str(100 * 1024 * 1024))  # 100 MB
         )
+        if self.min_disk_bytes < 0:
+            raise ValueError("MIN_DISK_BYTES must be 0 or greater")
 
         # Job lifecycle
         self.job_ttl_seconds = int(os.getenv("JOB_TTL_SECONDS", str(60 * 60)))  # 1 hour
+        if self.job_ttl_seconds < 1:
+            raise ValueError("JOB_TTL_SECONDS must be at least 1")
         self.cleanup_interval_seconds = int(os.getenv("CLEANUP_INTERVAL_SECONDS", str(5 * 60)))
+        if self.cleanup_interval_seconds < 1:
+            raise ValueError("CLEANUP_INTERVAL_SECONDS must be at least 1")
         self.max_total_jobs = int(os.getenv("MAX_TOTAL_JOBS", "100"))
         if self.max_total_jobs < 1:
             raise ValueError("MAX_TOTAL_JOBS must be at least 1")
@@ -65,8 +82,16 @@ class Settings:
             raise ValueError("DOWNLOAD_TTL_SECONDS must be at least 1")
 
         # Server
-        self.log_level = os.getenv("LOG_LEVEL", "INFO")
-        self.log_format = os.getenv("LOG_FORMAT", "text")  # "text" or "json"
+        self.log_level = os.getenv("LOG_LEVEL", "INFO").strip().upper()
+        if self.log_level not in _VALID_LOG_LEVELS:
+            raise ValueError(
+                f"Invalid LOG_LEVEL={self.log_level!r}, must be one of {sorted(_VALID_LOG_LEVELS)}"
+            )
+        self.log_format = os.getenv("LOG_FORMAT", "text").strip().lower()
+        if self.log_format not in _VALID_LOG_FORMATS:
+            raise ValueError(
+                f"Invalid LOG_FORMAT={self.log_format!r}, must be one of {sorted(_VALID_LOG_FORMATS)}"
+            )
         self.enable_docs: bool = os.getenv("ENABLE_DOCS", "false").strip().lower() == "true"
 
         # Ensure directories exist
