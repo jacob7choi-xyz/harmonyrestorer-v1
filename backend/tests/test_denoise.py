@@ -87,13 +87,46 @@ def test_upload_rejects_unsupported_format(client):
     assert "Unsupported format" in r.json()["detail"]
 
 
-def test_upload_rejects_oversized_file(client):
+def test_upload_rejects_oversized_file(client) -> None:
+    """Oversized uploads return 413 and do not create a job or temp file."""
+    from app.services.jobs import job_manager
+
+    original_job_count = len(job_manager._jobs)
     with patch.object(settings, "max_upload_bytes", 10):
         r = client.post(
             "/api/v1/denoise",
             files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
         )
     assert r.status_code == 413
+    assert len(job_manager._jobs) == original_job_count
+
+
+def test_upload_accepts_file_at_size_limit(client, mock_denoiser, monkeypatch) -> None:
+    """A file exactly at max_upload_bytes is accepted."""
+    from app.services.jobs import job_manager
+
+    original_job_count = len(job_manager._jobs)
+    monkeypatch.setattr(settings, "max_upload_bytes", len(SMALL_WAV))
+    r = client.post(
+        "/api/v1/denoise",
+        files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
+    )
+    assert r.status_code == 200
+    assert len(job_manager._jobs) == original_job_count + 1
+
+
+def test_upload_rejects_file_one_byte_over_limit(client, monkeypatch) -> None:
+    """A file one byte over max_upload_bytes is rejected with 413 and no job is created."""
+    from app.services.jobs import job_manager
+
+    original_job_count = len(job_manager._jobs)
+    monkeypatch.setattr(settings, "max_upload_bytes", len(SMALL_WAV) - 1)
+    r = client.post(
+        "/api/v1/denoise",
+        files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
+    )
+    assert r.status_code == 413
+    assert len(job_manager._jobs) == original_job_count
 
 
 def test_upload_rejects_missing_file(client):

@@ -118,8 +118,10 @@ async def denoise_audio(
             detail=f"Unsupported format: {file_ext}",
         )
 
-    # Read with size limit
-    content = await file.read()
+    # Read at most max_upload_bytes + 1 so the server never allocates an unbounded
+    # body in application memory. Exactly one extra byte is read to distinguish
+    # "at the limit" from "over the limit" without a second read.
+    content = await file.read(settings.max_upload_bytes + 1)
     if len(content) > settings.max_upload_bytes:
         raise HTTPException(
             status_code=413,
