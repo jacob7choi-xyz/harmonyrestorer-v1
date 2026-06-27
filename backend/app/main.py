@@ -85,8 +85,9 @@ app = FastAPI(
     title="HarmonyRestorer v1",
     description="AI-powered audio denoising",
     version="1.0.0",
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
+    docs_url="/api/docs" if settings.enable_docs else None,
+    redoc_url="/api/redoc" if settings.enable_docs else None,
+    openapi_url="/api/openapi.json" if settings.enable_docs else None,
     lifespan=lifespan,
 )
 

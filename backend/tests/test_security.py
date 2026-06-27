@@ -3,7 +3,7 @@
 import time
 from unittest.mock import MagicMock, patch
 
-from app.config import settings
+from app.config import Settings, settings
 from app.main import app
 from fastapi.testclient import TestClient
 
@@ -147,6 +147,47 @@ def test_rate_limit_window_expiry_allows_new_requests(client, mock_denoiser, mon
         )
 
     assert r.status_code == 200, "Request after window expiry must succeed"
+
+
+# --- Docs gating ---
+
+
+def test_docs_disabled_by_default(client) -> None:
+    """/api/docs is unreachable when ENABLE_DOCS is not set."""
+    assert client.get("/api/docs").status_code == 404
+
+
+def test_redoc_disabled_by_default(client) -> None:
+    """/api/redoc is unreachable when ENABLE_DOCS is not set."""
+    assert client.get("/api/redoc").status_code == 404
+
+
+def test_openapi_json_disabled_by_default(client) -> None:
+    """/api/openapi.json is unreachable when ENABLE_DOCS is not set."""
+    assert client.get("/api/openapi.json").status_code == 404
+
+
+def test_openapi_json_default_route_disabled(client) -> None:
+    """FastAPI's implicit /openapi.json default route is also unreachable.
+
+    Setting openapi_url explicitly in the FastAPI constructor removes the
+    default /openapi.json route. This test guards against a regression where
+    the schema is hidden from /api/openapi.json but still accessible at the
+    FastAPI default.
+    """
+    assert client.get("/openapi.json").status_code == 404
+
+
+def test_enable_docs_setting_parses_true(monkeypatch) -> None:
+    """ENABLE_DOCS=true is parsed correctly as True."""
+    monkeypatch.setenv("ENABLE_DOCS", "true")
+    assert Settings().enable_docs is True
+
+
+def test_enable_docs_setting_defaults_false(monkeypatch) -> None:
+    """enable_docs is False when ENABLE_DOCS is not set."""
+    monkeypatch.delenv("ENABLE_DOCS", raising=False)
+    assert Settings().enable_docs is False
 
 
 # --- Stack trace suppression ---

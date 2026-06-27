@@ -67,6 +67,7 @@ class Settings:
         # Server
         self.log_level = os.getenv("LOG_LEVEL", "INFO")
         self.log_format = os.getenv("LOG_FORMAT", "text")  # "text" or "json"
+        self.enable_docs: bool = os.getenv("ENABLE_DOCS", "false").strip().lower() == "true"
 
         # Ensure directories exist
         self.upload_dir.mkdir(parents=True, exist_ok=True)
