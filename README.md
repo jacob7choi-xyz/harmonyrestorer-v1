@@ -5,7 +5,7 @@ AI-powered audio denoising. Upload noisy audio, get clean audio back.
 - **Model**: Custom-trained OpGAN (1D Operational GAN), with UVR-DeNoise as fallback via [audio-separator](https://github.com/karaokenerds/python-audio-separator)
 - **Formats**: WAV, MP3, FLAC, OGG, M4A, AAC (max 50 MB, 10 minutes)
 - **Stack**: FastAPI + React/TypeScript, Docker-ready
-- **Tests**: 347 passing (backend 108, dataset 155, frontend 84)
+- **Tests**: 399 passing (backend + dataset 315, frontend 84)
 
 ## Quick Start
 
@@ -35,14 +35,14 @@ curl http://localhost:8000/api/v1/status/{job_id}
 curl -O http://localhost:8000/api/v1/download/{job_id}
 ```
 
-Interactive docs: http://localhost:8000/api/docs
+> **Note:** Interactive docs are disabled by default. Set `ENABLE_DOCS=true` in `.env` to enable `/api/docs` and `/api/redoc` for local development.
 
 ## Architecture
 
 ```
 backend/app/
 ├── main.py              # App factory, middleware, lifespan
-├── config.py            # Settings (env vars)
+├── config.py            # Settings (env vars, validated at startup)
 ├── schemas.py           # Pydantic models, JobStatusEnum
 ├── exceptions.py        # Error handlers (no stack traces to users)
 ├── middleware.py         # Per-IP rate limiting
@@ -68,13 +68,18 @@ frontend/src/
 
 ## Security
 
-- File size limit (50 MB) and audio duration limit (10 min)
+- File size limit (50 MB) and audio duration limit (10 min), all 6 formats validated
 - Magic byte validation (content must match declared format)
 - UUID-based file storage (client filenames never trusted)
+- Atomic file writes (temp file + fsync + atomic rename; no partial files on crash)
+- Per-IP and global job caps (MAX_JOBS_PER_IP, MAX_TOTAL_JOBS) with automatic stale cleanup
 - Rate limiting (10 req/min per IP on upload)
 - CORS restricted to configured origins
 - Error sanitization (no stack traces in responses)
+- API schema (OpenAPI JSON, Swagger UI, ReDoc) disabled by default; enable with `ENABLE_DOCS=true`
+- All config settings validated at startup; bad values fail fast instead of degrading silently
 - Nginx: HSTS, CSP, X-Frame-Options, health endpoint restricted to private IPs
+- Proxy trust scoped to the pinned internal Docker subnet
 
 ## Docker
 
@@ -83,7 +88,7 @@ docker compose up --build    # Start full stack
 docker compose down          # Stop
 ```
 
-Both Dockerfiles use non-root users. The backend Dockerfile includes a health check; resource limits are configured in `docker-compose.yml`.
+Both images use non-root users. The backend includes a health check and has resource limits in `docker-compose.yml`. Set `FORWARDED_ALLOW_IPS` to your platform's proxy CIDR in production (see `backend/.env.example`).
 
 ## Quality Gate
 
@@ -167,7 +172,7 @@ Three before/after/restored triplets for each model. Click to listen in the brow
 ## Roadmap
 
 - [x] Working denoising API (UVR)
-- [x] Security hardening (3 phases)
+- [x] Security hardening (P0/P1 complete)
 - [x] React frontend with wizard flow, real waveform, audio playback, before/after comparison
 - [x] Frontend redesign: animated canvas background, blue accent, social footer, 84 tests
 - [x] Docker + CI/CD
@@ -176,6 +181,8 @@ Three before/after/restored triplets for each model. Click to listen in the brow
 - [x] Benchmark OpGAN (SDR 23.74 dB, PESQ 4.04, STOI 0.960)
 - [x] Benchmark UVR on same dataset for head-to-head comparison
 - [x] Swap in OpGAN as default denoiser (outperforms UVR by ~12 dB SDR)
+- [ ] Backend cloud deployment
+- [ ] Out-of-distribution audio evaluation
 
 ## License
 
