@@ -4,7 +4,7 @@ WORKDIR /app
 
 # System dependencies for audio processing
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg libsndfile1 curl gcc && \
+    apt-get install -y --no-install-recommends ffmpeg libsndfile1 curl build-essential && \
     rm -rf /var/lib/apt/lists/*
 
 # PyTorch CPU: separate layer for caching (largest download)
