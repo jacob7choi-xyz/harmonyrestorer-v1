@@ -26,6 +26,11 @@ class JobStatus(BaseModel):
     completed_at: datetime | None = None
     download_url: str | None = None
     processing_time: float | None = None
+    client_ip: str = Field(
+        default="",
+        exclude=True,
+        description="Internal-only client IP used for per-client job caps.",
+    )
 
 
 class DenoiseUploadResponse(BaseModel):

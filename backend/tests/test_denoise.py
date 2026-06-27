@@ -305,6 +305,84 @@ class TestDurationValidation:
         assert "too long" in r.json()["detail"].lower()
 
 
+def test_per_ip_cap_returns_429_and_removes_input_file(
+    client, mock_audio_duration, monkeypatch
+) -> None:
+    """Per-IP cap rejection returns 429, creates no new job, and leaves no input file behind.
+
+    Uses max_jobs_per_ip=1 (a valid production config) with one existing COMPLETED job
+    from the same IP so the cap is already at its limit. Covers the route cleanup path
+    that fires after the temp file has been renamed to input_path: if that cleanup were
+    missing, rejected uploads would accumulate on disk indefinitely.
+    """
+    from datetime import UTC, datetime
+
+    from app.schemas import JobStatus, JobStatusEnum
+    from app.services.jobs import job_manager
+
+    monkeypatch.setattr(settings, "max_jobs_per_ip", 1)
+    # "testclient" is the peer host Starlette's TestClient reports via request.client.host
+    job_manager._jobs["existing"] = JobStatus(
+        job_id="existing",
+        client_ip="testclient",
+        status=JobStatusEnum.COMPLETED,
+        progress=100,
+        message="done",
+        created_at=datetime.now(UTC),
+        completed_at=datetime.now(UTC),
+    )
+    upload_files_before = set(settings.upload_dir.iterdir())
+
+    r = client.post(
+        "/api/v1/denoise",
+        files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
+    )
+
+    assert r.status_code == 429
+    assert "Too many active jobs" in r.json()["detail"]
+    assert "existing" in job_manager._jobs
+    assert len(job_manager._jobs) == 1
+    assert set(settings.upload_dir.iterdir()) == upload_files_before
+
+
+def test_global_cap_returns_503_and_removes_input_file(
+    client, mock_audio_duration, monkeypatch
+) -> None:
+    """Global job cap rejection returns 503, creates no new job, and leaves no input file behind.
+
+    Uses max_total_jobs=1 with an existing job from a different IP so the global cap
+    fires before the per-IP check. Verifies the same route cleanup path as the 429 case.
+    """
+    from datetime import UTC, datetime
+
+    from app.schemas import JobStatus, JobStatusEnum
+    from app.services.jobs import job_manager
+
+    monkeypatch.setattr(settings, "max_total_jobs", 1)
+    monkeypatch.setattr(settings, "max_jobs_per_ip", 1)
+    job_manager._jobs["existing"] = JobStatus(
+        job_id="existing",
+        client_ip="other-client",
+        status=JobStatusEnum.COMPLETED,
+        progress=100,
+        message="done",
+        created_at=datetime.now(UTC),
+        completed_at=datetime.now(UTC),
+    )
+    upload_files_before = set(settings.upload_dir.iterdir())
+
+    r = client.post(
+        "/api/v1/denoise",
+        files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
+    )
+
+    assert r.status_code == 503
+    assert "Server is busy" in r.json()["detail"]
+    assert "existing" in job_manager._jobs
+    assert len(job_manager._jobs) == 1
+    assert set(settings.upload_dir.iterdir()) == upload_files_before
+
+
 def test_download_after_job_cleanup(client, mock_denoiser):
     """Download should return 404 after the job has been cleaned up."""
     from app.services.jobs import job_manager

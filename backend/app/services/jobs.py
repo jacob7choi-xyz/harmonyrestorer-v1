@@ -13,6 +13,19 @@ from app.services.opgan_denoiser import OpGANDenoiserService
 logger = logging.getLogger(__name__)
 
 
+class JobCapError(Exception):
+    """Raised when the global resource-occupying job cap is reached."""
+
+
+class IPJobCapError(Exception):
+    """Raised when the per-IP resource-occupying job cap is reached."""
+
+
+_RESOURCE_STATUSES: frozenset[JobStatusEnum] = frozenset(
+    {JobStatusEnum.QUEUED, JobStatusEnum.PROCESSING, JobStatusEnum.COMPLETED}
+)
+
+
 class JobManager:
     """Manages denoising jobs and their lifecycle."""
 
@@ -20,7 +33,7 @@ class JobManager:
         self._jobs: dict[str, JobStatus] = {}
         self._denoiser: DenoiserService | OpGANDenoiserService | None = None
         self._lock = threading.Lock()
-        self._downloading: set[str] = set()
+        self._downloading: dict[str, datetime] = {}
 
     def _get_denoiser(self) -> DenoiserService | OpGANDenoiserService:
         """Lazy-load the denoiser singleton based on configured engine."""
@@ -49,16 +62,58 @@ class JobManager:
                 counts[job.status] = counts.get(job.status, 0) + 1
             return counts
 
-    def create_job(self, job_id: str) -> JobStatus:
-        """Register a new processing job."""
-        job = JobStatus(
-            job_id=job_id,
-            status=JobStatusEnum.QUEUED,
-            progress=0,
-            message="Audio uploaded, queued for processing",
-            created_at=datetime.now(UTC),
+    def _count_resource_occupying_jobs(self, client_ip: str | None = None) -> int:
+        """Count resource-occupying jobs. Must be called with self._lock held.
+
+        Args:
+            client_ip: If provided, count only jobs from this client IP.
+                       If None, count all resource-occupying jobs globally.
+
+        Returns:
+            Number of jobs in QUEUED, PROCESSING, or COMPLETED status.
+        """
+        return sum(
+            1
+            for job in self._jobs.values()
+            if job.status in _RESOURCE_STATUSES
+            and (client_ip is None or job.client_ip == client_ip)
         )
+
+    def create_job(self, job_id: str, client_ip: str = "") -> JobStatus:
+        """Register a new processing job, enforcing global and per-IP caps.
+
+        Args:
+            job_id: UUID string for the new job.
+            client_ip: Verified client IP address from the upload request.
+
+        Returns:
+            The newly created JobStatus.
+
+        Raises:
+            JobCapError: If the global resource-occupying job cap is reached.
+            IPJobCapError: If the per-IP resource-occupying job cap is reached.
+        """
         with self._lock:
+            global_count = self._count_resource_occupying_jobs()
+            if global_count >= settings.max_total_jobs:
+                raise JobCapError(
+                    f"Global job cap reached ({global_count}/{settings.max_total_jobs})"
+                )
+            if client_ip:
+                ip_count = self._count_resource_occupying_jobs(client_ip)
+                if ip_count >= settings.max_jobs_per_ip:
+                    raise IPJobCapError(
+                        f"Per-IP job cap reached for {client_ip}"
+                        f" ({ip_count}/{settings.max_jobs_per_ip})"
+                    )
+            job = JobStatus(
+                job_id=job_id,
+                client_ip=client_ip,
+                status=JobStatusEnum.QUEUED,
+                progress=0,
+                message="Audio uploaded, queued for processing",
+                created_at=datetime.now(UTC),
+            )
             self._jobs[job_id] = job
         return job
 
@@ -72,13 +127,13 @@ class JobManager:
         with self._lock:
             if job_id not in self._jobs:
                 return False
-            self._downloading.add(job_id)
+            self._downloading[job_id] = datetime.now(UTC)
             return True
 
     def unmark_downloading(self, job_id: str) -> None:
         """Remove download guard from a job."""
         with self._lock:
-            self._downloading.discard(job_id)
+            self._downloading.pop(job_id, None)
 
     def process(self, job_id: str, input_path: Path) -> None:
         """Run denoising. Called as a background task."""
@@ -132,11 +187,23 @@ class JobManager:
     def cleanup_expired(self) -> int:
         """Remove finished jobs older than TTL and delete their output files.
 
-        Skips jobs that are actively being downloaded or still processing
-        to prevent race conditions with concurrent downloads and background tasks.
+        First evicts stale download markers left by disconnected clients, then
+        removes jobs in COMPLETED or FAILED status that have exceeded the TTL.
+        Skips jobs actively being downloaded to prevent races with concurrent
+        downloads and background tasks.
         """
         now = datetime.now(UTC)
         with self._lock:
+            # Evict stale download markers left by disconnected clients
+            stale_markers = [
+                job_id
+                for job_id, started_at in self._downloading.items()
+                if (now - started_at).total_seconds() > settings.download_ttl_seconds
+            ]
+            for job_id in stale_markers:
+                del self._downloading[job_id]
+                logger.warning("Evicted stale download marker for job %s", job_id)
+
             expired_ids = [
                 job_id
                 for job_id, job in self._jobs.items()

@@ -52,6 +52,17 @@ class Settings:
         # Job lifecycle
         self.job_ttl_seconds = int(os.getenv("JOB_TTL_SECONDS", str(60 * 60)))  # 1 hour
         self.cleanup_interval_seconds = int(os.getenv("CLEANUP_INTERVAL_SECONDS", str(5 * 60)))
+        self.max_total_jobs = int(os.getenv("MAX_TOTAL_JOBS", "100"))
+        if self.max_total_jobs < 1:
+            raise ValueError("MAX_TOTAL_JOBS must be at least 1")
+        self.max_jobs_per_ip = int(os.getenv("MAX_JOBS_PER_IP", "3"))
+        if self.max_jobs_per_ip < 1:
+            raise ValueError("MAX_JOBS_PER_IP must be at least 1")
+        if self.max_jobs_per_ip > self.max_total_jobs:
+            raise ValueError("MAX_JOBS_PER_IP cannot exceed MAX_TOTAL_JOBS")
+        self.download_ttl_seconds = int(os.getenv("DOWNLOAD_TTL_SECONDS", "300"))
+        if self.download_ttl_seconds < 1:
+            raise ValueError("DOWNLOAD_TTL_SECONDS must be at least 1")
 
         # Server
         self.log_level = os.getenv("LOG_LEVEL", "INFO")

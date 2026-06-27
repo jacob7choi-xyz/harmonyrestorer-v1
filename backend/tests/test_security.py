@@ -43,7 +43,7 @@ def test_rate_limit_none_client_returns_503():
     assert "proxy misconfiguration" in r.json()["detail"]
 
 
-def test_rate_limit_different_ips_have_independent_buckets(mock_denoiser):
+def test_rate_limit_different_ips_have_independent_buckets(mock_denoiser, monkeypatch):
     """Two different client IPs have fully independent rate-limit buckets.
 
     Proves that rate limiting is keyed on the real client IP, not on a shared
@@ -65,6 +65,7 @@ def test_rate_limit_different_ips_have_independent_buckets(mock_denoiser):
                 scope = {**scope, "client": (self._ip, 12345)}
             await self._app(scope, receive, send)
 
+    monkeypatch.setattr(settings, "max_jobs_per_ip", 100)
     limit = settings.rate_limit_max_requests
     _clear_rate_limiter(app)
 
@@ -91,8 +92,9 @@ def test_rate_limit_different_ips_have_independent_buckets(mock_denoiser):
     assert r.status_code == 200, "IP B must not be affected by IP A's exhausted bucket"
 
 
-def test_rate_limiter_returns_429_after_limit(client, mock_denoiser):
+def test_rate_limiter_returns_429_after_limit(client, mock_denoiser, monkeypatch):
     """Uploads exceeding rate_limit_max_requests should be rejected with 429."""
+    monkeypatch.setattr(settings, "max_jobs_per_ip", 100)
     limit = settings.rate_limit_max_requests
 
     for i in range(limit):
@@ -111,13 +113,14 @@ def test_rate_limiter_returns_429_after_limit(client, mock_denoiser):
     assert "Too many requests" in r.json()["detail"]
 
 
-def test_rate_limit_window_expiry_allows_new_requests(client, mock_denoiser) -> None:
+def test_rate_limit_window_expiry_allows_new_requests(client, mock_denoiser, monkeypatch) -> None:
     """After the rate-limit window expires, stale timestamps are pruned and
     the client can upload again without a server restart.
 
     Covers the sliding-window prune branch in middleware.py:
         active = [t for t in self._requests[ip] if t > cutoff]
     """
+    monkeypatch.setattr(settings, "max_jobs_per_ip", 100)
     limit = settings.rate_limit_max_requests
     window = settings.rate_limit_window_seconds
 

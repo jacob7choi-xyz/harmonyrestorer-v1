@@ -10,13 +10,13 @@ from pathlib import Path
 import audioread
 import librosa
 import soundfile as sf
-from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 
 from app.config import settings
 from app.schemas import DenoiseUploadResponse, JobStatus, JobStatusEnum
-from app.services.jobs import job_manager
+from app.services.jobs import IPJobCapError, JobCapError, job_manager
 
 logger = logging.getLogger(__name__)
 
@@ -121,10 +121,13 @@ def _validate_job_id(job_id: str) -> None:
 
 @router.post("/denoise", response_model=DenoiseUploadResponse)
 async def denoise_audio(
+    request: Request,
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
 ) -> DenoiseUploadResponse:
     """Upload and denoise an audio file."""
+    client_ip = request.client.host if request.client else ""
+
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")
 
@@ -175,7 +178,21 @@ async def denoise_audio(
         logger.exception("Failed to save upload %s", job_id)
         raise HTTPException(status_code=500, detail="Failed to save file") from err
 
-    job_manager.create_job(job_id)
+    try:
+        job_manager.create_job(job_id, client_ip=client_ip)
+    except IPJobCapError as exc:
+        input_path.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=429,
+            detail="Too many active jobs for your IP. Try again later.",
+        ) from exc
+    except JobCapError as exc:
+        input_path.unlink(missing_ok=True)
+        raise HTTPException(
+            status_code=503,
+            detail="Server is busy. Try again later.",
+        ) from exc
+
     background_tasks.add_task(job_manager.process, job_id, input_path)
 
     return DenoiseUploadResponse(
