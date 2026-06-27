@@ -31,12 +31,13 @@ processed/
 backend/uploads/
 backend/processed/
 
-# Models
-*.pt
+# Models (training artifacts excluded; production checkpoint baked into image)
 *.pth
 *.ckpt
 *.onnx
 checkpoints/
+!checkpoints/
+!checkpoints/final.pt
 weights/
 
 # External tools (not needed — we use audio-separator pip package)

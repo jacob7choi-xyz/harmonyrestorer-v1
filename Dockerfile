@@ -26,6 +26,7 @@ RUN mkdir -p backend/app && \
 
 # Application code
 COPY backend/app/ backend/app/
+COPY checkpoints/final.pt checkpoints/final.pt
 
 # Non-root user + writable directories
 RUN useradd --create-home --shell /sbin/nologin appuser && \
@@ -40,4 +41,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --proxy-headers --forwarded-allow-ips=\"${FORWARDED_ALLOW_IPS:-127.0.0.1}\""]
+CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port \"${PORT:-8000}\" --proxy-headers --forwarded-allow-ips=\"${FORWARDED_ALLOW_IPS:-127.0.0.1}\""]
