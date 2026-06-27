@@ -7,11 +7,17 @@ AI-powered audio denoising. Upload noisy audio, get clean audio back.
 - **Stack**: FastAPI + React/TypeScript, Docker-ready
 - **Tests**: 399 passing (backend + dataset 315, frontend 84)
 
+Live at [harmonyrestorer.online](https://harmonyrestorer.online).
+
 ## Quick Start
 
 ```bash
 git clone https://github.com/jacob7choi-xyz/harmonyrestorer-v1.git
 cd harmonyrestorer-v1
+
+# Copy env files before running anything
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env.local
 
 uv sync --all-groups
 
@@ -22,10 +28,12 @@ cd backend && uv run uvicorn app.main:app --reload --port 8000
 cd frontend && npm ci && npm run dev
 ```
 
+> **Note:** To run the frontend against the live deployed backend instead of a local server, set `VITE_API_URL=https://harmonyrestorer-backend-468785563224.us-central1.run.app/api/v1` in `frontend/.env.local` and run only the frontend step.
+
 ## API
 
 ```bash
-# Upload and denoise
+# Local backend — replace localhost:8000 with the Cloud Run URL for the deployed backend
 curl -X POST http://localhost:8000/api/v1/denoise -F "file=@audio.wav"
 
 # Check status
@@ -59,6 +67,7 @@ backend/app/
 │   └── jobs.py            # JobManager, background processing
 
 frontend/src/
+├── main.tsx             # Vite entry point
 ├── App.tsx              # Wizard orchestrator (upload/processing/complete)
 ├── types.ts             # Shared types
 ├── api/client.ts        # Backend API calls + polling
@@ -70,32 +79,41 @@ frontend/src/
 
 - File size limit (50 MB) and audio duration limit (10 min), all 6 formats validated
 - Magic byte validation (content must match declared format)
-- UUID-based file storage (client filenames never trusted)
+- UUID-based file storage (client filenames never trusted); incoming job IDs validated as UUIDs before any storage access
 - Atomic file writes (temp file + fsync + atomic rename; no partial files on crash)
 - Per-IP and global job caps (MAX_JOBS_PER_IP, MAX_TOTAL_JOBS) with automatic stale cleanup
 - Rate limiting (10 req/min per IP on upload)
-- CORS restricted to configured origins
+- CORS restricted to configured origins (GET and POST only)
 - Error sanitization (no stack traces in responses)
 - API schema (OpenAPI JSON, Swagger UI, ReDoc) disabled by default; enable with `ENABLE_DOCS=true`
 - All config settings validated at startup; bad values fail fast instead of degrading silently
-- Nginx: HSTS, CSP, X-Frame-Options, health endpoint restricted to private IPs
+- Nginx: CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, HSTS (active when TLS is terminated upstream; no-op in local HTTP-only Docker runs), health endpoint restricted to private IPs, `client_max_body_size 50M` as a proxy-layer defense before the request reaches FastAPI
 - Proxy trust scoped to the pinned internal Docker subnet
 
 ## Docker
 
 ```bash
+# Required on first run — env files must exist before docker compose reads them
+cp backend/.env.example backend/.env
+cp frontend/.env.example frontend/.env.local
+
 docker compose up --build    # Start full stack
 docker compose down          # Stop
 ```
 
-Both images use non-root users. The backend includes a health check and has resource limits in `docker-compose.yml`. Set `FORWARDED_ALLOW_IPS` to your platform's proxy CIDR in production (see `backend/.env.example`).
+After startup, the app is accessible at `http://localhost:3000`. The backend is not exposed directly to the host; all traffic routes through the frontend's nginx reverse proxy.
+
+Both images use non-root users. The backend includes a health check and has resource limits in `docker-compose.yml`. `FORWARDED_ALLOW_IPS` controls which proxy sources Uvicorn trusts for forwarded client IP headers. Leave it at the safe default unless the deployment platform's trusted proxy source has been verified; never use `*` in production.
 
 ## Quality Gate
 
 ```bash
-# Backend + dataset
-cd backend && uv run ruff format --check . && uv run ruff check . && uv run mypy . && uv run pytest -v
-cd .. && uv run pytest dataset/tests/ -v
+# Backend + dataset (run from repo root)
+uv run ruff format --check backend/ dataset/
+uv run ruff check backend/ dataset/
+uv run mypy backend/app/
+uv run pytest -v
+uv run pytest dataset/tests/ -v
 
 # Frontend
 cd frontend && npm run type-check && npm run lint && npm run build && npm run test
@@ -181,7 +199,7 @@ Three before/after/restored triplets for each model. Click to listen in the brow
 - [x] Benchmark OpGAN (SDR 23.74 dB, PESQ 4.04, STOI 0.960)
 - [x] Benchmark UVR on same dataset for head-to-head comparison
 - [x] Swap in OpGAN as default denoiser (outperforms UVR by ~12 dB SDR)
-- [ ] Backend cloud deployment
+- [x] Backend cloud deployment (Cloud Run, us-central1)
 - [ ] Out-of-distribution audio evaluation
 
 ## License
