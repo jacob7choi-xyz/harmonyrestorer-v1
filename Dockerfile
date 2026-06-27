@@ -7,9 +7,13 @@ RUN apt-get update && \
     apt-get install -y --no-install-recommends ffmpeg libsndfile1 curl build-essential && \
     rm -rf /var/lib/apt/lists/*
 
-# PyTorch CPU: separate layer for caching (largest download)
+# PyTorch CPU: separate layer for caching (largest download).
+# Pinned to the exact versions resolved by the first successful Docker build.
+# torch and torchaudio currently pin to different minor versions; revisit
+# both together in a future dependency upgrade to a matched PyTorch release.
 RUN pip install --no-cache-dir \
-    torch torchaudio \
+    torch==2.12.1+cpu \
+    torchaudio==2.11.0+cpu \
     --index-url https://download.pytorch.org/whl/cpu
 
 # Project dependencies: install before copying code for layer caching.
