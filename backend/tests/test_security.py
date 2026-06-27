@@ -1,7 +1,7 @@
 """Tests for security features: rate limiting, error sanitization, input validation."""
 
 import time
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from app.config import settings
 from app.main import app
@@ -153,11 +153,17 @@ def test_unhandled_exception_returns_generic_error():
     """Unhandled exceptions must return 'Internal server error', never a stack trace."""
     from tests.conftest import _clear_rate_limiter
 
+    mock_info = MagicMock()
+    mock_info.duration = 1.0
+
     with TestClient(app, raise_server_exceptions=False) as c:
         _clear_rate_limiter(app)
-        with patch(
-            "app.routes.denoise.job_manager.create_job",
-            side_effect=RuntimeError("secret database password exposed"),
+        with (
+            patch("app.routes.denoise.sf.info", return_value=mock_info),
+            patch(
+                "app.routes.denoise.job_manager.create_job",
+                side_effect=RuntimeError("secret database password exposed"),
+            ),
         ):
             r = c.post(
                 "/api/v1/denoise",

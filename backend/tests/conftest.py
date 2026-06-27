@@ -1,6 +1,6 @@
 """Shared test fixtures."""
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 from app.config import settings
@@ -31,8 +31,38 @@ def client():
 
 
 @pytest.fixture()
-def mock_denoiser():
-    """Mock DenoiserService that writes a dummy output file."""
+def mock_audio_duration():
+    """Mock audio duration reads to return 1.0 second for all formats.
+
+    Required in tests that use minimal byte fixtures (SMALL_WAV, SAMPLE_BYTES)
+    which are not valid audio files. Without this fixture, soundfile and librosa
+    raise parse errors that now fail closed with 400 under the M1 security fix.
+    Apply this fixture whenever an upload is expected to succeed and duration
+    validation is not the behavior under test.
+    """
+    mock_info = MagicMock()
+    mock_info.duration = 1.0
+    with (
+        patch("app.routes.denoise.sf.info", return_value=mock_info),
+        patch("librosa.get_duration", return_value=1.0),
+    ):
+        yield
+
+
+@pytest.fixture()
+def mock_denoiser(mock_audio_duration):
+    """Mock DenoiserService for upload-success tests.
+
+    Depends on mock_audio_duration, which patches sf.info and librosa.get_duration
+    to return 1.0 second. This is required because the SMALL_WAV and SAMPLE_BYTES
+    fixtures are minimal magic-byte sequences, not real audio, and the fail-closed
+    duration check in _check_audio_duration would otherwise reject them with 400.
+
+    Tests that exercise duration-validation behavior should explicitly override
+    the duration mock with their own controlled values. Test-level monkeypatches
+    or patches take precedence over this fixture because they are applied after
+    fixture setup.
+    """
     denoiser = MagicMock()
 
     def fake_denoise(input_path):

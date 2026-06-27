@@ -7,6 +7,7 @@ import tempfile
 import uuid
 from pathlib import Path
 
+import audioread
 import librosa
 import soundfile as sf
 from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile
@@ -62,11 +63,12 @@ def _validate_audio_magic(content: bytes, extension: str) -> bool:
 
 
 def _check_audio_duration(tmp_path: str, file_ext: str, content: bytes) -> None:
-    """Reject audio that exceeds the configured duration limit.
+    """Validate audio duration before processing.
 
-    Uses soundfile for WAV/FLAC/OGG (reads from bytes in memory) and librosa
-    for MP3/M4A/AAC (requires a file path). Silently skips the check if the
-    duration cannot be read.
+    Security invariant: duration validation must fail closed. If duration cannot
+    be validated, the upload must not proceed to inference because malformed or
+    highly compressed audio can otherwise bypass the max-duration limit and
+    amplify CPU use.
 
     Args:
         tmp_path: Path to the temporary file on disk (used for librosa formats).
@@ -74,7 +76,9 @@ def _check_audio_duration(tmp_path: str, file_ext: str, content: bytes) -> None:
         content: Raw file bytes (used for soundfile formats).
 
     Raises:
-        HTTPException: 400 if the audio duration exceeds the configured limit.
+        HTTPException: 400 if audio duration exceeds the configured limit or
+            cannot be determined due to a known decode or parser error.
+        HTTPException: 500 if an unexpected error occurs during duration reading.
     """
     duration: float | None = None
     try:
@@ -82,9 +86,23 @@ def _check_audio_duration(tmp_path: str, file_ext: str, content: bytes) -> None:
             duration = sf.info(io.BytesIO(content)).duration
         elif file_ext in _LIBROSA_FORMATS:
             duration = librosa.get_duration(path=tmp_path)
-    except Exception:
-        logger.warning("Could not read audio duration for %s file, skipping check", file_ext)
-        return
+    except (
+        sf.SoundFileError,
+        librosa.util.exceptions.ParameterError,
+        audioread.exceptions.DecodeError,
+        audioread.exceptions.NoBackendError,
+    ) as exc:
+        logger.info("Rejected upload: duration unreadable: %s", exc)
+        raise HTTPException(
+            status_code=400,
+            detail="Could not validate audio duration. Re-export the file and try again.",
+        ) from exc
+    except Exception as exc:
+        logger.exception("Unexpected error reading audio duration")
+        raise HTTPException(
+            status_code=500,
+            detail="Upload processing failed",
+        ) from exc
 
     if duration is not None and duration > settings.max_audio_duration_seconds:
         raise HTTPException(

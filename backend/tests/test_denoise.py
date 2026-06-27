@@ -3,6 +3,7 @@
 from unittest.mock import Mock, patch
 
 import pytest
+import soundfile as sf
 from app.config import settings
 
 SMALL_WAV = b"RIFF" + b"\x00" * 4 + b"WAVE" + b"\x00" * 32
@@ -51,7 +52,7 @@ def test_upload_leaves_no_temp_files(client, mock_denoiser):
     assert not new_tmp, f"Orphaned temp files after upload: {[f.name for f in new_tmp]}"
 
 
-def test_upload_write_failure_cleans_up_temp_file(client, monkeypatch):
+def test_upload_write_failure_cleans_up_temp_file(client, monkeypatch, mock_audio_duration):
     """If the atomic rename fails, no traces remain in the upload dir and 500 is returned."""
     from pathlib import Path
 
@@ -246,25 +247,46 @@ class TestDurationValidation:
         )
         assert r.status_code == 200
 
-    def test_sf_info_exception_is_swallowed_and_upload_proceeds(
-        self, client, mock_denoiser, monkeypatch
-    ) -> None:
-        """If sf.info raises (corrupt/truncated WAV), the duration check is
-        skipped and the upload proceeds rather than returning an error.
+    def test_soundfile_error_returns_400_and_creates_no_job(self, client, monkeypatch) -> None:
+        """A known soundfile parse error during duration reading returns 400 and creates no job.
 
-        This covers the bare except-Exception branch in denoise.py that
-        logs a warning and allows through files whose duration cannot be read.
+        Covers the fail-closed invariant: duration validation failure must not allow
+        the upload to proceed to inference.
         """
+        from app.services.jobs import job_manager
+
+        original_job_count = len(job_manager._jobs)
         monkeypatch.setattr(
             "app.routes.denoise.sf.info",
-            Mock(side_effect=RuntimeError("corrupt header")),
+            Mock(side_effect=sf.SoundFileError("corrupt header")),
         )
 
         r = client.post(
             "/api/v1/denoise",
             files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
         )
-        assert r.status_code == 200
+        assert r.status_code == 400
+        assert "duration" in r.json()["detail"].lower()
+        assert len(job_manager._jobs) == original_job_count
+
+    def test_unexpected_duration_error_returns_500_and_creates_no_job(
+        self, client, monkeypatch
+    ) -> None:
+        """An unexpected exception during duration reading returns 500 and creates no job."""
+        from app.services.jobs import job_manager
+
+        original_job_count = len(job_manager._jobs)
+        monkeypatch.setattr(
+            "app.routes.denoise.sf.info",
+            Mock(side_effect=RuntimeError("unexpected internal error")),
+        )
+
+        r = client.post(
+            "/api/v1/denoise",
+            files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
+        )
+        assert r.status_code == 500
+        assert len(job_manager._jobs) == original_job_count
 
     @pytest.mark.parametrize("ext", [".mp3", ".m4a", ".aac"])
     def test_librosa_format_exceeding_max_duration_returns_400(
