@@ -153,10 +153,10 @@ export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAr
         aria-disabled={isProcessing}
         className={`inline-flex items-center gap-3 rounded-full px-8 py-4 transition-all cursor-pointer border font-bold
           ${isDragging
-            ? 'bg-amber-glow border-amber/60 scale-105 text-amber-soft'
+            ? 'bg-violet-glow border-violet/60 scale-105 text-violet-soft'
             : currentFile
-              ? 'bg-white/5 border-glass text-ink hover:border-amber/40'
-              : 'bg-amber border-transparent text-on-amber hover:bg-amber-deep hover:scale-[1.03] animate-pulse-glow'}
+              ? 'bg-white/5 border-glass text-ink hover:border-violet/40'
+              : 'bg-gradient-to-r from-[#7c5cff] to-[#4fd1ff] border-transparent text-white hover:scale-[1.03] hover:brightness-110 animate-pulse-glow'}
           ${isProcessing ? 'opacity-50 cursor-not-allowed animate-none' : ''}`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}

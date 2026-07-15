@@ -1,9 +1,9 @@
 @import "tailwindcss";
 
 @theme {
-  /* Background hierarchy: near-black gallery dark */
-  --color-base: #0d0d0f;
-  --color-surface: #14141a;
+  /* Background hierarchy: deep midnight indigo, lit by the aurora washes */
+  --color-base: #08070c;
+  --color-surface: #100f16;
   --color-card: rgba(255, 255, 255, 0.04);
   --color-card-hover: rgba(255, 255, 255, 0.07);
 
@@ -17,20 +17,22 @@
   --color-ink-muted: #5e5a56;
   --color-on-amber: #1a0f00;
 
-  /* Amber scale: the "original / noisy" narrative + primary CTA */
+  /* Amber scale: the "original / noisy" narrative */
   --color-amber: #e8a820;
   --color-amber-soft: #f5d48a;
   --color-amber-deep: #d4920a;
   --color-amber-glow: rgba(232, 168, 32, 0.15);
 
-  /* Violet scale: the "enhanced / restored" narrative */
-  --color-violet: #7c5fe8;
-  --color-violet-soft: #c4b8f5;
-  --color-violet-deep: #6347d4;
-  --color-violet-glow: rgba(124, 95, 232, 0.15);
+  /* Iris pair: the "restored / transformative" narrative */
+  --color-violet: #7c5cff;
+  --color-violet-soft: #c9b8ff;
+  --color-violet-deep: #6247e0;
+  --color-violet-glow: rgba(124, 92, 255, 0.16);
+  --color-cyan-bright: #4fd1ff;
+  --color-cyan-glow: rgba(79, 209, 255, 0.14);
 
   /* Semantic */
-  --color-ring: #7c5fe8;
+  --color-ring: #7c5cff;
   --color-destructive: #e34040;
   --color-destructive-bg: rgba(227, 64, 64, 0.1);
   --color-track: rgba(255, 255, 255, 0.08);
@@ -45,6 +47,9 @@
   --animate-fade-in: fadeIn 0.6s ease-out;
   --animate-slide-up: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
   --animate-pulse-glow: pulseGlow 3s ease-in-out infinite;
+  --animate-aurora-a: auroraA 26s ease-in-out infinite alternate;
+  --animate-aurora-b: auroraB 34s ease-in-out infinite alternate;
+  --animate-aurora-c: auroraC 40s ease-in-out infinite alternate;
 }
 
 @keyframes fadeIn {
@@ -58,13 +63,28 @@
 }
 
 @keyframes pulseGlow {
-  0%, 100% { box-shadow: 0 0 24px rgba(232, 168, 32, 0.15); }
-  50% { box-shadow: 0 0 40px rgba(232, 168, 32, 0.3); }
+  0%, 100% { box-shadow: 0 0 26px rgba(124, 92, 255, 0.25); }
+  50% { box-shadow: 0 0 44px rgba(124, 92, 255, 0.45); }
+}
+
+@keyframes auroraA {
+  0% { transform: translate(-50%, -50%) scale(1); }
+  100% { transform: translate(-44%, -56%) scale(1.15); }
+}
+
+@keyframes auroraB {
+  0% { transform: translate(-50%, -50%) scale(1); }
+  100% { transform: translate(-62%, -42%) scale(1.2); }
+}
+
+@keyframes auroraC {
+  0% { transform: translate(-50%, -50%) scale(1); }
+  100% { transform: translate(-38%, -58%) scale(1.1); }
 }
 
 @layer base {
   body {
-    background-color: #0d0d0f;
+    background-color: #08070c;
     color: #f0ede8;
     font-family: "Inter", system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
@@ -72,7 +92,7 @@
   }
 
   :focus-visible {
-    outline: 2px solid #7c5fe8;
+    outline: 2px solid #7c5cff;
     outline-offset: 2px;
   }
 

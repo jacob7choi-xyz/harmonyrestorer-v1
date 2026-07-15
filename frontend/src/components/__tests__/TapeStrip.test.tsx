@@ -104,4 +104,21 @@ describe('TapeStrip', () => {
   it('renders without crashing when peaks are missing', () => {
     expect(() => render(<TapeStrip noisyPeaks={null} mode="demo" />)).not.toThrow();
   });
+
+  it('accepts a gradient palette and ticks without crashing', () => {
+    expect(() => render(
+      <TapeStrip
+        noisyPeaks={PEAKS}
+        cleanPeaks={PEAKS}
+        mode="demo"
+        palette={{
+          clean: ['#2b4bff', '#21c8ff'],
+          noisy: 'rgba(14, 14, 14, 0.82)',
+          divider: '#0e0e0e',
+          speckle: 'rgba(14, 14, 14, 0.28)',
+        }}
+        ticks
+      />,
+    )).not.toThrow();
+  });
 });

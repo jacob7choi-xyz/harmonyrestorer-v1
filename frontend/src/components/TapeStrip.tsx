@@ -3,10 +3,18 @@ import { ChevronsLeftRight } from 'lucide-react';
 
 export type TapeStripMode = 'demo' | 'compare' | 'processing' | 'file';
 
+export interface TapeStripPalette {
+  /** Restored-side bar color; a pair renders as a left-to-right gradient. */
+  clean: string | readonly [string, string];
+  noisy: string;
+  divider: string;
+  speckle: string;
+}
+
 interface TapeStripProps {
-  /** Peaks of the noisy/original audio; drawn grainy amber right of the divider. */
+  /** Peaks of the noisy/original audio; drawn grainy right of the divider. */
   noisyPeaks: Float32Array | null;
-  /** Peaks of the restored audio; drawn clean violet left of the divider. */
+  /** Peaks of the restored audio; drawn clean left of the divider. */
   cleanPeaks?: Float32Array | null;
   mode: TapeStripMode;
   /** Restoration progress 0..1; drives the divider in processing mode. */
@@ -16,6 +24,9 @@ interface TapeStripProps {
   onSeek?: (fraction: number) => void;
   /** Continuous mix updates while the divider moves (0 = noisy, 1 = restored). */
   onMixChange?: (mix: number) => void;
+  palette?: TapeStripPalette;
+  /** Draw ruler tick marks along the top edge. */
+  ticks?: boolean;
   className?: string;
 }
 
@@ -26,10 +37,15 @@ const SWEEP_SPEED = 0.5;
 const SWEEP_RANGE = 0.35;
 const JITTER_AMOUNT = 0.22;
 const SPECKLE_COUNT = 32;
+const TICK_MINOR_SPACING = 10;
+const TICK_MAJOR_EVERY = 5;
 
-const CLEAN_COLOR = '#9d8bf0';
-const NOISY_COLOR = 'rgba(232, 168, 32, 0.78)';
-const DIVIDER_COLOR = '#f0ede8';
+const DEFAULT_PALETTE: TapeStripPalette = {
+  clean: '#9d8bf0',
+  noisy: 'rgba(232, 168, 32, 0.78)',
+  divider: '#f0ede8',
+  speckle: 'rgba(245, 212, 138, 0.35)',
+};
 
 function prefersReducedMotion(): boolean {
   return (
@@ -52,6 +68,8 @@ function drawStrip(
   playhead: number,
   time: number,
   animate: boolean,
+  palette: TapeStripPalette,
+  ticks: boolean,
 ): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -74,6 +92,28 @@ function drawStrip(
   const dividerX = divider * width;
   const playheadX = playhead * width;
 
+  let cleanFill: string | CanvasGradient;
+  if (typeof palette.clean === 'string') {
+    cleanFill = palette.clean;
+  } else {
+    const gradient = ctx.createLinearGradient(0, 0, width, 0);
+    gradient.addColorStop(0, palette.clean[0]);
+    gradient.addColorStop(1, palette.clean[1]);
+    cleanFill = gradient;
+  }
+
+  if (ticks) {
+    ctx.fillStyle = palette.divider;
+    ctx.globalAlpha = 0.35;
+    const tickCount = Math.floor(width / TICK_MINOR_SPACING);
+    for (let t = 0; t <= tickCount; t++) {
+      const tx = t * TICK_MINOR_SPACING;
+      const tall = t % TICK_MAJOR_EVERY === 0;
+      ctx.fillRect(tx, 0, 1, tall ? 8 : 4);
+    }
+    ctx.globalAlpha = 1;
+  }
+
   for (let i = 0; i < barCount; i++) {
     const x = i * step;
     const fraction = i / barCount;
@@ -90,7 +130,7 @@ function drawStrip(
     }
 
     const barHeight = Math.max(MIN_BAR_HEIGHT, peak * maxBarHeight);
-    ctx.fillStyle = isClean ? CLEAN_COLOR : NOISY_COLOR;
+    ctx.fillStyle = isClean ? cleanFill : palette.noisy;
     ctx.globalAlpha = x < playheadX ? 1 : 0.62;
     ctx.fillRect(x, centerY - barHeight, BAR_WIDTH, barHeight);
     ctx.fillRect(x, centerY, BAR_WIDTH, barHeight);
@@ -99,7 +139,7 @@ function drawStrip(
 
   // Static speckles on the noisy side
   if (animate) {
-    ctx.fillStyle = 'rgba(245, 212, 138, 0.35)';
+    ctx.fillStyle = palette.speckle;
     const noisyWidth = width - dividerX;
     if (noisyWidth > 8) {
       for (let k = 0; k < SPECKLE_COUNT; k++) {
@@ -111,14 +151,8 @@ function drawStrip(
     }
   }
 
-  // Divider: soft glow plus a crisp line
-  const glow = ctx.createLinearGradient(dividerX - 24, 0, dividerX + 24, 0);
-  glow.addColorStop(0, 'rgba(240, 237, 232, 0)');
-  glow.addColorStop(0.5, 'rgba(240, 237, 232, 0.14)');
-  glow.addColorStop(1, 'rgba(240, 237, 232, 0)');
-  ctx.fillStyle = glow;
-  ctx.fillRect(dividerX - 24, 0, 48, height);
-  ctx.fillStyle = DIVIDER_COLOR;
+  // Divider line
+  ctx.fillStyle = palette.divider;
   ctx.fillRect(dividerX - 1, 0, 2, height);
 }
 
@@ -130,6 +164,8 @@ export function TapeStrip({
   playhead = 0,
   onSeek,
   onMixChange,
+  palette = DEFAULT_PALETTE,
+  ticks = false,
   className = '',
 }: TapeStripProps): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -194,6 +230,8 @@ export function TapeStrip({
         playheadRef.current,
         time,
         !reduced,
+        palette,
+        ticks,
       );
 
       if (!reduced) {
@@ -214,7 +252,7 @@ export function TapeStrip({
       cancelAnimationFrame(rafRef.current);
       observer.disconnect();
     };
-  }, [mode, noisyPeaks, cleanPeaks, onMixChange, syncThumb]);
+  }, [mode, noisyPeaks, cleanPeaks, onMixChange, syncThumb, palette, ticks]);
 
   // Redraw on playhead/progress changes under reduced motion (no RAF loop)
   useEffect(() => {
@@ -223,8 +261,8 @@ export function TapeStrip({
     const divider = mode === 'processing' ? progress
       : mode === 'file' ? 0
       : dividerRef.current;
-    drawStrip(canvas, noisyPeaks, cleanPeaks, divider, playhead, 0, false);
-  }, [mode, noisyPeaks, cleanPeaks, playhead, progress]);
+    drawStrip(canvas, noisyPeaks, cleanPeaks, divider, playhead, 0, false, palette, ticks);
+  }, [mode, noisyPeaks, cleanPeaks, playhead, progress, palette, ticks]);
 
   const fractionFromEvent = useCallback((clientX: number): number => {
     const canvas = canvasRef.current;
@@ -292,7 +330,7 @@ export function TapeStrip({
           className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-7 h-7 rounded-full bg-ink border border-glass-active shadow-lg cursor-ew-resize touch-none flex items-center justify-center"
           style={{ left: '50%' }}
         >
-          <ChevronsLeftRight aria-hidden="true" className="w-3.5 h-3.5 text-[#0d0d0f]" />
+          <ChevronsLeftRight aria-hidden="true" className="w-3.5 h-3.5" style={{ color: 'var(--color-base)' }} />
         </div>
       )}
     </div>

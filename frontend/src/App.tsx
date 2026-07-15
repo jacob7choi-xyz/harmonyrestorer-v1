@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { Download, Play, Pause, RotateCcw, Music, Github, Linkedin, Instagram, Youtube } from 'lucide-react';
 import { uploadAudio, pollUntilDone, getDownloadUrl } from './api/client';
 import { UploadArea } from './components/UploadArea';
-import { TapeStrip } from './components/TapeStrip';
+import { TapeStrip, type TapeStripPalette } from './components/TapeStrip';
 import { Analytics } from '@vercel/analytics/react';
 import { useAudioDecoder, decodeBlobToWaveform } from './hooks/useAudioDecoder';
 import { useCrossfadePlayback } from './hooks/useCrossfadePlayback';
@@ -18,6 +18,17 @@ const SAMPLE_NOISY_URL = '/sample-noisy.wav';
 const SAMPLE_RESTORED_URL = '/sample-restored.wav';
 
 const FILM_GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E")`;
+
+/* Warm sepia for the original audio; iridescent violet-to-cyan for the restored side. */
+const AURORA_PALETTE: TapeStripPalette = {
+  clean: ['#7c5cff', '#4fd1ff'],
+  noisy: 'rgba(232, 168, 32, 0.78)',
+  divider: '#f0ede8',
+  speckle: 'rgba(245, 212, 138, 0.35)',
+};
+
+const CTA_GRADIENT =
+  'bg-gradient-to-r from-[#7c5cff] to-[#4fd1ff] text-white shadow-[0_0_30px_rgba(124,92,255,0.3)]';
 
 interface DemoAssets {
   noisyUrl: string;
@@ -322,6 +333,30 @@ export default function HarmonyRestorer(): React.JSX.Element {
       onDrop={handleGlobalDrop}
       onDragOver={handleGlobalDragOver}
     >
+      <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+        <div
+          className="absolute left-1/2 top-[36%] h-[70vh] w-[110vw] rounded-full blur-[120px] animate-aurora-a"
+          style={{
+            transform: 'translate(-50%, -50%)',
+            background: 'radial-gradient(ellipse at center, rgba(124, 92, 255, 0.3), transparent 60%)',
+          }}
+        />
+        <div
+          className="absolute left-[72%] top-[58%] h-[50vh] w-[65vw] rounded-full blur-[110px] animate-aurora-b"
+          style={{
+            transform: 'translate(-50%, -50%)',
+            background: 'radial-gradient(ellipse at center, rgba(79, 209, 255, 0.22), transparent 60%)',
+          }}
+        />
+        <div
+          className="absolute left-[24%] top-[62%] h-[42vh] w-[52vw] rounded-full blur-[110px] animate-aurora-c"
+          style={{
+            transform: 'translate(-50%, -50%)',
+            background: 'radial-gradient(ellipse at center, rgba(232, 168, 32, 0.14), transparent 60%)',
+          }}
+        />
+      </div>
+
       <div
         aria-hidden="true"
         className="pointer-events-none fixed inset-0 z-20 opacity-[0.05]"
@@ -355,6 +390,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
                     playhead={demoPlayhead}
                     onSeek={demoPlayback.seek}
                     onMixChange={demoPlayback.setMix}
+                    palette={AURORA_PALETTE}
                   />
                 </StripStage>
                 <StripLabels
@@ -376,7 +412,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
             {file && waveform && (
               <section aria-label="Your recording" className="mb-10">
                 <StripStage>
-                  <TapeStrip noisyPeaks={waveform.peaks} mode="file" />
+                  <TapeStrip noisyPeaks={waveform.peaks} mode="file" palette={AURORA_PALETTE} />
                 </StripStage>
               </section>
             )}
@@ -409,7 +445,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
                 <button
                   onClick={processAudio}
                   disabled={isProcessing}
-                  className="mx-auto flex items-center justify-center gap-2 rounded-full bg-amber px-10 py-3.5 font-bold text-on-amber transition-all animate-pulse-glow hover:scale-[1.03] hover:bg-amber-deep disabled:cursor-not-allowed disabled:bg-white/5 disabled:text-ink-muted disabled:animate-none disabled:hover:scale-100"
+                  className={`mx-auto flex items-center justify-center gap-2 rounded-full px-10 py-3.5 font-bold transition-all hover:scale-[1.03] hover:brightness-110 disabled:cursor-not-allowed disabled:bg-none disabled:bg-white/5 disabled:text-ink-muted disabled:shadow-none disabled:hover:scale-100 ${CTA_GRADIENT}`}
                 >
                   <span>Enhance</span>
                 </button>
@@ -433,6 +469,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
                   noisyPeaks={waveform.peaks}
                   mode="processing"
                   progress={status.progress / 100}
+                  palette={AURORA_PALETTE}
                 />
               </StripStage>
             )}
@@ -451,7 +488,9 @@ export default function HarmonyRestorer(): React.JSX.Element {
           <div className="animate-fade-in">
             <header className="mb-12 text-center">
               <h1 className="font-display mb-3 text-5xl text-ink sm:text-6xl">
-                <span className="italic text-violet-soft">Restored</span>
+                <span className="italic bg-gradient-to-r from-[#a78bff] to-[#4fd1ff] bg-clip-text text-transparent">
+                  Restored
+                </span>
               </h1>
               {status.processingTime != null && (
                 <p className="text-sm text-ink-secondary">
@@ -468,6 +507,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
                 playhead={resultPlayhead}
                 onSeek={resultPlayback.seek}
                 onMixChange={resultPlayback.setMix}
+                palette={AURORA_PALETTE}
               />
             </StripStage>
             <StripLabels
@@ -490,7 +530,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
                 <a
                   href={status.downloadUrl}
                   download
-                  className="flex items-center justify-center gap-2 rounded-full bg-amber px-8 py-3.5 font-bold text-on-amber transition-all hover:scale-[1.02] hover:bg-amber-deep"
+                  className={`flex items-center justify-center gap-2 rounded-full px-8 py-3.5 font-bold transition-all hover:scale-[1.02] hover:brightness-110 ${CTA_GRADIENT}`}
                 >
                   <Download className="h-4 w-4" />
                   <span>Download</span>
