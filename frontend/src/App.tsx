@@ -1,13 +1,11 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { Download, Loader2, RotateCcw, Github, Linkedin, Instagram, Youtube } from 'lucide-react';
+import { Download, Play, Pause, RotateCcw, Music, Github, Linkedin, Instagram, Youtube } from 'lucide-react';
 import { uploadAudio, pollUntilDone, getDownloadUrl } from './api/client';
 import { UploadArea } from './components/UploadArea';
-import { AudioPlayer } from './components/AudioPlayer';
-import { WaveformCanvas } from './components/WaveformCanvas';
-import { ComparisonView } from './components/ComparisonView';
-import { TechnoBackground } from './components/TechnoBackground';
+import { TapeStrip } from './components/TapeStrip';
 import { Analytics } from '@vercel/analytics/react';
-import { useAudioDecoder, computePeaks, DEFAULT_PEAK_COUNT } from './hooks/useAudioDecoder';
+import { useAudioDecoder, decodeBlobToWaveform } from './hooks/useAudioDecoder';
+import { useCrossfadePlayback } from './hooks/useCrossfadePlayback';
 import type { ProcessingStatus, WizardStep } from './types';
 
 const INITIAL_STATUS: ProcessingStatus = {
@@ -15,6 +13,18 @@ const INITIAL_STATUS: ProcessingStatus = {
   progress: 0,
   message: 'Ready to enhance your audio',
 };
+
+const SAMPLE_NOISY_URL = '/sample-noisy.wav';
+const SAMPLE_RESTORED_URL = '/sample-restored.wav';
+
+const FILM_GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E")`;
+
+interface DemoAssets {
+  noisyUrl: string;
+  cleanUrl: string;
+  noisyPeaks: Float32Array;
+  cleanPeaks: Float32Array;
+}
 
 function deriveStep(status: ProcessingStatus['status']): WizardStep {
   switch (status) {
@@ -29,25 +39,124 @@ function deriveStep(status: ProcessingStatus['status']): WizardStep {
   }
 }
 
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+interface StripStageProps {
+  children: React.ReactNode;
+}
+
+/** Full-bleed stage for the tape strip with the amber/violet horizon glow. */
+function StripStage({ children }: StripStageProps): React.JSX.Element {
+  return (
+    <div className="relative left-1/2 w-screen -translate-x-1/2">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0">
+        <div className="absolute left-[12%] top-1/2 h-56 w-[45%] -translate-y-1/2 rounded-full bg-violet-glow blur-3xl" />
+        <div className="absolute right-[12%] top-1/2 h-56 w-[45%] -translate-y-1/2 rounded-full bg-amber-glow blur-3xl" />
+      </div>
+      {children}
+    </div>
+  );
+}
+
+interface StripLabelsProps {
+  time?: string;
+}
+
+/** Side labels tying the strip's two halves to the color narrative. */
+function StripLabels({ time }: StripLabelsProps): React.JSX.Element {
+  return (
+    <div className="mt-3 flex items-center justify-between text-[0.65rem] font-semibold uppercase tracking-[0.25em]">
+      <span className="text-violet-soft">Restored</span>
+      {time && <span className="font-mono normal-case tracking-normal text-ink-muted">{time}</span>}
+      <span className="text-amber-soft">Original</span>
+    </div>
+  );
+}
+
+interface PlayButtonProps {
+  isPlaying: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+}
+
+function PlayButton({ isPlaying, onClick, disabled = false }: PlayButtonProps): React.JSX.Element {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={isPlaying ? 'Pause' : 'Play'}
+      className="flex h-12 w-12 items-center justify-center rounded-full bg-ink text-[#0d0d0f] transition-all hover:scale-105 disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="ml-0.5 h-5 w-5" />}
+    </button>
+  );
+}
 
 export default function HarmonyRestorer(): React.JSX.Element {
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<ProcessingStatus>(INITIAL_STATUS);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isSampleLoading, setIsSampleLoading] = useState(false);
+  const [demo, setDemo] = useState<DemoAssets | null>(null);
   const [originalBlobUrl, setOriginalBlobUrl] = useState<string | null>(null);
   const [enhancedBlobUrl, setEnhancedBlobUrl] = useState<string | null>(null);
-  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [enhancedPeaks, setEnhancedPeaks] = useState<Float32Array | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const { waveform } = useAudioDecoder(file);
   const step = deriveStep(status.status);
 
+  const demoPlayback = useCrossfadePlayback(
+    demo?.noisyUrl ?? null,
+    demo?.cleanUrl ?? null,
+    { loop: true },
+  );
+  const resultPlayback = useCrossfadePlayback(originalBlobUrl, enhancedBlobUrl);
+  const { originalRef: demoOriginalRef, enhancedRef: demoEnhancedRef } = demoPlayback;
+  const { originalRef: resultOriginalRef, enhancedRef: resultEnhancedRef } = resultPlayback;
+
+  // Load the landing demo pair; the page degrades gracefully without it
+  useEffect(() => {
+    let cancelled = false;
+    const urls: string[] = [];
+
+    async function load(): Promise<void> {
+      try {
+        const [noisyRes, cleanRes] = await Promise.all([
+          fetch(SAMPLE_NOISY_URL),
+          fetch(SAMPLE_RESTORED_URL),
+        ]);
+        if (!noisyRes.ok || !cleanRes.ok) return;
+        const [noisyBlob, cleanBlob] = await Promise.all([noisyRes.blob(), cleanRes.blob()]);
+        const [noisyWf, cleanWf] = await Promise.all([
+          decodeBlobToWaveform(noisyBlob),
+          decodeBlobToWaveform(cleanBlob),
+        ]);
+        if (cancelled) return;
+        const noisyUrl = URL.createObjectURL(noisyBlob);
+        const cleanUrl = URL.createObjectURL(cleanBlob);
+        urls.push(noisyUrl, cleanUrl);
+        setDemo({ noisyUrl, cleanUrl, noisyPeaks: noisyWf.peaks, cleanPeaks: cleanWf.peaks });
+      } catch {
+        // Demo strip simply stays hidden if assets fail to load or decode
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+      urls.forEach(u => URL.revokeObjectURL(u));
+    };
+  }, []);
+
   // Cleanup blob URLs on unmount
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
-      if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
       if (originalBlobUrl) URL.revokeObjectURL(originalBlobUrl);
       if (enhancedBlobUrl) URL.revokeObjectURL(enhancedBlobUrl);
     };
@@ -56,17 +165,15 @@ export default function HarmonyRestorer(): React.JSX.Element {
 
   const resetState = useCallback((): void => {
     abortRef.current?.abort();
-    if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
     if (originalBlobUrl) URL.revokeObjectURL(originalBlobUrl);
     if (enhancedBlobUrl) URL.revokeObjectURL(enhancedBlobUrl);
     setFile(null);
     setStatus(INITIAL_STATUS);
     setIsProcessing(false);
-    setPreviewBlobUrl(null);
     setOriginalBlobUrl(null);
     setEnhancedBlobUrl(null);
     setEnhancedPeaks(null);
-  }, [previewBlobUrl, originalBlobUrl, enhancedBlobUrl]);
+  }, [originalBlobUrl, enhancedBlobUrl]);
 
   const processAudio = useCallback(async (): Promise<void> => {
     if (!file) return;
@@ -105,20 +212,9 @@ export default function HarmonyRestorer(): React.JSX.Element {
         const enhUrl = URL.createObjectURL(blob);
         setEnhancedBlobUrl(enhUrl);
 
-        // Decode enhanced audio for waveform visualization.
-        // A new AudioContext is created and closed per upload rather than using a
-        // singleton. This is acceptable because uploads are infrequent and it avoids
-        // managing AudioContext lifetime/suspension across the component tree.
         try {
-          const arrayBuffer = await blob.arrayBuffer();
-          const audioCtx = new AudioContext();
-          try {
-            const audioBuffer = await audioCtx.decodeAudioData(arrayBuffer);
-            const channelData = audioBuffer.getChannelData(0);
-            setEnhancedPeaks(computePeaks(channelData, DEFAULT_PEAK_COUNT));
-          } finally {
-            await audioCtx.close();
-          }
+          const enhancedWaveform = await decodeBlobToWaveform(blob);
+          setEnhancedPeaks(enhancedWaveform.peaks);
         } catch (err) {
           console.warn('Failed to decode enhanced audio waveform:', err);
         }
@@ -152,16 +248,32 @@ export default function HarmonyRestorer(): React.JSX.Element {
       abortRef.current?.abort();
       setIsProcessing(false);
     }
-    if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
     if (originalBlobUrl) URL.revokeObjectURL(originalBlobUrl);
     if (enhancedBlobUrl) URL.revokeObjectURL(enhancedBlobUrl);
     setFile(selectedFile);
-    setPreviewBlobUrl(URL.createObjectURL(selectedFile));
     setStatus(INITIAL_STATUS);
     setOriginalBlobUrl(null);
     setEnhancedBlobUrl(null);
     setEnhancedPeaks(null);
-  }, [isProcessing, previewBlobUrl, originalBlobUrl, enhancedBlobUrl]);
+  }, [isProcessing, originalBlobUrl, enhancedBlobUrl]);
+
+  const handleTrySample = useCallback(async (): Promise<void> => {
+    setIsSampleLoading(true);
+    try {
+      const res = await fetch(SAMPLE_NOISY_URL);
+      if (!res.ok) throw new Error(`Sample fetch failed: ${res.status}`);
+      const blob = await res.blob();
+      handleFileSelect(new File([blob], 'sample-noisy.wav', { type: 'audio/wav' }));
+    } catch {
+      setStatus({
+        status: 'failed',
+        progress: 0,
+        message: 'Could not load the sample. Try uploading a file instead.',
+      });
+    } finally {
+      setIsSampleLoading(false);
+    }
+  }, [handleFileSelect]);
 
   // Global drop zone
   const handleGlobalDrop = useCallback((e: React.DragEvent<HTMLDivElement>): void => {
@@ -181,85 +293,153 @@ export default function HarmonyRestorer(): React.JSX.Element {
     e.preventDefault();
   }, []);
 
-  const bgIntensity = step === 'processing' ? 'processing'
-    : step === 'complete' ? 'complete'
-    : 'idle';
+  const handleDemoPlayPause = useCallback((): void => {
+    if (demoPlayback.state.isPlaying) {
+      demoPlayback.pause();
+    } else {
+      demoPlayback.play();
+    }
+  }, [demoPlayback]);
+
+  const handleResultPlayPause = useCallback((): void => {
+    if (resultPlayback.state.isPlaying) {
+      resultPlayback.pause();
+    } else {
+      resultPlayback.play();
+    }
+  }, [resultPlayback]);
+
+  const demoPlayhead = demoPlayback.state.duration > 0
+    ? demoPlayback.state.currentTime / demoPlayback.state.duration
+    : 0;
+  const resultPlayhead = resultPlayback.state.duration > 0
+    ? resultPlayback.state.currentTime / resultPlayback.state.duration
+    : 0;
 
   return (
     <div
-      className="min-h-screen bg-[#121212]"
+      className="min-h-screen overflow-x-clip bg-base"
       onDrop={handleGlobalDrop}
       onDragOver={handleGlobalDragOver}
     >
-      <TechnoBackground intensity={bgIntensity} />
-      <div className="relative z-10 mx-auto max-w-2xl px-6 py-16">
-        {/* Header */}
-        <header className="text-center mb-12">
-          <h1 className="text-3xl font-bold text-white tracking-tight mb-2">
-            HarmonyRestorer
-          </h1>
-          <p className="text-[#B3B3B3]">
-            AI-powered audio restoration. Upload, enhance, compare.
-          </p>
-        </header>
+      <div
+        aria-hidden="true"
+        className="pointer-events-none fixed inset-0 z-20 opacity-[0.05]"
+        style={{ backgroundImage: FILM_GRAIN }}
+      />
+
+      <div className="relative z-10 mx-auto max-w-3xl px-6 py-14">
+        <p className="mb-16 text-center text-xs font-semibold uppercase tracking-[0.35em] text-ink-muted">
+          HarmonyRestorer
+        </p>
 
         {/* Step 1: Upload */}
         {step === 'upload' && (
-          <div className="space-y-6 animate-fade-in">
-            <UploadArea
-              onFileSelect={handleFileSelect}
-              isProcessing={isProcessing}
-              currentFile={file}
-            />
+          <div className="animate-fade-in">
+            <header className="mb-12 text-center">
+              <h1 className="font-display mb-5 text-5xl leading-[1.02] text-ink sm:text-7xl">
+                Hear it the way it was <span className="italic text-amber-soft">recorded</span>
+              </h1>
+              <p className="mx-auto max-w-md text-lg text-ink-secondary">
+                AI-powered audio restoration. Seconds per track, free.
+              </p>
+            </header>
 
-            {waveform && (
-              <AudioPlayer
-                label="Preview"
-                src={previewBlobUrl}
-                peaks={waveform.peaks}
-                accentColor="#B3B3B3"
+            {!file && demo && (
+              <section aria-label="Live restoration demo" className="mb-14">
+                <StripStage>
+                  <TapeStrip
+                    noisyPeaks={demo.noisyPeaks}
+                    cleanPeaks={demo.cleanPeaks}
+                    mode="demo"
+                    playhead={demoPlayhead}
+                    onSeek={demoPlayback.seek}
+                    onMixChange={demoPlayback.setMix}
+                  />
+                </StripStage>
+                <StripLabels
+                  time={`${formatTime(demoPlayback.state.currentTime)} / ${formatTime(demoPlayback.state.duration)}`}
+                />
+                <div className="mt-6 flex flex-col items-center gap-4">
+                  <PlayButton
+                    isPlaying={demoPlayback.state.isPlaying}
+                    onClick={handleDemoPlayPause}
+                  />
+                  <p className="max-w-sm text-center text-xs leading-relaxed text-ink-muted">
+                    Bach, degraded to tape-era noise and restored live by the model.
+                    Press play, then drag the line to hear the difference.
+                  </p>
+                </div>
+              </section>
+            )}
+
+            {file && waveform && (
+              <section aria-label="Your recording" className="mb-10">
+                <StripStage>
+                  <TapeStrip noisyPeaks={waveform.peaks} mode="file" />
+                </StripStage>
+              </section>
+            )}
+
+            <div className="space-y-6">
+              <UploadArea
+                onFileSelect={handleFileSelect}
+                isProcessing={isProcessing}
+                currentFile={file}
               />
-            )}
 
-            {status.status === 'failed' && (
-              <div className="bg-[#E34040]/10 rounded-lg p-4">
-                <p className="text-sm text-[#E34040]">{status.message}</p>
-              </div>
-            )}
+              {!file && (
+                <button
+                  onClick={handleTrySample}
+                  disabled={isSampleLoading || isProcessing}
+                  className="mx-auto flex items-center gap-2 text-sm text-ink-secondary transition-colors hover:text-amber-soft disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Music className="h-4 w-4" />
+                  <span>{isSampleLoading ? 'Loading sample...' : 'No file handy? Try a sample'}</span>
+                </button>
+              )}
 
-            <button
-              onClick={processAudio}
-              disabled={!file || isProcessing}
-              className="w-full flex items-center justify-center gap-2 bg-[#5B8DEF] hover:bg-[#7BA4F7] hover:scale-[1.02] disabled:bg-[#333333]/50 disabled:backdrop-blur-md disabled:text-[#727272] text-black font-bold py-3.5 px-6 rounded-full transition-all disabled:cursor-not-allowed disabled:hover:scale-100"
-            >
-              <span>Enhance</span>
-            </button>
+              {status.status === 'failed' && (
+                <div className="rounded-md border border-destructive/20 bg-destructive-bg p-4 text-center">
+                  <p className="text-sm text-destructive">{status.message}</p>
+                </div>
+              )}
+
+              {file && (
+                <button
+                  onClick={processAudio}
+                  disabled={isProcessing}
+                  className="mx-auto flex items-center justify-center gap-2 rounded-full bg-amber px-10 py-3.5 font-bold text-on-amber transition-all animate-pulse-glow hover:scale-[1.03] hover:bg-amber-deep disabled:cursor-not-allowed disabled:bg-white/5 disabled:text-ink-muted disabled:animate-none disabled:hover:scale-100"
+                >
+                  <span>Enhance</span>
+                </button>
+              )}
+            </div>
           </div>
         )}
 
         {/* Step 2: Processing */}
         {step === 'processing' && (
-          <div className="space-y-6 animate-fade-in">
+          <div className="animate-fade-in">
+            <header className="mb-12 text-center">
+              <h1 className="font-display text-4xl text-ink sm:text-5xl">
+                Restoring your recording
+              </h1>
+            </header>
+
             {waveform && (
-              <div className="bg-[#282828] rounded-xl p-4">
-                <WaveformCanvas peaks={waveform.peaks} accentColor="#5B8DEF" baseColor="#404040" />
-              </div>
+              <StripStage>
+                <TapeStrip
+                  noisyPeaks={waveform.peaks}
+                  mode="processing"
+                  progress={status.progress / 100}
+                />
+              </StripStage>
             )}
 
-            <div className="bg-[#282828] rounded-xl p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <Loader2 className="w-5 h-5 text-[#5B8DEF] animate-spin" />
-                <span className="text-sm font-medium text-white">{status.message}</span>
-              </div>
-
-              <div className="w-full bg-[#404040] rounded-full h-1 overflow-hidden">
-                <div
-                  className="h-full bg-[#5B8DEF] rounded-full transition-all duration-500 ease-out"
-                  style={{ width: `${status.progress}%` }}
-                />
-              </div>
-
-              <p className="text-xs text-[#727272] mt-2 text-right">
+            <div className="mt-8 text-center">
+              <p className="text-sm font-medium text-ink">{status.message}</p>
+              <p className="mt-2 font-mono text-xs text-ink-muted">
                 {Math.round(status.progress)}%
               </p>
             </div>
@@ -268,67 +448,95 @@ export default function HarmonyRestorer(): React.JSX.Element {
 
         {/* Step 3: Complete */}
         {step === 'complete' && (
-          <div className="space-y-6 animate-fade-in">
-            {status.processingTime != null && (
-              <p className="text-sm text-[#B3B3B3] text-center">
-                Enhanced in {status.processingTime.toFixed(1)}s
-              </p>
-            )}
+          <div className="animate-fade-in">
+            <header className="mb-12 text-center">
+              <h1 className="font-display mb-3 text-5xl text-ink sm:text-6xl">
+                <span className="italic text-violet-soft">Restored</span>
+              </h1>
+              {status.processingTime != null && (
+                <p className="text-sm text-ink-secondary">
+                  Enhanced in {status.processingTime.toFixed(1)}s
+                </p>
+              )}
+            </header>
 
-            <ComparisonView
-              originalSrc={originalBlobUrl}
-              enhancedSrc={enhancedBlobUrl}
-              originalPeaks={waveform?.peaks ?? null}
-              enhancedPeaks={enhancedPeaks}
+            <StripStage>
+              <TapeStrip
+                noisyPeaks={waveform?.peaks ?? null}
+                cleanPeaks={enhancedPeaks}
+                mode="compare"
+                playhead={resultPlayhead}
+                onSeek={resultPlayback.seek}
+                onMixChange={resultPlayback.setMix}
+              />
+            </StripStage>
+            <StripLabels
+              time={`${formatTime(resultPlayback.state.currentTime)} / ${formatTime(resultPlayback.state.duration)}`}
             />
 
-            <div className="flex gap-3">
+            <div className="mt-6 flex flex-col items-center gap-4">
+              <PlayButton
+                isPlaying={resultPlayback.state.isPlaying}
+                onClick={handleResultPlayPause}
+                disabled={!originalBlobUrl && !enhancedBlobUrl}
+              />
+              <p className="max-w-sm text-center text-xs text-ink-muted">
+                Drag the line while it plays to compare your original with the restoration.
+              </p>
+            </div>
+
+            <div className="mt-10 flex justify-center gap-3">
               {status.downloadUrl && (
                 <a
                   href={status.downloadUrl}
                   download
-                  className="flex-1 flex items-center justify-center gap-2 bg-[#5B8DEF] hover:bg-[#7BA4F7] hover:scale-[1.02] text-black font-bold py-3.5 px-6 rounded-full transition-all"
+                  className="flex items-center justify-center gap-2 rounded-full bg-amber px-8 py-3.5 font-bold text-on-amber transition-all hover:scale-[1.02] hover:bg-amber-deep"
                 >
-                  <Download className="w-4 h-4" />
+                  <Download className="h-4 w-4" />
                   <span>Download</span>
                 </a>
               )}
 
               <button
                 onClick={resetState}
-                className="flex items-center justify-center gap-2 bg-[#282828] hover:bg-[#333333] text-white font-medium py-3.5 px-5 rounded-full transition-colors"
+                className="flex items-center justify-center gap-2 rounded-full border border-glass bg-white/5 px-6 py-3.5 font-medium text-ink transition-colors hover:bg-white/10"
               >
-                <RotateCcw className="w-4 h-4" />
+                <RotateCcw className="h-4 w-4" />
                 <span>New file</span>
               </button>
             </div>
           </div>
         )}
 
-        <footer className="text-center mt-16 pt-8 border-t border-[#282828]">
-          <p className="text-[#B3B3B3] text-sm font-medium mb-6">Powered by OpGAN AI denoising</p>
+        <footer className="mt-20 border-t border-glass pt-8 text-center">
+          <p className="mb-5 text-sm font-medium text-ink-secondary">Powered by OpGAN AI denoising</p>
 
-          <div className="flex items-center justify-center gap-12 mb-6">
-            <a href="https://github.com/jacob7choi-xyz" target="_blank" rel="noopener noreferrer" aria-label="GitHub" className="text-[#727272] hover:text-white transition-colors">
-              <Github className="w-5 h-5" />
+          <div className="mb-5 flex items-center justify-center gap-8">
+            <a href="https://github.com/jacob7choi-xyz" target="_blank" rel="noopener noreferrer" aria-label="GitHub" className="text-ink-muted transition-colors hover:text-amber-soft">
+              <Github className="h-5 w-5" />
             </a>
-            <a href="https://www.linkedin.com/in/jacobjchoi/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" className="text-[#727272] hover:text-white transition-colors">
-              <Linkedin className="w-5 h-5" />
+            <a href="https://www.linkedin.com/in/jacobjchoi/" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" className="text-ink-muted transition-colors hover:text-amber-soft">
+              <Linkedin className="h-5 w-5" />
             </a>
-            <a href="https://x.com/jacob7choii" target="_blank" rel="noopener noreferrer" aria-label="X" className="text-[#727272] hover:text-white transition-colors">
-              <svg viewBox="0 0 24 24" className="w-5 h-5" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>
+            <a href="https://x.com/jacob7choii" target="_blank" rel="noopener noreferrer" aria-label="X" className="text-ink-muted transition-colors hover:text-amber-soft">
+              <svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" /></svg>
             </a>
-            <a href="https://www.instagram.com/jacob7choi/" target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="text-[#727272] hover:text-white transition-colors">
-              <Instagram className="w-5 h-5" />
+            <a href="https://www.instagram.com/jacob7choi/" target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="text-ink-muted transition-colors hover:text-amber-soft">
+              <Instagram className="h-5 w-5" />
             </a>
-            <a href="https://youtube.com/@jacob7choi?si=QUGG9m33dLDOHoxM" target="_blank" rel="noopener noreferrer" aria-label="YouTube" className="text-[#727272] hover:text-white transition-colors">
-              <Youtube className="w-5 h-5" />
+            <a href="https://youtube.com/@jacob7choi?si=QUGG9m33dLDOHoxM" target="_blank" rel="noopener noreferrer" aria-label="YouTube" className="text-ink-muted transition-colors hover:text-amber-soft">
+              <Youtube className="h-5 w-5" />
             </a>
           </div>
 
-          <p className="text-[#727272] text-xs">&copy; {new Date().getFullYear()} <a href="https://jacobjchoi.xyz/" target="_blank" rel="noopener noreferrer" className="underline hover:text-white transition-colors">Jacob J. Choi</a></p>
+          <p className="text-xs text-ink-muted">&copy; {new Date().getFullYear()} <a href="https://jacobjchoi.xyz/" target="_blank" rel="noopener noreferrer" className="underline transition-colors hover:text-ink">Jacob J. Choi</a></p>
         </footer>
       </div>
+
+      <audio ref={demoOriginalRef} preload="auto" className="hidden" aria-hidden="true" />
+      <audio ref={demoEnhancedRef} preload="auto" className="hidden" aria-hidden="true" />
+      <audio ref={resultOriginalRef} preload="auto" className="hidden" aria-hidden="true" />
+      <audio ref={resultEnhancedRef} preload="auto" className="hidden" aria-hidden="true" />
       <Analytics />
     </div>
   );

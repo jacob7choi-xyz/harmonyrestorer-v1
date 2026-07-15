@@ -23,14 +23,14 @@ export class ErrorBoundary extends Component<Props, State> {
   render(): React.ReactNode {
     if (this.state.error) {
       return (
-        <div className="min-h-screen bg-[#121212] flex items-center justify-center p-6">
-          <div className="bg-[#282828] rounded-xl p-8 max-w-md text-center">
-            <AlertCircle className="w-12 h-12 text-[#E34040] mx-auto mb-4" />
-            <h2 className="text-xl font-bold text-white mb-2">Something went wrong</h2>
-            <p className="text-[#B3B3B3] mb-6">{this.state.error.message}</p>
+        <div className="min-h-screen bg-base flex items-center justify-center p-6">
+          <div className="bg-card backdrop-blur-md border border-glass rounded-lg p-8 max-w-md text-center">
+            <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4" />
+            <h2 className="text-xl font-bold text-ink mb-2">Something went wrong</h2>
+            <p className="text-ink-secondary mb-6">{this.state.error.message}</p>
             <button
               onClick={() => this.setState(s => ({ error: null, resetKey: s.resetKey + 1 }))}
-              className="bg-[#5B8DEF] hover:bg-[#7BA4F7] text-black font-bold py-3 px-6 rounded-full transition-colors"
+              className="bg-amber hover:bg-amber-deep text-on-amber font-bold py-3 px-6 rounded-full transition-colors"
             >
               Try Again
             </button>

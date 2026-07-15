@@ -21,6 +21,22 @@ function computePeaks(channelData: Float32Array, peakCount: number): Float32Arra
   return peaks;
 }
 
+/** Decode any audio Blob (or File) into waveform peaks and duration. */
+export async function decodeBlobToWaveform(
+  blob: Blob,
+  peakCount: number = DEFAULT_PEAK_COUNT,
+): Promise<WaveformData> {
+  const arrayBuffer = await blob.arrayBuffer();
+  const audioContext = new AudioContext();
+  try {
+    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+    const channelData = audioBuffer.getChannelData(0);
+    return { peaks: computePeaks(channelData, peakCount), duration: audioBuffer.duration };
+  } finally {
+    await audioContext.close();
+  }
+}
+
 export function useAudioDecoder(
   file: File | null,
   peakCount: number = DEFAULT_PEAK_COUNT,
@@ -35,18 +51,10 @@ export function useAudioDecoder(
 
     async function decode(): Promise<void> {
       try {
-        const arrayBuffer = await file!.arrayBuffer();
-        const audioContext = new AudioContext();
-        try {
-          const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-          if (cancelled) return;
-          const channelData = audioBuffer.getChannelData(0);
-          const peaks = computePeaks(channelData, peakCount);
-          setWaveform({ peaks, duration: audioBuffer.duration });
-          setError(null);
-        } finally {
-          await audioContext.close();
-        }
+        const result = await decodeBlobToWaveform(file!, peakCount);
+        if (cancelled) return;
+        setWaveform(result);
+        setError(null);
       } catch {
         if (!cancelled) {
           setWaveform(null);

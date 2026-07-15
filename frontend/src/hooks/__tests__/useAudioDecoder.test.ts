@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { computePeaks } from '../useAudioDecoder';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { computePeaks, decodeBlobToWaveform } from '../useAudioDecoder';
 
 describe('computePeaks', () => {
   it('returns correct number of peaks', () => {
@@ -35,5 +35,46 @@ describe('computePeaks', () => {
     // samplesPerPeak would be 0, so all peaks should be 0
     expect(peaks.length).toBe(10);
     peaks.forEach(p => expect(p).toBe(0));
+  });
+});
+
+describe('decodeBlobToWaveform', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('decodes a blob into peaks and duration and closes the context', async () => {
+    const channelData = new Float32Array(1000);
+    channelData[10] = 0.7;
+    const mockClose = vi.fn().mockResolvedValue(undefined);
+    class MockAudioContext {
+      decodeAudioData = vi.fn().mockResolvedValue({
+        duration: 2.5,
+        getChannelData: () => channelData,
+      });
+
+      close = mockClose;
+    }
+    vi.stubGlobal('AudioContext', MockAudioContext);
+
+    const result = await decodeBlobToWaveform(new Blob([new Uint8Array(4)]), 10);
+
+    expect(result.duration).toBe(2.5);
+    expect(result.peaks.length).toBe(10);
+    expect(Math.max(...result.peaks)).toBeCloseTo(0.7);
+    expect(mockClose).toHaveBeenCalled();
+  });
+
+  it('closes the context and rethrows when decoding fails', async () => {
+    const mockClose = vi.fn().mockResolvedValue(undefined);
+    class MockAudioContext {
+      decodeAudioData = vi.fn().mockRejectedValue(new Error('bad data'));
+
+      close = mockClose;
+    }
+    vi.stubGlobal('AudioContext', MockAudioContext);
+
+    await expect(decodeBlobToWaveform(new Blob([new Uint8Array(4)]), 10)).rejects.toThrow('bad data');
+    expect(mockClose).toHaveBeenCalled();
   });
 });

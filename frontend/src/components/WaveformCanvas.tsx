@@ -5,6 +5,8 @@ interface WaveformCanvasProps {
   playhead?: number;
   onSeek?: (fraction: number) => void;
   accentColor?: string;
+  /** When set, the played region fills with a left-to-right gradient from accentColor to this color. */
+  gradientEndColor?: string;
   baseColor?: string;
   className?: string;
 }
@@ -19,6 +21,7 @@ function drawWaveform(
   playhead: number,
   accentColor: string,
   baseColor: string,
+  gradientEndColor?: string,
 ): void {
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -40,6 +43,14 @@ function drawWaveform(
   const samplesPerBar = Math.max(1, Math.floor(peaks.length / barCount));
   const playheadX = playhead * width;
 
+  let accentFill: string | CanvasGradient = accentColor;
+  if (gradientEndColor) {
+    const gradient = ctx.createLinearGradient(0, 0, width, 0);
+    gradient.addColorStop(0, accentColor);
+    gradient.addColorStop(1, gradientEndColor);
+    accentFill = gradient;
+  }
+
   for (let i = 0; i < barCount; i++) {
     const x = i * step;
     const sampleIndex = Math.min(Math.floor(i * peaks.length / barCount), peaks.length - 1);
@@ -53,7 +64,7 @@ function drawWaveform(
     }
 
     const barHeight = Math.max(MIN_BAR_HEIGHT, peak * maxBarHeight);
-    ctx.fillStyle = x < playheadX ? accentColor : baseColor;
+    ctx.fillStyle = x < playheadX ? accentFill : baseColor;
     // Draw mirrored bar above and below center line
     ctx.fillRect(x, centerY - barHeight, BAR_WIDTH, barHeight);
     ctx.fillRect(x, centerY, BAR_WIDTH, barHeight);
@@ -64,7 +75,8 @@ export function WaveformCanvas({
   peaks,
   playhead = 0,
   onSeek,
-  accentColor = '#5B8DEF',
+  accentColor = '#7c5fe8',
+  gradientEndColor,
   baseColor = '#404040',
   className = '',
 }: WaveformCanvasProps): React.JSX.Element {
@@ -76,7 +88,7 @@ export function WaveformCanvas({
     if (!canvas || peaks.length === 0) return;
 
     const draw = (): void => {
-      drawWaveform(canvas, peaks, playhead, accentColor, baseColor);
+      drawWaveform(canvas, peaks, playhead, accentColor, baseColor, gradientEndColor);
     };
     draw();
 
@@ -93,7 +105,7 @@ export function WaveformCanvas({
       }
       observer.disconnect();
     };
-  }, [peaks, playhead, accentColor, baseColor]);
+  }, [peaks, playhead, accentColor, baseColor, gradientEndColor]);
 
   const handleClick = useCallback(
     (e: React.MouseEvent<HTMLCanvasElement>): void => {

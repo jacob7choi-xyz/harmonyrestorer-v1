@@ -145,58 +145,59 @@ export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAr
   };
 
   return (
-    <div
-      role="button"
-      tabIndex={0}
-      aria-label={currentFile ? `Selected: ${currentFile.name}. Press to change file.` : 'Upload audio file'}
-      aria-disabled={isProcessing}
-      className={`rounded-xl p-8 text-center transition-all cursor-pointer border
-        ${isDragging
-          ? 'bg-[#5B8DEF]/10 border-[#5B8DEF]/50 scale-[1.02] backdrop-blur-md'
-          : 'bg-[#282828]/50 backdrop-blur-md border-white/5 hover:bg-[#333333]/50 hover:border-[#5B8DEF]/30'}
-        ${isProcessing ? 'opacity-50 cursor-not-allowed' : ''}`}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-      onClick={handleClick}
-      onKeyDown={handleKeyDown}
-    >
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="audio/*"
-        onChange={handleFileChange}
-        className="hidden"
-        disabled={isProcessing}
-      />
+    <div className="text-center">
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={currentFile ? `Selected: ${currentFile.name}. Press to change file.` : 'Upload audio file'}
+        aria-disabled={isProcessing}
+        className={`inline-flex items-center gap-3 rounded-full px-8 py-4 transition-all cursor-pointer border font-bold
+          ${isDragging
+            ? 'bg-amber-glow border-amber/60 scale-105 text-amber-soft'
+            : currentFile
+              ? 'bg-white/5 border-glass text-ink hover:border-amber/40'
+              : 'bg-amber border-transparent text-on-amber hover:bg-amber-deep hover:scale-[1.03] animate-pulse-glow'}
+          ${isProcessing ? 'opacity-50 cursor-not-allowed animate-none' : ''}`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        onClick={handleClick}
+        onKeyDown={handleKeyDown}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="audio/*"
+          onChange={handleFileChange}
+          className="hidden"
+          disabled={isProcessing}
+        />
 
-      <div className="flex flex-col items-center space-y-4">
         {currentFile ? (
           <>
-            <div className="w-16 h-16 rounded-full bg-[#5B8DEF]/20 flex items-center justify-center">
-              <FileAudio className="w-8 h-8 text-[#5B8DEF]" />
-            </div>
-            <div>
-              <p className="text-lg font-medium text-white">{currentFile.name}</p>
-              <p className="text-sm text-[#B3B3B3]">{(currentFile.size / 1024 / 1024).toFixed(2)} MB</p>
-            </div>
+            <FileAudio className="w-5 h-5 text-amber shrink-0" />
+            <span className="font-medium">{currentFile.name}</span>
+            <span className="text-sm font-normal text-ink-secondary">
+              {(currentFile.size / 1024 / 1024).toFixed(2)} MB
+            </span>
           </>
         ) : (
           <>
-            <div className="w-16 h-16 rounded-full bg-white/5 border border-white/10 flex items-center justify-center">
-              <Upload className="w-8 h-8 text-[#B3B3B3]" />
-            </div>
-            <div>
-              <p className="text-xl font-medium text-white mb-2">Drop audio file here</p>
-              <p className="text-sm text-[#B3B3B3]">or tap to browse. WAV, FLAC, MP3, OGG, M4A, AAC</p>
-            </div>
+            <Upload className="w-5 h-5 shrink-0" />
+            <span>Restore your audio</span>
           </>
         )}
-
-        {error && (
-          <p className="text-sm text-[#E34040] mt-2">{error}</p>
-        )}
       </div>
+
+      <p className="mt-4 text-xs text-ink-muted tracking-wide">
+        {currentFile
+          ? 'Tap the pill to choose a different file'
+          : 'or drop a file anywhere. WAV, FLAC, MP3, OGG, M4A, AAC, up to 50 MB'}
+      </p>
+
+      {error && (
+        <p className="text-sm text-destructive mt-3">{error}</p>
+      )}
     </div>
   );
 }

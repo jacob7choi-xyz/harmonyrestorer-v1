@@ -12,16 +12,12 @@ vi.mock('../api/client', () => ({
 // Mock useAudioDecoder (AudioContext not available in jsdom)
 vi.mock('../hooks/useAudioDecoder', () => ({
   useAudioDecoder: () => ({ waveform: null, error: null }),
+  decodeBlobToWaveform: vi.fn().mockResolvedValue({ peaks: new Float32Array(0), duration: 0 }),
 }));
 
-// Mock ComparisonView to avoid AudioPlayer/WaveformCanvas complexity
-vi.mock('../components/ComparisonView', () => ({
-  ComparisonView: () => <div data-testid="comparison-view">ComparisonView</div>,
-}));
-
-// Mock WaveformCanvas
-vi.mock('../components/WaveformCanvas', () => ({
-  WaveformCanvas: () => <canvas data-testid="waveform-canvas" />,
+// Mock TapeStrip to avoid canvas/RAF complexity
+vi.mock('../components/TapeStrip', () => ({
+  TapeStrip: () => <div data-testid="tape-strip">TapeStrip</div>,
 }));
 
 // Mock fetch for blob download in the processing flow
@@ -80,26 +76,60 @@ describe('App (HarmonyRestorer)', () => {
 
   // Static render tests (no fake timers needed)
 
-  it('renders the heading and subtitle', () => {
+  it('renders the wordmark, headline, and subtitle', () => {
     render(<App />);
-    expect(screen.getByRole('heading', { name: /harmonyrestorer/i })).toBeInTheDocument();
+    expect(screen.getByText('HarmonyRestorer')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /hear it the way it was/i })).toBeInTheDocument();
     expect(screen.getByText(/ai-powered audio restoration/i)).toBeInTheDocument();
   });
 
-  it('renders the upload area on initial load', () => {
+  it('renders the upload pill on initial load', () => {
     render(<App />);
-    expect(screen.getByText(/drop audio file here/i)).toBeInTheDocument();
+    expect(screen.getByText(/restore your audio/i)).toBeInTheDocument();
   });
 
-  it('shows the Enhance button disabled when no file is selected', () => {
+  it('does not show the Enhance button before a file is selected', () => {
     render(<App />);
-    const button = screen.getByRole('button', { name: /enhance/i });
-    expect(button).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /enhance/i })).not.toBeInTheDocument();
   });
 
   it('renders the footer', () => {
     render(<App />);
     expect(screen.getByText(/powered by opgan ai denoising/i)).toBeInTheDocument();
+  });
+
+  // Sample loading tests (handleFileSelect is called directly; no duration check)
+
+  it('loads the bundled sample when "Try a sample" is clicked', async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      blob: () => Promise.resolve(new Blob(['audio'], { type: 'audio/wav' })),
+    });
+    render(<App />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /try a sample/i }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('sample-noisy.wav')).toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: /enhance/i })).toBeEnabled();
+  });
+
+  it('shows an error and selects no file when the sample fails to load', async () => {
+    mockFetch.mockRejectedValue(new Error('network down'));
+    render(<App />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /try a sample/i }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/could not load the sample/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByText('sample-noisy.wav')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /enhance/i })).not.toBeInTheDocument();
   });
 
   // File selection tests (need fake timers for duration check)
@@ -239,7 +269,7 @@ describe('App (HarmonyRestorer)', () => {
       fireEvent.click(screen.getByRole('button', { name: /new file/i }));
     });
 
-    expect(screen.getByText(/drop audio file here/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /enhance/i })).toBeDisabled();
+    expect(screen.getByText(/restore your audio/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /enhance/i })).not.toBeInTheDocument();
   });
 });

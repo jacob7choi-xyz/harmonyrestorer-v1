@@ -9,7 +9,8 @@ describe('UploadArea', () => {
 
   it('renders upload prompt when no file selected', () => {
     render(<UploadArea onFileSelect={vi.fn()} isProcessing={false} currentFile={null} />)
-    expect(screen.getByText(/drop audio file here/i)).toBeInTheDocument()
+    expect(screen.getByText(/restore your audio/i)).toBeInTheDocument()
+    expect(screen.getByText(/drop a file anywhere/i)).toBeInTheDocument()
   })
 
   it('shows file name when file is selected', () => {

@@ -22,7 +22,7 @@ function AudioPlayerInner({
   label,
   src,
   peaks,
-  accentColor = '#5B8DEF',
+  accentColor = '#7c5fe8',
   onPlay,
   onPause,
 }: AudioPlayerProps): React.JSX.Element {
@@ -48,10 +48,10 @@ function AudioPlayerInner({
   }, [state.isPlaying, state.currentTime, state.duration, onPause]);
 
   return (
-    <div className="rounded-xl bg-[#282828] p-4">
+    <div className="rounded-lg bg-card backdrop-blur-md border border-glass p-4">
       <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-bold text-[#B3B3B3] uppercase tracking-widest">{label}</span>
-        <span className="text-xs text-[#727272] tabular-nums">
+        <span className="text-xs font-bold text-ink-secondary uppercase tracking-widest">{label}</span>
+        <span className="text-xs text-ink-muted font-mono tabular-nums">
           {formatTime(state.currentTime)} / {formatTime(state.duration)}
         </span>
       </div>
@@ -66,21 +66,21 @@ function AudioPlayerInner({
           className="mb-3"
         />
       ) : (
-        <div className="w-full h-16 bg-[#181818] rounded-lg flex items-center justify-center mb-3">
-          <span className="text-sm text-[#727272]">No waveform available</span>
+        <div className="w-full h-16 bg-surface rounded-md flex items-center justify-center mb-3">
+          <span className="text-sm text-ink-muted">No waveform available</span>
         </div>
       )}
 
       <button
         onClick={handlePlayPause}
         disabled={!src}
-        className="w-10 h-10 rounded-full bg-[#5B8DEF] hover:bg-[#7BA4F7] hover:scale-105 disabled:bg-[#333333] disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center"
+        className="w-10 h-10 rounded-full bg-violet hover:bg-violet-deep hover:scale-105 disabled:bg-track disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center"
         aria-label={state.isPlaying ? 'Pause' : 'Play'}
       >
         {state.isPlaying ? (
-          <Pause className="w-4 h-4 text-black" />
+          <Pause className="w-4 h-4 text-ink" />
         ) : (
-          <Play className="w-4 h-4 text-black ml-0.5" />
+          <Play className="w-4 h-4 text-ink ml-0.5" />
         )}
       </button>
 

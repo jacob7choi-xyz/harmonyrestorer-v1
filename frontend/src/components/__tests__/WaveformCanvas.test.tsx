@@ -14,11 +14,13 @@ globalThis.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserv
 const mockFillRect = vi.fn();
 const mockClearRect = vi.fn();
 const mockScale = vi.fn();
+const mockCreateLinearGradient = vi.fn().mockReturnValue({ addColorStop: vi.fn() });
 
 HTMLCanvasElement.prototype.getContext = vi.fn().mockReturnValue({
   fillRect: mockFillRect,
   clearRect: mockClearRect,
   scale: mockScale,
+  createLinearGradient: mockCreateLinearGradient,
   fillStyle: '',
 }) as unknown as typeof HTMLCanvasElement.prototype.getContext;
 
@@ -27,6 +29,7 @@ describe('WaveformCanvas', () => {
     mockFillRect.mockClear();
     mockClearRect.mockClear();
     mockScale.mockClear();
+    mockCreateLinearGradient.mockClear();
   });
 
   it('renders a canvas element', () => {
@@ -86,6 +89,18 @@ describe('WaveformCanvas', () => {
     expect(screen.getByRole('img', { name: 'Audio waveform' })).toBeInTheDocument();
     expect(mockFillRect).not.toHaveBeenCalled();
     expect(mockClearRect).not.toHaveBeenCalled();
+  });
+
+  it('creates a gradient fill when gradientEndColor is provided', () => {
+    const peaks = new Float32Array([0.5, 0.8]);
+    render(<WaveformCanvas peaks={peaks} accentColor="#e8a820" gradientEndColor="#7c5fe8" />);
+    expect(mockCreateLinearGradient).toHaveBeenCalled();
+  });
+
+  it('does not create a gradient fill without gradientEndColor', () => {
+    const peaks = new Float32Array([0.5, 0.8]);
+    render(<WaveformCanvas peaks={peaks} accentColor="#e8a820" />);
+    expect(mockCreateLinearGradient).not.toHaveBeenCalled();
   });
 
   it('applies custom className', () => {
