@@ -376,7 +376,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
                 Hear it the way it was <span className="italic text-amber-soft">recorded</span>
               </h1>
               <p className="mx-auto max-w-md text-lg text-ink-secondary">
-                AI-powered audio restoration. Seconds per track, free.
+                AI-powered audio restoration.
               </p>
             </header>
 
