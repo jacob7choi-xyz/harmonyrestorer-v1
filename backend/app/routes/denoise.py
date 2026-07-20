@@ -1,5 +1,6 @@
 """Audio denoising endpoints."""
 
+import asyncio
 import io
 import logging
 import os
@@ -10,17 +11,52 @@ from pathlib import Path
 import audioread
 import librosa
 import soundfile as sf
-from fastapi import APIRouter, BackgroundTasks, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 
 from app.config import settings
 from app.schemas import DenoiseUploadResponse, JobStatus, JobStatusEnum
+from app.services.admission import InferenceAdmission
 from app.services.jobs import IPJobCapError, JobCapError, job_manager
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1", tags=["denoise"])
+
+admission = InferenceAdmission(settings.inference_concurrency)
+
+# Strong references keep lifecycle tasks alive after a cancelled request;
+# the event loop itself holds only weak references to tasks.
+_inference_tasks: set[asyncio.Task[None]] = set()
+
+
+def _observe_inference_task(task: asyncio.Task[None]) -> None:
+    """Drop the registry reference and surface unexpected lifecycle failures."""
+    _inference_tasks.discard(task)
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        # process() converts processing errors to a FAILED job internally,
+        # so an exception escaping the lifecycle means the pipeline itself
+        # is broken, not just one job.
+        logger.error("Inference lifecycle task failed unexpectedly", exc_info=exc)
+
+
+async def _run_inference(job_id: str, input_path: Path) -> None:
+    """Run one inference and release its admission slot on true completion.
+
+    The slot is owned by this task, not the HTTP handler: a cancelled
+    request must not free inference capacity while the worker thread is
+    still executing.
+    """
+    try:
+        await run_in_threadpool(job_manager.process, job_id, input_path)
+    finally:
+        admission.release()
+
 
 _MAX_MB = settings.max_upload_bytes / (1024 * 1024)
 _MAX_DURATION_MIN = settings.max_audio_duration_seconds / 60
@@ -122,10 +158,21 @@ def _validate_job_id(job_id: str) -> None:
 @router.post("/denoise", response_model=DenoiseUploadResponse)
 async def denoise_audio(
     request: Request,
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
 ) -> DenoiseUploadResponse:
-    """Upload and denoise an audio file."""
+    """Upload an audio file and denoise it within the request.
+
+    Transitional contract: processing completes before this endpoint
+    responds, while the status and download endpoints are retained so
+    existing polling clients keep working unchanged. A processing failure
+    returns HTTP 200 with status "failed", matching the job API.
+
+    Cancellation: if the request is cancelled mid-inference the worker
+    thread cannot be interrupted; the detached lifecycle task keeps the
+    admission slot until the thread finishes, bounding orphaned work to
+    the configured inference concurrency. In-flight work and in-memory
+    job state do not survive process or instance termination.
+    """
     client_ip = request.client.host if request.client else ""
 
     if not file.filename:
@@ -156,50 +203,80 @@ async def denoise_audio(
             detail=f"File content does not match {file_ext} format",
         )
 
+    # Fail-fast admission before any application-owned artifact exists.
+    # Inference runs inside this request, so inference capacity is the
+    # scarce resource protected here; busy rejection creates no tempfile
+    # and no job record (framework multipart spooling may already have
+    # occurred before this handler ran).
+    if not admission.try_acquire():
+        logger.warning("Inference capacity busy; rejecting upload from %s", client_ip or "unknown")
+        raise HTTPException(
+            status_code=503,
+            detail="Server is busy processing another file. Try again shortly.",
+            headers={"Retry-After": "30"},
+        )
+
     job_id = str(uuid.uuid4())
     input_path = settings.upload_dir / f"{job_id}{file_ext}"
 
-    tmp_fd, tmp_path_str = tempfile.mkstemp(
-        prefix=f".{job_id}.", suffix=f"{file_ext}.tmp", dir=settings.upload_dir
-    )
-    os.close(tmp_fd)
+    # Slot ownership transfers to the lifecycle task once it is created;
+    # any failure before that point must release the slot here.
+    slot_transferred = False
     try:
-        with open(tmp_path_str, "wb") as f:
-            f.write(content)
-            os.fsync(f.fileno())
-        _check_audio_duration(tmp_path_str, file_ext, content)
-        Path(tmp_path_str).replace(input_path)
-        logger.info("Saved upload %s (%d bytes)", job_id, len(content))
-    except HTTPException:
-        Path(tmp_path_str).unlink(missing_ok=True)
-        raise
-    except Exception as err:
-        Path(tmp_path_str).unlink(missing_ok=True)
-        logger.exception("Failed to save upload %s", job_id)
-        raise HTTPException(status_code=500, detail="Failed to save file") from err
+        tmp_fd, tmp_path_str = tempfile.mkstemp(
+            prefix=f".{job_id}.", suffix=f"{file_ext}.tmp", dir=settings.upload_dir
+        )
+        os.close(tmp_fd)
+        try:
+            with open(tmp_path_str, "wb") as f:
+                f.write(content)
+                os.fsync(f.fileno())
+            _check_audio_duration(tmp_path_str, file_ext, content)
+            Path(tmp_path_str).replace(input_path)
+            logger.info("Saved upload %s (%d bytes)", job_id, len(content))
+        except HTTPException:
+            Path(tmp_path_str).unlink(missing_ok=True)
+            raise
+        except Exception as err:
+            Path(tmp_path_str).unlink(missing_ok=True)
+            logger.exception("Failed to save upload %s", job_id)
+            raise HTTPException(status_code=500, detail="Failed to save file") from err
 
-    try:
-        job_manager.create_job(job_id, client_ip=client_ip)
-    except IPJobCapError as exc:
-        input_path.unlink(missing_ok=True)
-        raise HTTPException(
-            status_code=429,
-            detail="Too many active jobs for your IP. Try again later.",
-        ) from exc
-    except JobCapError as exc:
-        input_path.unlink(missing_ok=True)
-        raise HTTPException(
-            status_code=503,
-            detail="Server is busy. Try again later.",
-        ) from exc
+        try:
+            job_manager.create_job(job_id, client_ip=client_ip)
+        except IPJobCapError as exc:
+            input_path.unlink(missing_ok=True)
+            raise HTTPException(
+                status_code=429,
+                detail="Too many active jobs for your IP. Try again later.",
+            ) from exc
+        except JobCapError as exc:
+            input_path.unlink(missing_ok=True)
+            raise HTTPException(
+                status_code=503,
+                detail="Server is busy. Try again later.",
+            ) from exc
 
-    background_tasks.add_task(job_manager.process, job_id, input_path)
+        task = asyncio.create_task(_run_inference(job_id, input_path))
+        slot_transferred = True
+        _inference_tasks.add(task)
+        task.add_done_callback(_observe_inference_task)
+    finally:
+        if not slot_transferred:
+            admission.release()
 
-    return DenoiseUploadResponse(
-        job_id=job_id,
-        status=JobStatusEnum.QUEUED,
-        message="Audio uploaded and queued for denoising",
-    )
+    # Shield: a cancelled request must not cancel the inference lifecycle.
+    await asyncio.shield(task)
+
+    job = job_manager.get_job(job_id)
+    if job is None:
+        # Reachable only if TTL cleanup raced within milliseconds of completion
+        return DenoiseUploadResponse(
+            job_id=job_id,
+            status=JobStatusEnum.COMPLETED,
+            message="Denoising complete",
+        )
+    return DenoiseUploadResponse(job_id=job_id, status=job.status, message=job.message)
 
 
 @router.get("/status/{job_id}", response_model=JobStatus)

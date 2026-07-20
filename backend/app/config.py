@@ -80,6 +80,12 @@ class Settings:
         self.download_ttl_seconds = int(os.getenv("DOWNLOAD_TTL_SECONDS", "300"))
         if self.download_ttl_seconds < 1:
             raise ValueError("DOWNLOAD_TTL_SECONDS must be at least 1")
+        # Process-local bound on concurrently executing inferences; the
+        # deployment runs one application worker per instance, so this is
+        # also the instance-wide bound.
+        self.inference_concurrency = int(os.getenv("INFERENCE_CONCURRENCY", "1"))
+        if self.inference_concurrency < 1:
+            raise ValueError("INFERENCE_CONCURRENCY must be at least 1")
 
         # Server
         self.log_level = os.getenv("LOG_LEVEL", "INFO").strip().upper()

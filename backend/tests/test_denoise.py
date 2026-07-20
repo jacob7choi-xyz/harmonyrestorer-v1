@@ -22,7 +22,7 @@ SAMPLE_BYTES: dict[str, bytes] = {
 # --- Upload ---
 
 
-def test_upload_returns_job_id(client, mock_denoiser):
+def test_upload_returns_job_id(client, mock_denoiser) -> None:
     r = client.post(
         "/api/v1/denoise",
         files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
@@ -30,7 +30,7 @@ def test_upload_returns_job_id(client, mock_denoiser):
     assert r.status_code == 200
     data = r.json()
     assert "job_id" in data
-    assert data["status"] == "queued"
+    assert data["status"] == "completed"
 
 
 def test_upload_leaves_no_temp_files(client, mock_denoiser):
@@ -136,7 +136,7 @@ def test_upload_rejects_missing_file(client):
 
 
 @pytest.mark.parametrize("ext", [".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac"])
-def test_upload_accepts_all_supported_formats(client, mock_denoiser, ext):
+def test_upload_accepts_all_supported_formats(client, mock_denoiser, ext) -> None:
     """Every format listed in settings.supported_formats should be accepted."""
     content = SAMPLE_BYTES[ext]
     r = client.post(
@@ -144,14 +144,97 @@ def test_upload_accepts_all_supported_formats(client, mock_denoiser, ext):
         files={"file": (f"audio{ext}", content, "audio/octet-stream")},
     )
     assert r.status_code == 200
-    assert r.json()["status"] == "queued"
+    assert r.json()["status"] == "completed"
+
+
+def test_upload_returns_failed_status_when_processing_fails(
+    client, mock_audio_duration, monkeypatch
+) -> None:
+    """A processing failure is a 200 with status failed, and the input is cleaned up.
+
+    The transitional contract keeps failure reporting on the job API rather
+    than converting inference errors into HTTP 5xx.
+    """
+    from app.services.jobs import job_manager
+
+    failing = Mock()
+    failing.denoise.side_effect = RuntimeError("model exploded")
+    monkeypatch.setattr(job_manager, "_denoiser", failing)
+
+    before_files = set(settings.upload_dir.iterdir())
+    r = client.post(
+        "/api/v1/denoise",
+        files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
+    )
+
+    assert r.status_code == 200
+    assert r.json()["status"] == "failed"
+    # The input file must not linger after a failed job
+    assert set(settings.upload_dir.iterdir()) == before_files
+
+
+def test_download_immediately_after_upload(client, mock_denoiser) -> None:
+    """Processing completes within the upload request, so download works with no polling."""
+    r = client.post(
+        "/api/v1/denoise",
+        files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
+    )
+    assert r.json()["status"] == "completed"
+
+    d = client.get(f"/api/v1/download/{r.json()['job_id']}")
+    assert d.status_code == 200
+
+
+def test_upload_rejected_when_inference_busy(client, mock_denoiser) -> None:
+    """Busy admission is an immediate 503 with no job record and no new files."""
+    from app.routes import denoise as denoise_module
+    from app.services.jobs import job_manager
+
+    assert denoise_module.admission.try_acquire()
+    try:
+        jobs_before = dict(job_manager._jobs)
+        files_before = set(settings.upload_dir.iterdir())
+
+        r = client.post(
+            "/api/v1/denoise",
+            files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
+        )
+
+        assert r.status_code == 503
+        assert r.headers.get("retry-after") == "30"
+        assert job_manager._jobs == jobs_before
+        assert set(settings.upload_dir.iterdir()) == files_before
+    finally:
+        denoise_module.admission.release()
+
+
+def test_upload_processes_exactly_once(client, mock_denoiser, monkeypatch) -> None:
+    """The synchronous path runs processing once, with no scheduled background task."""
+    from app.services.jobs import job_manager
+
+    calls: list[str] = []
+    original_process = job_manager.process
+
+    def counting_process(job_id, input_path) -> None:
+        calls.append(job_id)
+        original_process(job_id, input_path)
+
+    monkeypatch.setattr(job_manager, "process", counting_process)
+
+    r = client.post(
+        "/api/v1/denoise",
+        files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
+    )
+
+    assert r.status_code == 200
+    assert calls == [r.json()["job_id"]]
 
 
 # --- Status ---
 
 
-def test_status_after_processing(client, mock_denoiser):
-    """Background task runs synchronously in TestClient, so job completes immediately."""
+def test_status_after_processing(client, mock_denoiser) -> None:
+    """Processing completes within the upload request, so status is terminal immediately."""
     r = client.post(
         "/api/v1/denoise",
         files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
