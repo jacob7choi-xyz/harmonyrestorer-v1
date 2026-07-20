@@ -93,6 +93,29 @@ describe('TapeStrip', () => {
     expect(onSeek).toHaveBeenCalledWith(0.25);
   });
 
+  it('scrubs continuously with pointer drag when seekable', () => {
+    const onSeek = vi.fn();
+    render(
+      <TapeStrip noisyPeaks={PEAKS} cleanPeaks={PEAKS} mode="demo" onSeek={onSeek} />,
+    );
+    const canvas = screen.getByRole('img');
+    vi.spyOn(canvas, 'getBoundingClientRect').mockReturnValue({
+      left: 0, right: 400, top: 0, bottom: 160, width: 400, height: 160,
+      x: 0, y: 0, toJSON: () => {},
+    });
+
+    fireEvent.pointerDown(canvas, { clientX: 100, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 200, pointerId: 1 });
+    fireEvent.pointerMove(canvas, { clientX: 300, pointerId: 1 });
+    fireEvent.pointerUp(canvas, { clientX: 300, pointerId: 1 });
+
+    expect(onSeek.mock.calls.map(c => c[0])).toEqual([0.25, 0.5, 0.75]);
+
+    // After release, moves no longer scrub
+    fireEvent.pointerMove(canvas, { clientX: 40, pointerId: 1 });
+    expect(onSeek).toHaveBeenCalledTimes(3);
+  });
+
   it('has cursor-pointer on the canvas only when seekable', () => {
     const { rerender } = render(<TapeStrip noisyPeaks={PEAKS} mode="file" />);
     expect(screen.getByRole('img').className).not.toContain('cursor-pointer');

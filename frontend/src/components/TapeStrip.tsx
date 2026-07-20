@@ -154,6 +154,14 @@ function drawStrip(
   // Divider line
   ctx.fillStyle = palette.divider;
   ctx.fillRect(dividerX - 1, 0, 2, height);
+
+  // Traveling playhead: a bright line that moves with playback
+  if (playhead > 0.001) {
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.18)';
+    ctx.fillRect(playheadX - 4, 0, 8, height);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+    ctx.fillRect(playheadX - 1, 0, 2, height);
+  }
 }
 
 export function TapeStrip({
@@ -276,6 +284,27 @@ export function TapeStrip({
     onSeek(fractionFromEvent(e.clientX));
   }, [onSeek, fractionFromEvent]);
 
+  const scrubbingRef = useRef<boolean>(false);
+
+  const handleCanvasPointerDown = useCallback((e: React.PointerEvent<HTMLCanvasElement>): void => {
+    if (!onSeek) return;
+    scrubbingRef.current = true;
+    // Guarded: jsdom lacks pointer capture
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+    onSeek(fractionFromEvent(e.clientX));
+  }, [onSeek, fractionFromEvent]);
+
+  const handleCanvasPointerMove = useCallback((e: React.PointerEvent<HTMLCanvasElement>): void => {
+    if (!scrubbingRef.current || !onSeek) return;
+    onSeek(fractionFromEvent(e.clientX));
+  }, [onSeek, fractionFromEvent]);
+
+  const handleCanvasPointerUp = useCallback((e: React.PointerEvent<HTMLCanvasElement>): void => {
+    if (!scrubbingRef.current) return;
+    scrubbingRef.current = false;
+    e.currentTarget.releasePointerCapture?.(e.pointerId);
+  }, []);
+
   const handleThumbPointerDown = useCallback((e: React.PointerEvent<HTMLDivElement>): void => {
     if (!interactive) return;
     userInteractedRef.current = true;
@@ -308,8 +337,11 @@ export function TapeStrip({
       <canvas
         ref={canvasRef}
         data-testid="tape-strip"
-        className={`absolute inset-0 w-full h-full ${onSeek ? 'cursor-pointer' : ''}`}
+        className={`absolute inset-0 w-full h-full ${onSeek ? 'cursor-pointer touch-none' : ''}`}
         onClick={handleCanvasClick}
+        onPointerDown={handleCanvasPointerDown}
+        onPointerMove={handleCanvasPointerMove}
+        onPointerUp={handleCanvasPointerUp}
         role="img"
         aria-label="Audio waveform, split between restored and original"
       />
