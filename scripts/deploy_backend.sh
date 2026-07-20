@@ -92,7 +92,7 @@ gcloud run deploy "${SERVICE}" \
   --memory "${EXPECT_MEMORY}" \
   --cpu "${EXPECT_CPU}" \
   --timeout "${EXPECT_TIMEOUT}" \
-  --set-env-vars "CORS_ORIGINS=https://harmonyrestorer.online,ENABLE_DOCS=false,LOG_FORMAT=json,LOG_LEVEL=INFO"
+  --set-env-vars "CORS_ORIGINS=https://harmonyrestorer.online,ENABLE_DOCS=false,LOG_FORMAT=json,LOG_LEVEL=INFO,MAX_JOBS_PER_IP=6,JOB_TTL_SECONDS=1200"
 
 CANDIDATE_REVISION=$(gcloud run services describe "${SERVICE}" --region "${REGION}" \
   --project "${PROJECT}" --format='value(status.latestCreatedRevisionName)')

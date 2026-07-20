@@ -5,6 +5,7 @@ import { UploadArea } from './components/UploadArea';
 import { TapeStrip, type TapeStripPalette } from './components/TapeStrip';
 import { Analytics } from '@vercel/analytics/react';
 import { useAudioDecoder, decodeBlobToWaveform } from './hooks/useAudioDecoder';
+import { useAudioPlayback } from './hooks/useAudioPlayback';
 import { useCrossfadePlayback } from './hooks/useCrossfadePlayback';
 import type { ProcessingStatus, WizardStep } from './types';
 
@@ -113,6 +114,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSampleLoading, setIsSampleLoading] = useState(false);
   const [demo, setDemo] = useState<DemoAssets | null>(null);
+  const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [originalBlobUrl, setOriginalBlobUrl] = useState<string | null>(null);
   const [enhancedBlobUrl, setEnhancedBlobUrl] = useState<string | null>(null);
   const [enhancedPeaks, setEnhancedPeaks] = useState<Float32Array | null>(null);
@@ -127,8 +129,13 @@ export default function HarmonyRestorer(): React.JSX.Element {
     { loop: true },
   );
   const resultPlayback = useCrossfadePlayback(originalBlobUrl, enhancedBlobUrl);
+  // The selected file stays playable before and during processing; the audio
+  // element lives at the root, so playback survives the step transition
+  const previewPlayback = useAudioPlayback(previewBlobUrl);
   const { originalRef: demoOriginalRef, enhancedRef: demoEnhancedRef } = demoPlayback;
   const { originalRef: resultOriginalRef, enhancedRef: resultEnhancedRef } = resultPlayback;
+  const { audioRef: previewAudioRef, pause: pausePreviewPlayback } = previewPlayback;
+  const { pause: pauseDemoPlayback } = demoPlayback;
 
   // Load the landing demo pair; the page degrades gracefully without it
   useEffect(() => {
@@ -168,6 +175,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
   useEffect(() => {
     return () => {
       abortRef.current?.abort();
+      if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
       if (originalBlobUrl) URL.revokeObjectURL(originalBlobUrl);
       if (enhancedBlobUrl) URL.revokeObjectURL(enhancedBlobUrl);
     };
@@ -176,15 +184,17 @@ export default function HarmonyRestorer(): React.JSX.Element {
 
   const resetState = useCallback((): void => {
     abortRef.current?.abort();
+    if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
     if (originalBlobUrl) URL.revokeObjectURL(originalBlobUrl);
     if (enhancedBlobUrl) URL.revokeObjectURL(enhancedBlobUrl);
     setFile(null);
     setStatus(INITIAL_STATUS);
     setIsProcessing(false);
+    setPreviewBlobUrl(null);
     setOriginalBlobUrl(null);
     setEnhancedBlobUrl(null);
     setEnhancedPeaks(null);
-  }, [originalBlobUrl, enhancedBlobUrl]);
+  }, [previewBlobUrl, originalBlobUrl, enhancedBlobUrl]);
 
   const processAudio = useCallback(async (): Promise<void> => {
     if (!file) return;
@@ -234,6 +244,8 @@ export default function HarmonyRestorer(): React.JSX.Element {
         console.warn('Failed to fetch enhanced audio for playback:', err);
       }
 
+      // Stop the original preview so it never overlaps the compare player
+      pausePreviewPlayback();
       setStatus({
         status: 'completed',
         progress: 100,
@@ -252,21 +264,25 @@ export default function HarmonyRestorer(): React.JSX.Element {
     } finally {
       setIsProcessing(false);
     }
-  }, [file]);
+  }, [file, pausePreviewPlayback]);
 
   const handleFileSelect = useCallback((selectedFile: File): void => {
     if (isProcessing) {
       abortRef.current?.abort();
       setIsProcessing(false);
     }
+    // The demo strip unmounts on selection; its looping audio must stop too
+    pauseDemoPlayback();
+    if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
     if (originalBlobUrl) URL.revokeObjectURL(originalBlobUrl);
     if (enhancedBlobUrl) URL.revokeObjectURL(enhancedBlobUrl);
     setFile(selectedFile);
+    setPreviewBlobUrl(URL.createObjectURL(selectedFile));
     setStatus(INITIAL_STATUS);
     setOriginalBlobUrl(null);
     setEnhancedBlobUrl(null);
     setEnhancedPeaks(null);
-  }, [isProcessing, originalBlobUrl, enhancedBlobUrl]);
+  }, [isProcessing, pauseDemoPlayback, previewBlobUrl, originalBlobUrl, enhancedBlobUrl]);
 
   const handleTrySample = useCallback(async (): Promise<void> => {
     setIsSampleLoading(true);
@@ -320,12 +336,24 @@ export default function HarmonyRestorer(): React.JSX.Element {
     }
   }, [resultPlayback]);
 
+  const handlePreviewPlayPause = useCallback((): void => {
+    if (previewPlayback.state.isPlaying) {
+      previewPlayback.pause();
+    } else {
+      previewPlayback.play();
+    }
+  }, [previewPlayback]);
+
   const demoPlayhead = demoPlayback.state.duration > 0
     ? demoPlayback.state.currentTime / demoPlayback.state.duration
     : 0;
   const resultPlayhead = resultPlayback.state.duration > 0
     ? resultPlayback.state.currentTime / resultPlayback.state.duration
     : 0;
+  const previewPlayhead = previewPlayback.state.duration > 0
+    ? previewPlayback.state.currentTime / previewPlayback.state.duration
+    : 0;
+  const previewTime = `${formatTime(previewPlayback.state.currentTime)} / ${formatTime(previewPlayback.state.duration)}`;
 
   return (
     <div
@@ -412,8 +440,26 @@ export default function HarmonyRestorer(): React.JSX.Element {
             {file && waveform && (
               <section aria-label="Your recording" className="mb-10">
                 <StripStage>
-                  <TapeStrip noisyPeaks={waveform.peaks} mode="file" palette={AURORA_PALETTE} />
+                  <TapeStrip
+                    noisyPeaks={waveform.peaks}
+                    mode="file"
+                    palette={AURORA_PALETTE}
+                    playhead={previewPlayhead}
+                    onSeek={previewPlayback.seek}
+                  />
                 </StripStage>
+                <div className="mt-3 flex items-center justify-between font-mono text-[0.65rem] uppercase tracking-[0.25em]">
+                  <span className="text-amber-soft">Original</span>
+                  <span className="normal-case tracking-normal text-ink-muted">{previewTime}</span>
+                </div>
+                <div className="mt-4 flex items-center justify-center gap-4">
+                  <PlayButton
+                    isPlaying={previewPlayback.state.isPlaying}
+                    onClick={handlePreviewPlayPause}
+                    disabled={!previewBlobUrl}
+                  />
+                  <p className="text-xs text-ink-muted">Listen to your original before restoring it.</p>
+                </div>
               </section>
             )}
 
@@ -470,6 +516,8 @@ export default function HarmonyRestorer(): React.JSX.Element {
                   mode="processing"
                   progress={status.progress / 100}
                   palette={AURORA_PALETTE}
+                  playhead={previewPlayhead}
+                  onSeek={previewPlayback.seek}
                 />
               </StripStage>
             )}
@@ -479,6 +527,15 @@ export default function HarmonyRestorer(): React.JSX.Element {
               <p className="mt-2 font-mono text-xs text-ink-muted">
                 {Math.round(status.progress)}%
               </p>
+            </div>
+
+            <div className="mt-6 flex items-center justify-center gap-4">
+              <PlayButton
+                isPlaying={previewPlayback.state.isPlaying}
+                onClick={handlePreviewPlayPause}
+                disabled={!previewBlobUrl}
+              />
+              <p className="text-xs text-ink-muted">Listen to your original while the model works.</p>
             </div>
           </div>
         )}
@@ -577,6 +634,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
       <audio ref={demoEnhancedRef} preload="auto" className="hidden" aria-hidden="true" />
       <audio ref={resultOriginalRef} preload="auto" className="hidden" aria-hidden="true" />
       <audio ref={resultEnhancedRef} preload="auto" className="hidden" aria-hidden="true" />
+      <audio ref={previewAudioRef} preload="metadata" className="hidden" aria-hidden="true" />
       <Analytics />
     </div>
   );

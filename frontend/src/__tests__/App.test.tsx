@@ -9,9 +9,13 @@ vi.mock('../api/client', () => ({
   getDownloadUrl: vi.fn((id: string) => `/api/v1/download/${id}`),
 }));
 
-// Mock useAudioDecoder (AudioContext not available in jsdom)
+// Mock useAudioDecoder (AudioContext not available in jsdom); returns peaks
+// when a file is selected so the preview strip sections render
 vi.mock('../hooks/useAudioDecoder', () => ({
-  useAudioDecoder: () => ({ waveform: null, error: null }),
+  useAudioDecoder: (file: File | null) => ({
+    waveform: file ? { peaks: new Float32Array([0.5, 0.8]), duration: 2 } : null,
+    error: null,
+  }),
   decodeBlobToWaveform: vi.fn().mockResolvedValue({ peaks: new Float32Array(0), duration: 0 }),
 }));
 
@@ -149,6 +153,15 @@ describe('App (HarmonyRestorer)', () => {
     await selectFileWithFakeTimers('my_track.wav');
 
     expect(screen.getByText('my_track.wav')).toBeInTheDocument();
+  });
+
+  it('offers original playback after selecting a file', async () => {
+    vi.useFakeTimers();
+    render(<App />);
+    await selectFileWithFakeTimers();
+
+    expect(screen.getByRole('button', { name: 'Play' })).toBeInTheDocument();
+    expect(screen.getByTestId('tape-strip')).toBeInTheDocument();
   });
 
   // Processing flow tests (fake timers for file select, real timers for async flow)
