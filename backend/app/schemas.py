@@ -31,6 +31,11 @@ class JobStatus(BaseModel):
         exclude=True,
         description="Internal-only client IP used for per-client job caps.",
     )
+    download_stem: str = Field(
+        default="audio",
+        exclude=True,
+        description="Internal-only sanitized stem for the download filename.",
+    )
 
 
 class DenoiseUploadResponse(BaseModel):

@@ -4,6 +4,7 @@ import asyncio
 import io
 import logging
 import os
+import re
 import tempfile
 import uuid
 from pathlib import Path
@@ -155,6 +156,28 @@ def _validate_job_id(job_id: str) -> None:
         raise HTTPException(status_code=400, detail="Invalid job ID") from err
 
 
+_STEM_UNSAFE_CHARS = re.compile(r"[^A-Za-z0-9 ._-]+")
+_MAX_STEM_LENGTH = 80
+
+
+def _sanitize_download_stem(filename: str) -> str:
+    """Reduce a client filename to a header-safe download stem.
+
+    Client filenames are never used in filesystem paths; this stem appears
+    only in the download Content-Disposition header, restricted to a
+    conservative character set so header injection is impossible.
+
+    Args:
+        filename: Raw client-supplied filename.
+
+    Returns:
+        A safe stem, or "audio" when nothing safe remains.
+    """
+    stem = Path(filename).stem
+    stem = _STEM_UNSAFE_CHARS.sub("", stem).strip(" .")
+    return stem[:_MAX_STEM_LENGTH] or "audio"
+
+
 @router.post("/denoise", response_model=DenoiseUploadResponse)
 async def denoise_audio(
     request: Request,
@@ -243,7 +266,11 @@ async def denoise_audio(
             raise HTTPException(status_code=500, detail="Failed to save file") from err
 
         try:
-            job_manager.create_job(job_id, client_ip=client_ip)
+            job_manager.create_job(
+                job_id,
+                client_ip=client_ip,
+                download_stem=_sanitize_download_stem(file.filename),
+            )
         except IPJobCapError as exc:
             input_path.unlink(missing_ok=True)
             raise HTTPException(
@@ -311,7 +338,7 @@ async def download_audio(job_id: str) -> FileResponse:
 
         return FileResponse(
             path=output_path,
-            filename="denoised_audio.wav",
+            filename=f"{job.download_stem}_restored.wav",
             media_type="audio/wav",
             background=BackgroundTask(job_manager.unmark_downloading, job_id),
         )

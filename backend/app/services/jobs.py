@@ -79,12 +79,15 @@ class JobManager:
             and (client_ip is None or job.client_ip == client_ip)
         )
 
-    def create_job(self, job_id: str, client_ip: str = "") -> JobStatus:
+    def create_job(
+        self, job_id: str, client_ip: str = "", download_stem: str = "audio"
+    ) -> JobStatus:
         """Register a new processing job, enforcing global and per-IP caps.
 
         Args:
             job_id: UUID string for the new job.
             client_ip: Verified client IP address from the upload request.
+            download_stem: Sanitized stem for the eventual download filename.
 
         Returns:
             The newly created JobStatus.
@@ -109,6 +112,7 @@ class JobManager:
             job = JobStatus(
                 job_id=job_id,
                 client_ip=client_ip,
+                download_stem=download_stem,
                 status=JobStatusEnum.QUEUED,
                 progress=0,
                 message="Audio uploaded, queued for processing",

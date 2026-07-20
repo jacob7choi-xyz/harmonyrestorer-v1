@@ -185,6 +185,60 @@ def test_download_immediately_after_upload(client, mock_denoiser) -> None:
     assert d.status_code == 200
 
 
+def test_download_filename_uses_original_name(client, mock_denoiser) -> None:
+    """The download is named after the uploaded file with a _restored suffix."""
+    r = client.post(
+        "/api/v1/denoise",
+        files={"file": ("My Lonely Heart.wav", SMALL_WAV, "audio/wav")},
+    )
+    d = client.get(f"/api/v1/download/{r.json()['job_id']}")
+
+    assert d.status_code == 200
+    # Starlette emits an RFC 5987 encoded filename; decode before comparing
+    from urllib.parse import unquote
+
+    assert "My Lonely Heart_restored.wav" in unquote(d.headers["content-disposition"])
+
+
+def test_download_filename_sanitizes_hostile_names(client, mock_denoiser) -> None:
+    """Path tricks and unsafe characters never reach the download header."""
+    r = client.post(
+        "/api/v1/denoise",
+        files={"file": ("../../etc/pass#wd$!.wav", SMALL_WAV, "audio/wav")},
+    )
+    d = client.get(f"/api/v1/download/{r.json()['job_id']}")
+
+    assert d.status_code == 200
+    disposition = d.headers["content-disposition"]
+    assert "passwd_restored.wav" in disposition
+    assert "/" not in disposition.split("filename")[1]
+    assert ".." not in disposition
+
+
+def test_download_filename_falls_back_when_nothing_safe_remains(client, mock_denoiser) -> None:
+    """A name with no safe characters gets the generic audio stem."""
+    r = client.post(
+        "/api/v1/denoise",
+        files={"file": ("....wav", SMALL_WAV, "audio/wav")},
+    )
+    d = client.get(f"/api/v1/download/{r.json()['job_id']}")
+
+    assert d.status_code == 200
+    assert "audio_restored.wav" in d.headers["content-disposition"]
+
+
+def test_status_response_does_not_leak_download_stem(client, mock_denoiser) -> None:
+    """download_stem is internal-only, like client_ip."""
+    r = client.post(
+        "/api/v1/denoise",
+        files={"file": ("secret project name.wav", SMALL_WAV, "audio/wav")},
+    )
+    s = client.get(f"/api/v1/status/{r.json()['job_id']}")
+
+    assert s.status_code == 200
+    assert "download_stem" not in s.json()
+
+
 def test_upload_rejected_when_inference_busy(client, mock_denoiser) -> None:
     """Busy admission is an immediate 503 with no job record and no new files."""
     from app.routes import denoise as denoise_module
