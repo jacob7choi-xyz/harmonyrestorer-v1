@@ -99,15 +99,17 @@ CANDIDATE_REVISION=$(gcloud run services describe "${SERVICE}" --region "${REGIO
 echo "    candidate revision: ${CANDIDATE_REVISION}"
 
 echo "==> Asserting configuration on the candidate revision object itself"
+# csv preserves empty fields for absent annotations; tab-separated value()
+# output collapses them, silently shifting every later field left
 REV=$(gcloud run revisions describe "${CANDIDATE_REVISION}" --region "${REGION}" --project "${PROJECT}" \
-  --format='value(metadata.annotations["autoscaling.knative.dev/maxScale"],
+  --format='csv[no-heading](metadata.annotations["autoscaling.knative.dev/maxScale"],
                   metadata.annotations["autoscaling.knative.dev/minScale"],
                   metadata.annotations["run.googleapis.com/cpu-throttling"],
                   spec.containers[0].resources.limits.memory,
                   spec.containers[0].resources.limits.cpu,
                   spec.timeoutSeconds,
                   spec.containerConcurrency)')
-IFS=$'\t' read -r MAX_SCALE MIN_SCALE THROTTLING MEMORY CPU TIMEOUT CONCURRENCY <<< "${REV}"
+IFS=',' read -r MAX_SCALE MIN_SCALE THROTTLING MEMORY CPU TIMEOUT CONCURRENCY <<< "${REV}"
 
 # Tagged candidates outside the traffic split are not governed by service-level
 # limits, so the revision's own maxScale annotation is the binding assertion.
