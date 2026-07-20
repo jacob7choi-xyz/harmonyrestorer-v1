@@ -97,3 +97,4 @@ data/
 # Demo audio bundled with the frontend (exception to the *.wav rule above)
 !frontend/public/sample-noisy.wav
 !frontend/public/sample-restored.wav
+.vercel
