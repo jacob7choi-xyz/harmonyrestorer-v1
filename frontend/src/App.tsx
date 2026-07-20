@@ -193,7 +193,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
-    setStatus({ status: 'uploading', progress: 0, message: 'Uploading audio file...' });
+    setStatus({ status: 'uploading', progress: 0, message: 'Uploading and restoring...' });
 
     try {
       const { job_id } = await uploadAudio(file, controller.signal);
