@@ -40,7 +40,11 @@ jobs:
       - name: Dependency audit (pip-audit)
         # CVE-2026-3219 affects pip itself with no fix version available upstream;
         # ignored until a patched pip release is published.
-        run: uv run pip-audit --ignore-vuln CVE-2026-3219
+        # PYSEC-2026-3447 affects setuptools; the fix (83.0.0) requires torch 2.13,
+        # while the production image pins torch 2.12.1+cpu. setuptools is a
+        # build-time tool and is not used at runtime. Revisit alongside the
+        # planned torch/torchaudio upgrade to a matched release pair.
+        run: uv run pip-audit --ignore-vuln CVE-2026-3219 --ignore-vuln PYSEC-2026-3447
 
       - name: Tests with coverage
         run: uv run pytest backend/tests/ -v --tb=short --cov=backend/app --cov-fail-under=80
