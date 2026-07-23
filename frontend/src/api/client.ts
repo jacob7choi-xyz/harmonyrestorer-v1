@@ -51,8 +51,8 @@ export async function getJobStatus(
   return res.json();
 }
 
-export function getDownloadUrl(jobId: string): string {
-  return `${API_BASE}/download/${jobId}`;
+export function getDownloadUrl(jobId: string, format: string = 'wav'): string {
+  return `${API_BASE}/download/${jobId}?format=${format}`;
 }
 
 const MAX_POLL_DURATION = 300_000;

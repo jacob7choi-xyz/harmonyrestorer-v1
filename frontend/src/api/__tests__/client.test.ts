@@ -136,9 +136,14 @@ describe('getJobStatus', () => {
 })
 
 describe('getDownloadUrl', () => {
-  it('returns correct download URL', () => {
+  it('returns correct download URL with default wav format', () => {
     const url = getDownloadUrl('abc-123')
-    expect(url).toContain('/download/abc-123')
+    expect(url).toContain('/download/abc-123?format=wav')
+  })
+
+  it('includes the requested format', () => {
+    const url = getDownloadUrl('abc-123', 'mp3')
+    expect(url).toContain('/download/abc-123?format=mp3')
   })
 })
 

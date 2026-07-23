@@ -6,7 +6,9 @@ import App from '../App';
 vi.mock('../api/client', () => ({
   uploadAudio: vi.fn(),
   pollUntilDone: vi.fn(),
-  getDownloadUrl: vi.fn((id: string) => `/api/v1/download/${id}`),
+  getDownloadUrl: vi.fn(
+    (id: string, format = 'wav') => `/api/v1/download/${id}?format=${format}`,
+  ),
 }));
 
 // Mock useAudioDecoder (AudioContext not available in jsdom); returns peaks
@@ -203,7 +205,46 @@ describe('App (HarmonyRestorer)', () => {
 
     expect(screen.getByText(/enhanced in 2\.5s/i)).toBeInTheDocument();
     const downloadLink = screen.getByRole('link', { name: /download/i });
-    expect(downloadLink).toHaveAttribute('href', '/api/v1/download/test-123');
+    expect(downloadLink).toHaveAttribute('href', '/api/v1/download/test-123?format=wav');
+  });
+
+  it('switches the download link format from the picker', async () => {
+    mockUpload.mockResolvedValue({
+      job_id: 'fmt-321',
+      status: 'queued',
+      message: 'Queued',
+    });
+    mockPoll.mockImplementation(async (jobId, onUpdate) => {
+      const result = {
+        job_id: jobId,
+        status: 'completed' as const,
+        progress: 100,
+        message: 'Done',
+        completed_at: null,
+        download_url: `/api/v1/download/${jobId}`,
+        processing_time: 1.0,
+      };
+      onUpdate(result);
+      return result;
+    });
+
+    vi.useFakeTimers();
+    render(<App />);
+    await selectFileAndRestoreTimers();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /enhance/i }));
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: /download/i })).toBeInTheDocument();
+    });
+
+    // Default follows the uploaded .wav; picking MP3 rewrites the link
+    fireEvent.click(screen.getByRole('button', { name: /^mp3$/i }));
+    expect(screen.getByRole('link', { name: /download/i })).toHaveAttribute(
+      'href',
+      '/api/v1/download/fmt-321?format=mp3',
+    );
   });
 
   it('shows error message when upload fails', async () => {

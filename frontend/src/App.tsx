@@ -18,6 +18,17 @@ const INITIAL_STATUS: ProcessingStatus = {
 const SAMPLE_NOISY_URL = '/sample-noisy.wav';
 const SAMPLE_RESTORED_URL = '/sample-restored.wav';
 
+const DOWNLOAD_FORMATS = ['wav', 'mp3', 'flac', 'ogg', 'm4a'] as const;
+type DownloadFormat = (typeof DOWNLOAD_FORMATS)[number];
+
+function defaultFormatFor(filename: string): DownloadFormat {
+  const ext = filename.split('.').pop()?.toLowerCase() ?? '';
+  if (ext === 'aac') return 'm4a';
+  return (DOWNLOAD_FORMATS as readonly string[]).includes(ext)
+    ? (ext as DownloadFormat)
+    : 'wav';
+}
+
 const FILM_GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E")`;
 
 /* Warm sepia for the original audio; iridescent violet-to-cyan for the restored side. */
@@ -113,6 +124,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
   const [status, setStatus] = useState<ProcessingStatus>(INITIAL_STATUS);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isSampleLoading, setIsSampleLoading] = useState(false);
+  const [downloadFormat, setDownloadFormat] = useState<DownloadFormat>('wav');
   const [demo, setDemo] = useState<DemoAssets | null>(null);
   const [previewBlobUrl, setPreviewBlobUrl] = useState<string | null>(null);
   const [originalBlobUrl, setOriginalBlobUrl] = useState<string | null>(null);
@@ -278,6 +290,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
     if (enhancedBlobUrl) URL.revokeObjectURL(enhancedBlobUrl);
     setFile(selectedFile);
     setPreviewBlobUrl(URL.createObjectURL(selectedFile));
+    setDownloadFormat(defaultFormatFor(selectedFile.name));
     setStatus(INITIAL_STATUS);
     setOriginalBlobUrl(null);
     setEnhancedBlobUrl(null);
@@ -582,10 +595,34 @@ export default function HarmonyRestorer(): React.JSX.Element {
               </p>
             </div>
 
-            <div className="mt-10 flex justify-center gap-3">
-              {status.downloadUrl && (
+            <div className="mt-10 flex flex-col items-center gap-3">
+              <div className="flex items-center gap-2" role="group" aria-label="Download format">
+                {DOWNLOAD_FORMATS.map(fmt => (
+                  <button
+                    key={fmt}
+                    onClick={() => setDownloadFormat(fmt)}
+                    aria-pressed={downloadFormat === fmt}
+                    className={`rounded-full px-4 py-1.5 font-mono text-xs uppercase transition-colors ${
+                      downloadFormat === fmt
+                        ? 'bg-violet text-ink'
+                        : 'border border-glass bg-white/5 text-ink-secondary hover:text-ink'
+                    }`}
+                  >
+                    {fmt}
+                  </button>
+                ))}
+              </div>
+              <p className="max-w-md text-center text-xs text-ink-muted">
+                Every format carries the same restoration, rendered at 16 kHz mono,
+                the model's native resolution. Your choice changes file size and
+                compatibility, not quality.
+              </p>
+            </div>
+
+            <div className="mt-5 flex justify-center gap-3">
+              {status.downloadUrl && status.jobId && (
                 <a
-                  href={status.downloadUrl}
+                  href={getDownloadUrl(status.jobId, downloadFormat)}
                   download
                   className={`flex items-center justify-center gap-2 rounded-full px-8 py-3.5 font-bold transition-all hover:scale-[1.02] hover:brightness-110 ${CTA_GRADIENT}`}
                 >

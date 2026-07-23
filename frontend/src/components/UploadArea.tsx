@@ -192,7 +192,7 @@ export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAr
       <p className="mt-4 text-xs text-ink-muted tracking-wide">
         {currentFile
           ? 'Tap the pill to choose a different file'
-          : 'or drop a file anywhere. WAV, FLAC, MP3, OGG, M4A, AAC, up to 50 MB'}
+          : 'or drop a file anywhere. WAV, FLAC, MP3, OGG, M4A, AAC, up to 50 MB. Restored audio is rendered at 16 kHz mono.'}
       </p>
 
       {error && (
