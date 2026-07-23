@@ -9,6 +9,8 @@ import tempfile
 import threading
 from pathlib import Path
 
+from app.services.artifacts import artifact_budget
+
 logger = logging.getLogger(__name__)
 
 
@@ -69,6 +71,12 @@ def transcode_output(wav_path: Path, fmt: str) -> Path:
     if not _TRANSCODE_SLOTS.acquire(blocking=False):
         logger.warning("Conversion slot busy; rejecting %s to %s", wav_path.name, fmt)
         raise TranscodeBusyError("Another conversion is in progress")
+    # Deliberately conservative reservation (2x source) so no per-codec
+    # output-size proof is required; released when the subprocess exits
+    reservation = wav_path.stat().st_size * 2
+    if not artifact_budget.try_reserve(reservation):
+        _TRANSCODE_SLOTS.release()
+        raise TranscodeBusyError("Storage capacity unavailable for conversion")
     tmp_path: Path | None = None
     try:
         tmp_fd, tmp_str = tempfile.mkstemp(suffix=f".{fmt}", dir=wav_path.parent)
@@ -109,5 +117,6 @@ def transcode_output(wav_path: Path, fmt: str) -> Path:
     finally:
         if tmp_path is not None:
             tmp_path.unlink(missing_ok=True)
+        artifact_budget.release(reservation)
         _TRANSCODE_SLOTS.release()
     return target

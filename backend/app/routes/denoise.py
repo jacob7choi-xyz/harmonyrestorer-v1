@@ -20,6 +20,7 @@ from starlette.background import BackgroundTask
 from app.config import settings
 from app.schemas import DenoiseUploadResponse, JobStatus, JobStatusEnum
 from app.services.admission import InferenceAdmission
+from app.services.artifacts import artifact_budget
 from app.services.jobs import IPJobCapError, JobCapError, job_manager
 from app.services.transcode import (
     DOWNLOAD_FORMATS,
@@ -33,6 +34,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["denoise"])
 
 admission = InferenceAdmission(settings.inference_concurrency)
+
+# Worst-case restored WAV: 16kHz mono 16-bit (the model's native output
+# resolution) at the maximum accepted duration, plus header slack
+_OUTPUT_WAV_BYTES_MAX = settings.max_audio_duration_seconds * 16_000 * 2 + 1024
 
 # Strong references keep lifecycle tasks alive after a cancelled request;
 # the event loop itself holds only weak references to tasks.
@@ -52,17 +57,20 @@ def _observe_inference_task(task: asyncio.Task[None]) -> None:
         logger.error("Inference lifecycle task failed unexpectedly", exc_info=exc)
 
 
-async def _run_inference(job_id: str, input_path: Path) -> None:
-    """Run one inference and release its admission slot on true completion.
+async def _run_inference(job_id: str, input_path: Path, reservation_bytes: int) -> None:
+    """Run one inference; release its slot and byte reservation on completion.
 
-    The slot is owned by this task, not the HTTP handler: a cancelled
-    request must not free inference capacity while the worker thread is
-    still executing.
+    Both resources are owned by this task, not the HTTP handler: a
+    cancelled request must not free inference capacity or budget headroom
+    while the worker thread is still executing. The reservation is
+    released after process() has materialized or removed its files, so
+    subsequent budget scans see the persisted truth.
     """
     try:
         await run_in_threadpool(job_manager.process, job_id, input_path)
     finally:
         admission.release()
+        artifact_budget.release(reservation_bytes)
 
 
 _MAX_MB = settings.max_upload_bytes / (1024 * 1024)
@@ -248,10 +256,22 @@ async def denoise_audio(
     job_id = str(uuid.uuid4())
     input_path = settings.upload_dir / f"{job_id}{file_ext}"
 
-    # Slot ownership transfers to the lifecycle task once it is created;
-    # any failure before that point must release the slot here.
+    # Worst case simultaneous bytes for this job's lifecycle: the persisted
+    # input plus the intermediate and final outputs' coexistence window
+    upload_reservation = len(content) + 2 * _OUTPUT_WAV_BYTES_MAX
+
+    # Slot and reservation ownership transfer to the lifecycle task once it
+    # is created; any failure before that point must release both here.
     slot_transferred = False
+    reservation_made = False
     try:
+        if not artifact_budget.try_reserve(upload_reservation):
+            raise HTTPException(
+                status_code=503,
+                detail="Server storage is at capacity. Try again shortly.",
+                headers={"Retry-After": "60"},
+            )
+        reservation_made = True
         tmp_fd, tmp_path_str = tempfile.mkstemp(
             prefix=f".{job_id}.", suffix=f"{file_ext}.tmp", dir=settings.upload_dir
         )
@@ -291,7 +311,7 @@ async def denoise_audio(
             ) from exc
 
         try:
-            task = asyncio.create_task(_run_inference(job_id, input_path))
+            task = asyncio.create_task(_run_inference(job_id, input_path, upload_reservation))
         except Exception as err:
             # Transaction rollback at the ownership-transfer boundary: the
             # client never received this job_id, so no record or file may
@@ -306,6 +326,8 @@ async def denoise_audio(
     finally:
         if not slot_transferred:
             admission.release()
+            if reservation_made:
+                artifact_budget.release(upload_reservation)
 
     # Shield: a cancelled request must not cancel the inference lifecycle.
     await asyncio.shield(task)

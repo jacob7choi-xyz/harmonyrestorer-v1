@@ -26,6 +26,7 @@ def _base_dirs(monkeypatch, tmp_path) -> None:
         ("MAX_JOBS_PER_IP", "MAX_JOBS_PER_IP must be at least 1"),
         ("DOWNLOAD_TTL_SECONDS", "DOWNLOAD_TTL_SECONDS must be at least 1"),
         ("INFERENCE_CONCURRENCY", "INFERENCE_CONCURRENCY must be at least 1"),
+        ("MAX_ARTIFACT_BYTES", "MAX_ARTIFACT_BYTES must be at least 1"),
     ],
 )
 def test_numeric_settings_reject_zero(monkeypatch, env_name, message) -> None:

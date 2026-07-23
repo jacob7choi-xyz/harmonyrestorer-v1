@@ -143,6 +143,41 @@ class TestTranscodeAdmission:
         assert _TRANSCODE_SLOTS.acquire(blocking=False)
         _TRANSCODE_SLOTS.release()
 
+    def test_budget_exhaustion_rejects_and_releases_the_slot(self, wav_file, monkeypatch) -> None:
+        from app.services import transcode as transcode_module
+        from app.services.artifacts import ArtifactBudget
+
+        monkeypatch.setattr(
+            transcode_module, "artifact_budget", ArtifactBudget(limit_bytes=1, directories=[])
+        )
+
+        with pytest.raises(TranscodeBusyError, match="Storage capacity"):
+            transcode_output(wav_file, "mp3")
+
+        # The slot must not stay held after a budget rejection
+        assert _TRANSCODE_SLOTS.acquire(blocking=False)
+        _TRANSCODE_SLOTS.release()
+
+    def test_budget_reservation_released_after_subprocess_failure(
+        self, wav_file, monkeypatch
+    ) -> None:
+        from app.services import transcode as transcode_module
+        from app.services.artifacts import ArtifactBudget
+
+        # Budget fits exactly one reservation (2x the source size)
+        exact = ArtifactBudget(limit_bytes=wav_file.stat().st_size * 2, directories=[])
+        monkeypatch.setattr(transcode_module, "artifact_budget", exact)
+
+        def failing_run(argv, **kwargs):  # type: ignore[no-untyped-def]
+            return subprocess.CompletedProcess(argv, 1, stdout=b"", stderr=b"boom")
+
+        monkeypatch.setattr(subprocess, "run", failing_run)
+        with pytest.raises(TranscodeError, match="failed"):
+            transcode_output(wav_file, "mp3")
+
+        # Reservation returned: the same budget accepts the next attempt
+        assert exact.try_reserve(wav_file.stat().st_size * 2) is True
+
     def test_slot_released_after_subprocess_failure(self, wav_file, monkeypatch) -> None:
         def failing_run(argv, **kwargs):  # type: ignore[no-untyped-def]
             return subprocess.CompletedProcess(argv, 1, stdout=b"", stderr=b"boom")

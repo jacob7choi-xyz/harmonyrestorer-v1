@@ -227,6 +227,33 @@ def test_download_filename_falls_back_when_nothing_safe_remains(client, mock_den
     assert "audio_restored.wav" in d.headers["content-disposition"]
 
 
+def test_upload_rejected_when_artifact_budget_exhausted(
+    client, mock_audio_duration, monkeypatch
+) -> None:
+    """A full byte budget rejects the upload with 503 and leaves nothing:
+    no job, no files, and the inference slot is restored."""
+    from app.routes import denoise as denoise_module
+    from app.services.artifacts import ArtifactBudget
+    from app.services.jobs import job_manager
+
+    tiny = ArtifactBudget(limit_bytes=1, directories=[])
+    monkeypatch.setattr(denoise_module, "artifact_budget", tiny)
+
+    files_before = set(settings.upload_dir.iterdir())
+    r = client.post(
+        "/api/v1/denoise",
+        files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
+    )
+
+    assert r.status_code == 503
+    assert "storage" in r.json()["detail"].lower()
+    assert r.headers.get("retry-after") == "60"
+    assert job_manager._jobs == {}
+    assert set(settings.upload_dir.iterdir()) == files_before
+    assert denoise_module.admission.try_acquire() is True
+    denoise_module.admission.release()
+
+
 def test_lifecycle_start_failure_rolls_back_the_job_transaction(
     client, mock_audio_duration, monkeypatch
 ) -> None:

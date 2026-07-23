@@ -86,6 +86,13 @@ class Settings:
         self.inference_concurrency = int(os.getenv("INFERENCE_CONCURRENCY", "1"))
         if self.inference_concurrency < 1:
             raise ValueError("INFERENCE_CONCURRENCY must be at least 1")
+        # Byte budget for managed artifacts. The Cloud Run filesystem is
+        # memory-backed, so this bounds instance memory, not disk. Default
+        # derived from the 4 GiB instance: measured inference peak plus
+        # transients plus a 1 GiB safety reserve leaves ~1.5 GiB.
+        self.max_artifact_bytes = int(os.getenv("MAX_ARTIFACT_BYTES", str(1536 * 1024 * 1024)))
+        if self.max_artifact_bytes < 1:
+            raise ValueError("MAX_ARTIFACT_BYTES must be at least 1")
 
         # Server
         self.log_level = os.getenv("LOG_LEVEL", "INFO").strip().upper()

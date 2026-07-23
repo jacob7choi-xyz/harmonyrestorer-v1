@@ -23,6 +23,14 @@
 # Intended invariant per revision:
 #   max instances x workers per instance x inference slots = 1
 #
+# Memory budget (the Cloud Run filesystem is memory-backed):
+#   runtime peak + MAX_ARTIFACT_BYTES + safety reserve <= 4 GiB memory,
+#   with the safety reserve at 1 GiB unless explicitly re-reviewed.
+#   MAX_ARTIFACT_BYTES defaults to 1.5 GiB in config. MAX_TOTAL_JOBS=24 is
+#   derived: worst-case persisted bytes per job are ~38 MB (19.2 MB max
+#   output WAV plus all cached format variants), 1.5 GiB / 38 MB is ~39
+#   jobs, held to 24 at roughly two thirds for margin.
+#
 # Images are tagged with the git SHA so commit, image, and revision stay
 # auditable; the resolved digest is printed as the immutable identity.
 
@@ -92,7 +100,7 @@ gcloud run deploy "${SERVICE}" \
   --memory "${EXPECT_MEMORY}" \
   --cpu "${EXPECT_CPU}" \
   --timeout "${EXPECT_TIMEOUT}" \
-  --set-env-vars "CORS_ORIGINS=https://harmonyrestorer.online,ENABLE_DOCS=false,LOG_FORMAT=json,LOG_LEVEL=INFO,MAX_JOBS_PER_IP=6,JOB_TTL_SECONDS=1200"
+  --set-env-vars "CORS_ORIGINS=https://harmonyrestorer.online,ENABLE_DOCS=false,LOG_FORMAT=json,LOG_LEVEL=INFO,MAX_JOBS_PER_IP=6,JOB_TTL_SECONDS=1200,MAX_TOTAL_JOBS=24"
 
 CANDIDATE_REVISION=$(gcloud run services describe "${SERVICE}" --region "${REGION}" \
   --project "${PROJECT}" --format='value(status.latestCreatedRevisionName)')

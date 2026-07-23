@@ -58,7 +58,7 @@ class TestLifecycleOwnership:
         monkeypatch.setattr(job_manager, "process", fake)
 
         assert denoise.admission.try_acquire()
-        task = asyncio.create_task(denoise._run_inference("job-a", Path("/tmp/none")))
+        task = asyncio.create_task(denoise._run_inference("job-a", Path("/tmp/none"), 0))
         denoise._inference_tasks.add(task)
         task.add_done_callback(denoise._observe_inference_task)
 
@@ -66,18 +66,19 @@ class TestLifecycleOwnership:
             await asyncio.shield(task)
 
         route = asyncio.create_task(route_wait())
-        await asyncio.to_thread(fake.started.wait, 5)
+        try:
+            await asyncio.to_thread(fake.started.wait, 5)
 
-        route.cancel()
-        with pytest.raises(asyncio.CancelledError):
-            await route
+            route.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await route
 
-        # Request B: capacity must still be occupied by the orphaned inference
-        assert denoise.admission.try_acquire() is False
-        # The registry still strongly references the surviving lifecycle task
-        assert task in denoise._inference_tasks
-
-        fake.finish.set()
+            # Request B: capacity must still be occupied by the orphaned inference
+            assert denoise.admission.try_acquire() is False
+            # The registry still strongly references the surviving lifecycle task
+            assert task in denoise._inference_tasks
+        finally:
+            fake.finish.set()
         await task
 
         # Registry releases its reference only after true completion
@@ -96,15 +97,16 @@ class TestLifecycleOwnership:
         monkeypatch.setattr(job_manager, "process", fake)
 
         assert denoise.admission.try_acquire()
-        task = asyncio.create_task(denoise._run_inference("job-a", Path("/tmp/none")))
+        task = asyncio.create_task(denoise._run_inference("job-a", Path("/tmp/none"), 0))
         denoise._inference_tasks.add(task)
         task.add_done_callback(denoise._observe_inference_task)
-        await asyncio.to_thread(fake.started.wait, 5)
+        try:
+            await asyncio.to_thread(fake.started.wait, 5)
 
-        # A loop-scheduled sleep completing promptly proves the loop is live
-        await asyncio.wait_for(asyncio.sleep(0.01), timeout=1)
-
-        fake.finish.set()
+            # A loop-scheduled sleep completing promptly proves the loop is live
+            await asyncio.wait_for(asyncio.sleep(0.01), timeout=1)
+        finally:
+            fake.finish.set()
         await task
         # The slot was released by the lifecycle task's own finally
         assert denoise.admission.try_acquire() is True
@@ -119,7 +121,7 @@ class TestLifecycleOwnership:
         monkeypatch.setattr(job_manager, "process", exploding)
 
         assert denoise.admission.try_acquire()
-        task = asyncio.create_task(denoise._run_inference("job-x", Path("/tmp/none")))
+        task = asyncio.create_task(denoise._run_inference("job-x", Path("/tmp/none"), 0))
         denoise._inference_tasks.add(task)
         task.add_done_callback(denoise._observe_inference_task)
 
