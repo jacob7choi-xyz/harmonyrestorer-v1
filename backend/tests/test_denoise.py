@@ -299,6 +299,34 @@ def test_download_converts_to_requested_format(client, mock_denoiser, monkeypatc
     assert "song_restored.mp3" in d.headers["content-disposition"]
 
 
+def test_download_conversion_busy_returns_503_with_retry_after(
+    client, mock_denoiser, monkeypatch
+) -> None:
+    """A busy conversion slot maps to 503 with Retry-After, guard released."""
+    from app.routes import denoise as denoise_module
+    from app.services.jobs import job_manager
+    from app.services.transcode import TranscodeBusyError
+
+    def busy_transcode(wav_path, fmt):  # type: ignore[no-untyped-def]
+        if fmt == "wav":
+            return wav_path
+        raise TranscodeBusyError("Another conversion is in progress")
+
+    monkeypatch.setattr(denoise_module, "transcode_output", busy_transcode)
+
+    r = client.post(
+        "/api/v1/denoise",
+        files={"file": ("song.wav", SMALL_WAV, "audio/wav")},
+    )
+    job_id = r.json()["job_id"]
+    d = client.get(f"/api/v1/download/{job_id}?format=mp3")
+
+    assert d.status_code == 503
+    assert d.headers.get("retry-after") == "15"
+    assert job_id not in job_manager._downloading
+    assert client.get(f"/api/v1/download/{job_id}").status_code == 200
+
+
 def test_download_conversion_failure_returns_500_and_releases_guard(
     client, mock_denoiser, monkeypatch
 ) -> None:

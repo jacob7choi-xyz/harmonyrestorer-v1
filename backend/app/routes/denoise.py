@@ -21,7 +21,12 @@ from app.config import settings
 from app.schemas import DenoiseUploadResponse, JobStatus, JobStatusEnum
 from app.services.admission import InferenceAdmission
 from app.services.jobs import IPJobCapError, JobCapError, job_manager
-from app.services.transcode import DOWNLOAD_FORMATS, TranscodeError, transcode_output
+from app.services.transcode import (
+    DOWNLOAD_FORMATS,
+    TranscodeBusyError,
+    TranscodeError,
+    transcode_output,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -360,6 +365,12 @@ async def download_audio(job_id: str, format: str = Query("wav")) -> FileRespons
 
         try:
             serve_path = await run_in_threadpool(transcode_output, output_path, fmt)
+        except TranscodeBusyError as err:
+            raise HTTPException(
+                status_code=503,
+                detail="Another conversion is in progress. Try again shortly.",
+                headers={"Retry-After": "15"},
+            ) from err
         except TranscodeError as err:
             logger.error("Download conversion failed for %s: %s", job_id, err)
             raise HTTPException(status_code=500, detail="Format conversion failed") from err

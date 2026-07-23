@@ -6,6 +6,7 @@ import logging
 import os
 import subprocess  # nosec B404 - fixed argv, no shell, inputs validated below
 import tempfile
+import threading
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -15,7 +16,18 @@ class TranscodeError(Exception):
     """Raised when converting restored audio to a download format fails."""
 
 
+class TranscodeBusyError(TranscodeError):
+    """Raised when the single conversion slot is already occupied."""
+
+
 _FFMPEG_TIMEOUT_SECONDS = 120
+
+# At most one ffmpeg conversion at a time, mirroring inference admission:
+# expensive work gets an explicit fail-fast bound instead of competing
+# threadpool-wide for the instance's two vCPUs. The slot is acquired and
+# released inside the worker thread that runs the subprocess, so a
+# cancelled HTTP request cannot free capacity while ffmpeg still runs.
+_TRANSCODE_SLOTS = threading.BoundedSemaphore(1)
 
 # Formats servable for download, mapped to media types. wav is the model's
 # native output and is served directly without conversion.
@@ -54,11 +66,29 @@ def transcode_output(wav_path: Path, fmt: str) -> Path:
     if target.exists():
         return target
 
-    tmp_fd, tmp_str = tempfile.mkstemp(suffix=f".{fmt}", dir=wav_path.parent)
-    os.close(tmp_fd)
-    tmp_path = Path(tmp_str)
-    argv = ["ffmpeg", "-y", "-loglevel", "error", "-i", str(wav_path), str(tmp_path)]
+    if not _TRANSCODE_SLOTS.acquire(blocking=False):
+        logger.warning("Conversion slot busy; rejecting %s to %s", wav_path.name, fmt)
+        raise TranscodeBusyError("Another conversion is in progress")
+    tmp_path: Path | None = None
     try:
+        tmp_fd, tmp_str = tempfile.mkstemp(suffix=f".{fmt}", dir=wav_path.parent)
+        os.close(tmp_fd)
+        tmp_path = Path(tmp_str)
+        # Single encoder thread: the admitted conversion must not itself
+        # consume uncontrolled parallel CPU next to a running inference
+        argv = [
+            "ffmpeg",
+            "-y",
+            "-loglevel",
+            "error",
+            "-threads",
+            "1",
+            "-i",
+            str(wav_path),
+            "-threads",
+            "1",
+            str(tmp_path),
+        ]
         # nosec B603 - argv is fixed; paths are server-generated (UUID-derived)
         # and fmt is allowlisted above; no shell is involved
         result = subprocess.run(  # nosec
@@ -77,5 +107,7 @@ def transcode_output(wav_path: Path, fmt: str) -> Path:
         logger.error("ffmpeg timed out converting %s to %s", wav_path.name, fmt)
         raise TranscodeError(f"Conversion to {fmt} timed out") from err
     finally:
-        tmp_path.unlink(missing_ok=True)
+        if tmp_path is not None:
+            tmp_path.unlink(missing_ok=True)
+        _TRANSCODE_SLOTS.release()
     return target
