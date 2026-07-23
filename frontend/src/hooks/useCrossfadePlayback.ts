@@ -46,6 +46,26 @@ export function shouldResyncSlave(driftSeconds: number, slaveVolume: number): bo
   return driftSeconds > DRIFT_THRESHOLD && slaveVolume < BACKGROUND_VOLUME;
 }
 
+
+export type PlaybackTransition = 'finish' | 'stop' | 'keep';
+
+/** Decide the logical playback transition from the authoritative clock's state.
+
+    DOM events and the RAF loop are only signals to call this; the event
+    target carries no authority. Master selection (by audibility) happens
+    before this decision, never inside it. When the master has both ended
+    and paused (ended elements are paused), finishing wins. */
+export function resolvePlaybackTransition(
+  masterEnded: boolean,
+  masterPaused: boolean,
+  isPlaying: boolean,
+): PlaybackTransition {
+  if (!isPlaying) return 'keep';
+  if (masterEnded) return 'finish';
+  if (masterPaused) return 'stop';
+  return 'keep';
+}
+
 /**
  * Drive two audio elements in lockstep with a continuous crossfade between
  * them. mix = 0 plays only the original (noisy) track, mix = 1 plays only
@@ -66,6 +86,8 @@ export function useCrossfadePlayback(
   const rafRef = useRef<number>(0);
   const lastReportedTimeRef = useRef<number>(0);
   const mixRef = useRef<number>(0.5);
+  // Logical playback intent, readable from event handlers without stale closures
+  const isPlayingRef = useRef<boolean>(false);
   const [state, setState] = useState<CrossfadeState>({
     isPlaying: false,
     currentTime: 0,
@@ -114,11 +136,37 @@ export function useCrossfadePlayback(
       : { master: original, slave: enhanced };
   }, []);
 
+  /** Recompute logical playback from the authoritative clock's actual state.
+
+      Idempotent: a self-induced pause has already cleared isPlayingRef, so
+      the resulting element pause events resolve to keep.
+  */
+  const reconcilePlayback = useCallback((): void => {
+    const { master } = getMaster();
+    if (!master) return;
+    const transition = resolvePlaybackTransition(
+      master.ended,
+      master.paused,
+      isPlayingRef.current,
+    );
+    if (transition === 'keep') return;
+    isPlayingRef.current = false;
+    originalRef.current?.pause();
+    enhancedRef.current?.pause();
+    cancelAnimationFrame(rafRef.current);
+    if (transition === 'finish') {
+      setState(prev => ({ ...prev, isPlaying: false, currentTime: prev.duration }));
+    } else {
+      setState(prev => ({ ...prev, isPlaying: false, currentTime: master.currentTime }));
+    }
+  }, [getMaster]);
+
   useEffect(() => {
     const original = originalRef.current;
     const enhanced = enhancedRef.current;
     if (!original || !enhanced || !originalSrc || !enhancedSrc) return;
 
+    isPlayingRef.current = false;
     setState(prev => ({
       ...prev,
       isPlaying: false,
@@ -148,57 +196,63 @@ export function useCrossfadePlayback(
     const onEnhancedError = (): void => {
       setState(prev => ({ ...prev, enhancedReady: false }));
     };
-    const onEnded = (e: Event): void => {
-      // Looping elements never fire ended; only the master's end stops playback
-      const { master } = getMaster();
-      if (e.target !== master) return;
-      original.pause();
-      enhanced.pause();
-      cancelAnimationFrame(rafRef.current);
-      setState(prev => ({ ...prev, isPlaying: false, currentTime: prev.duration }));
+    // ended and pause events are signals to recompute logical state; the
+    // event target itself carries no authority (looping elements never
+    // fire ended, and a background-track pause must not stop playback)
+    const onPlaybackSignal = (): void => {
+      reconcilePlayback();
     };
 
     original.addEventListener('loadedmetadata', onMeta);
     enhanced.addEventListener('loadedmetadata', onMeta);
     original.addEventListener('error', onOriginalError);
     enhanced.addEventListener('error', onEnhancedError);
-    original.addEventListener('ended', onEnded);
-    enhanced.addEventListener('ended', onEnded);
+    original.addEventListener('ended', onPlaybackSignal);
+    enhanced.addEventListener('ended', onPlaybackSignal);
+    original.addEventListener('pause', onPlaybackSignal);
+    enhanced.addEventListener('pause', onPlaybackSignal);
 
     return () => {
       original.removeEventListener('loadedmetadata', onMeta);
       enhanced.removeEventListener('loadedmetadata', onMeta);
       original.removeEventListener('error', onOriginalError);
       enhanced.removeEventListener('error', onEnhancedError);
-      original.removeEventListener('ended', onEnded);
-      enhanced.removeEventListener('ended', onEnded);
+      original.removeEventListener('ended', onPlaybackSignal);
+      enhanced.removeEventListener('ended', onPlaybackSignal);
+      original.removeEventListener('pause', onPlaybackSignal);
+      enhanced.removeEventListener('pause', onPlaybackSignal);
+      isPlayingRef.current = false;
       original.pause();
       enhanced.pause();
       cancelAnimationFrame(rafRef.current);
     };
-  }, [originalSrc, enhancedSrc, loop, applyMix, getMaster]);
+  }, [originalSrc, enhancedSrc, loop, applyMix, reconcilePlayback]);
 
   const startTicking = useCallback((): void => {
     cancelAnimationFrame(rafRef.current);
     const tick = (): void => {
       const { master, slave } = getMaster();
-      if (master && !master.paused) {
-        if (Math.abs(master.currentTime - lastReportedTimeRef.current) > TIME_UPDATE_THRESHOLD) {
-          lastReportedTimeRef.current = master.currentTime;
-          setState(prev => ({ ...prev, currentTime: master.currentTime }));
-        }
-        // Bound clock drift, but never stutter the audible track
-        if (slave) {
-          const drift = Math.abs(slave.currentTime - master.currentTime);
-          if (shouldResyncSlave(drift, slave.volume)) {
-            slave.currentTime = master.currentTime;
-          }
-        }
-        rafRef.current = requestAnimationFrame(tick);
+      // A paused or ended master (blend flipped onto a dead track, browser
+      // interruption, natural end) must reconcile state, never exit silently
+      if (!master || master.paused || master.ended) {
+        reconcilePlayback();
+        return;
       }
+      if (Math.abs(master.currentTime - lastReportedTimeRef.current) > TIME_UPDATE_THRESHOLD) {
+        lastReportedTimeRef.current = master.currentTime;
+        setState(prev => ({ ...prev, currentTime: master.currentTime }));
+      }
+      // Bound clock drift, but never stutter the audible track
+      if (slave) {
+        const drift = Math.abs(slave.currentTime - master.currentTime);
+        if (shouldResyncSlave(drift, slave.volume)) {
+          slave.currentTime = master.currentTime;
+        }
+      }
+      rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
-  }, [getMaster]);
+  }, [getMaster, reconcilePlayback]);
 
   const play = useCallback((): void => {
     const { master, slave } = getMaster();
@@ -210,19 +264,25 @@ export function useCrossfadePlayback(
     const attempts = [master.play()];
     if (slave) attempts.push(slave.play());
     Promise.allSettled(attempts).then(results => {
+      // Playback counts as started only if the audible element is playing
       if (results[0].status === 'fulfilled') {
+        isPlayingRef.current = true;
         setState(prev => ({ ...prev, isPlaying: true }));
         startTicking();
       } else {
+        isPlayingRef.current = false;
         setState(prev => ({ ...prev, isPlaying: false }));
       }
     });
   }, [getMaster, startTicking]);
 
   const pause = useCallback((): void => {
+    // Clear intent before pausing the elements so their pause events
+    // reconcile to keep instead of re-running the stop transition
+    isPlayingRef.current = false;
+    cancelAnimationFrame(rafRef.current);
     originalRef.current?.pause();
     enhancedRef.current?.pause();
-    cancelAnimationFrame(rafRef.current);
     setState(prev => ({ ...prev, isPlaying: false }));
   }, []);
 

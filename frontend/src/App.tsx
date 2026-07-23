@@ -131,6 +131,20 @@ export default function HarmonyRestorer(): React.JSX.Element {
   const [enhancedBlobUrl, setEnhancedBlobUrl] = useState<string | null>(null);
   const [enhancedPeaks, setEnhancedPeaks] = useState<Float32Array | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // Live object URLs owned by this component. The unmount cleanup reads this
+  // ref, so it sees current values instead of the first render's closure.
+  const liveBlobUrlsRef = useRef<Set<string>>(new Set());
+
+  const trackBlobUrl = useCallback((url: string): string => {
+    liveBlobUrlsRef.current.add(url);
+    return url;
+  }, []);
+
+  const revokeBlobUrl = useCallback((url: string | null): void => {
+    if (!url) return;
+    URL.revokeObjectURL(url);
+    liveBlobUrlsRef.current.delete(url);
+  }, []);
 
   const { waveform } = useAudioDecoder(file);
   const step = deriveStep(status.status);
@@ -167,8 +181,8 @@ export default function HarmonyRestorer(): React.JSX.Element {
           decodeBlobToWaveform(cleanBlob),
         ]);
         if (cancelled) return;
-        const noisyUrl = URL.createObjectURL(noisyBlob);
-        const cleanUrl = URL.createObjectURL(cleanBlob);
+        const noisyUrl = trackBlobUrl(URL.createObjectURL(noisyBlob));
+        const cleanUrl = trackBlobUrl(URL.createObjectURL(cleanBlob));
         urls.push(noisyUrl, cleanUrl);
         setDemo({ noisyUrl, cleanUrl, noisyPeaks: noisyWf.peaks, cleanPeaks: cleanWf.peaks });
       } catch {
@@ -179,26 +193,26 @@ export default function HarmonyRestorer(): React.JSX.Element {
     load();
     return () => {
       cancelled = true;
-      urls.forEach(u => URL.revokeObjectURL(u));
+      urls.forEach(revokeBlobUrl);
     };
-  }, []);
+  }, [trackBlobUrl, revokeBlobUrl]);
 
-  // Cleanup blob URLs on unmount
+  // Cleanup every live blob URL on unmount; the registry ref always holds
+  // current values, unlike state captured by this effect's closure
   useEffect(() => {
+    const registry = liveBlobUrlsRef.current;
     return () => {
       abortRef.current?.abort();
-      if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
-      if (originalBlobUrl) URL.revokeObjectURL(originalBlobUrl);
-      if (enhancedBlobUrl) URL.revokeObjectURL(enhancedBlobUrl);
+      registry.forEach(u => URL.revokeObjectURL(u));
+      registry.clear();
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const resetState = useCallback((): void => {
     abortRef.current?.abort();
-    if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
-    if (originalBlobUrl) URL.revokeObjectURL(originalBlobUrl);
-    if (enhancedBlobUrl) URL.revokeObjectURL(enhancedBlobUrl);
+    revokeBlobUrl(previewBlobUrl);
+    revokeBlobUrl(originalBlobUrl);
+    revokeBlobUrl(enhancedBlobUrl);
     setFile(null);
     setStatus(INITIAL_STATUS);
     setIsProcessing(false);
@@ -206,7 +220,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
     setOriginalBlobUrl(null);
     setEnhancedBlobUrl(null);
     setEnhancedPeaks(null);
-  }, [previewBlobUrl, originalBlobUrl, enhancedBlobUrl]);
+  }, [revokeBlobUrl, previewBlobUrl, originalBlobUrl, enhancedBlobUrl]);
 
   const processAudio = useCallback(async (): Promise<void> => {
     if (!file) return;
@@ -235,14 +249,14 @@ export default function HarmonyRestorer(): React.JSX.Element {
       const downloadUrl = getDownloadUrl(result.job_id);
 
       // Create blob URL from original file for in-browser playback
-      const origUrl = URL.createObjectURL(file);
+      const origUrl = trackBlobUrl(URL.createObjectURL(file));
       setOriginalBlobUrl(origUrl);
 
       try {
         const res = await fetch(downloadUrl, { signal: controller.signal });
         if (!res.ok) throw new Error(`Download failed: ${res.status}`);
         const blob = await res.blob();
-        const enhUrl = URL.createObjectURL(blob);
+        const enhUrl = trackBlobUrl(URL.createObjectURL(blob));
         setEnhancedBlobUrl(enhUrl);
 
         try {
@@ -276,7 +290,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
     } finally {
       setIsProcessing(false);
     }
-  }, [file, pausePreviewPlayback]);
+  }, [file, pausePreviewPlayback, trackBlobUrl]);
 
   const handleFileSelect = useCallback((selectedFile: File): void => {
     if (isProcessing) {
@@ -285,17 +299,25 @@ export default function HarmonyRestorer(): React.JSX.Element {
     }
     // The demo strip unmounts on selection; its looping audio must stop too
     pauseDemoPlayback();
-    if (previewBlobUrl) URL.revokeObjectURL(previewBlobUrl);
-    if (originalBlobUrl) URL.revokeObjectURL(originalBlobUrl);
-    if (enhancedBlobUrl) URL.revokeObjectURL(enhancedBlobUrl);
+    revokeBlobUrl(previewBlobUrl);
+    revokeBlobUrl(originalBlobUrl);
+    revokeBlobUrl(enhancedBlobUrl);
     setFile(selectedFile);
-    setPreviewBlobUrl(URL.createObjectURL(selectedFile));
+    setPreviewBlobUrl(trackBlobUrl(URL.createObjectURL(selectedFile)));
     setDownloadFormat(defaultFormatFor(selectedFile.name));
     setStatus(INITIAL_STATUS);
     setOriginalBlobUrl(null);
     setEnhancedBlobUrl(null);
     setEnhancedPeaks(null);
-  }, [isProcessing, pauseDemoPlayback, previewBlobUrl, originalBlobUrl, enhancedBlobUrl]);
+  }, [
+    isProcessing,
+    pauseDemoPlayback,
+    revokeBlobUrl,
+    trackBlobUrl,
+    previewBlobUrl,
+    originalBlobUrl,
+    enhancedBlobUrl,
+  ]);
 
   const handleTrySample = useCallback(async (): Promise<void> => {
     setIsSampleLoading(true);

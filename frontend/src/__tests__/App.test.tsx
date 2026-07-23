@@ -30,8 +30,10 @@ vi.mock('../components/TapeStrip', () => ({
 const mockFetch = vi.fn();
 globalThis.fetch = mockFetch;
 
-// Mock URL.createObjectURL / revokeObjectURL (jsdom stubs)
-globalThis.URL.createObjectURL = vi.fn(() => 'blob:mock-url');
+// Mock URL.createObjectURL / revokeObjectURL (jsdom stubs); unique URLs so
+// revocation can be asserted per created URL
+let blobUrlCounter = 0;
+globalThis.URL.createObjectURL = vi.fn(() => `blob:mock-${++blobUrlCounter}`);
 globalThis.URL.revokeObjectURL = vi.fn();
 
 import { uploadAudio, pollUntilDone } from '../api/client';
@@ -155,6 +157,27 @@ describe('App (HarmonyRestorer)', () => {
     await selectFileWithFakeTimers('my_track.wav');
 
     expect(screen.getByText('my_track.wav')).toBeInTheDocument();
+  });
+
+  it('revokes every tracked blob URL on unmount', async () => {
+    vi.useFakeTimers();
+    const { unmount } = render(<App />);
+    await selectFileWithFakeTimers();
+    vi.useRealTimers();
+
+    const created = (
+      globalThis.URL.createObjectURL as ReturnType<typeof vi.fn>
+    ).mock.results.map(r => r.value as string);
+    expect(created.length).toBeGreaterThan(0);
+
+    unmount();
+
+    const revoked = (
+      globalThis.URL.revokeObjectURL as ReturnType<typeof vi.fn>
+    ).mock.calls.map(c => c[0] as string);
+    for (const url of created) {
+      expect(revoked).toContain(url);
+    }
   });
 
   it('offers original playback after selecting a file', async () => {
