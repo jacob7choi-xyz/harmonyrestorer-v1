@@ -227,6 +227,69 @@ def test_download_filename_falls_back_when_nothing_safe_remains(client, mock_den
     assert "audio_restored.wav" in d.headers["content-disposition"]
 
 
+def test_download_rejects_unknown_format(client, mock_denoiser) -> None:
+    """Formats outside the allowlist are rejected before any file access."""
+    r = client.post(
+        "/api/v1/denoise",
+        files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
+    )
+    d = client.get(f"/api/v1/download/{r.json()['job_id']}?format=exe")
+
+    assert d.status_code == 400
+    assert "Unsupported format" in d.json()["detail"]
+
+
+def test_download_converts_to_requested_format(client, mock_denoiser, monkeypatch) -> None:
+    """A non-wav format is served with matching name and media type."""
+    from app.routes import denoise as denoise_module
+
+    def fake_transcode(wav_path, fmt):  # type: ignore[no-untyped-def]
+        converted = wav_path.with_suffix(f".{fmt}")
+        converted.write_bytes(b"encoded")
+        return converted
+
+    monkeypatch.setattr(denoise_module, "transcode_output", fake_transcode)
+
+    r = client.post(
+        "/api/v1/denoise",
+        files={"file": ("song.wav", SMALL_WAV, "audio/wav")},
+    )
+    d = client.get(f"/api/v1/download/{r.json()['job_id']}?format=mp3")
+
+    assert d.status_code == 200
+    assert d.headers["content-type"].startswith("audio/mpeg")
+    assert "song_restored.mp3" in d.headers["content-disposition"]
+
+
+def test_download_conversion_failure_returns_500_and_releases_guard(
+    client, mock_denoiser, monkeypatch
+) -> None:
+    """A failed conversion reports 500 and does not leave the job download-locked."""
+    from app.routes import denoise as denoise_module
+    from app.services.jobs import job_manager
+    from app.services.transcode import TranscodeError
+
+    def failing_transcode(wav_path, fmt):  # type: ignore[no-untyped-def]
+        if fmt == "wav":
+            return wav_path
+        raise TranscodeError("encoder unavailable")
+
+    monkeypatch.setattr(denoise_module, "transcode_output", failing_transcode)
+
+    r = client.post(
+        "/api/v1/denoise",
+        files={"file": ("song.wav", SMALL_WAV, "audio/wav")},
+    )
+    job_id = r.json()["job_id"]
+    d = client.get(f"/api/v1/download/{job_id}?format=ogg")
+
+    assert d.status_code == 500
+    assert d.json()["detail"] == "Format conversion failed"
+    # Guard released: a wav download still succeeds afterwards
+    assert job_id not in job_manager._downloading
+    assert client.get(f"/api/v1/download/{job_id}").status_code == 200
+
+
 def test_status_response_does_not_leak_download_stem(client, mock_denoiser) -> None:
     """download_stem is internal-only, like client_ip."""
     r = client.post(

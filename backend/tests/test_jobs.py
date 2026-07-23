@@ -91,6 +91,28 @@ def test_cleanup_returns_zero_when_nothing_expired():
     assert mgr.cleanup_expired() == 0
 
 
+def test_cleanup_deletes_all_cached_format_variants() -> None:
+    """Expiry removes the WAV and every cached download conversion beside it."""
+    from app.config import settings
+
+    mgr = _make_manager_with_jobs()
+    wav = settings.processed_dir / "old_denoised.wav"
+    mp3 = settings.processed_dir / "old_denoised.mp3"
+    flac = settings.processed_dir / "old_denoised.flac"
+    for f in (wav, mp3, flac):
+        f.write_bytes(b"x")
+
+    try:
+        removed = mgr.cleanup_expired()
+        assert removed == 1
+        assert not wav.exists()
+        assert not mp3.exists()
+        assert not flac.exists()
+    finally:
+        for f in (wav, mp3, flac):
+            f.unlink(missing_ok=True)
+
+
 # --- job_counts ---
 
 

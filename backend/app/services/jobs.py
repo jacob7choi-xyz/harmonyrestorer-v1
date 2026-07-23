@@ -219,10 +219,11 @@ class JobManager:
             for job_id in expired_ids:
                 del self._jobs[job_id]
 
-        # Delete files outside the lock to avoid blocking other operations
+        # Delete files outside the lock to avoid blocking other operations.
+        # The glob also removes any cached download-format conversions.
         for job_id in expired_ids:
-            output_file = settings.processed_dir / f"{job_id}_denoised.wav"
-            output_file.unlink(missing_ok=True)
+            for output_file in settings.processed_dir.glob(f"{job_id}_denoised.*"):
+                output_file.unlink(missing_ok=True)
 
         if expired_ids:
             logger.info("Cleaned up %d expired job(s)", len(expired_ids))

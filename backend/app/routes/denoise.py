@@ -12,7 +12,7 @@ from pathlib import Path
 import audioread
 import librosa
 import soundfile as sf
-from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
@@ -21,6 +21,7 @@ from app.config import settings
 from app.schemas import DenoiseUploadResponse, JobStatus, JobStatusEnum
 from app.services.admission import InferenceAdmission
 from app.services.jobs import IPJobCapError, JobCapError, job_manager
+from app.services.transcode import DOWNLOAD_FORMATS, TranscodeError, transcode_output
 
 logger = logging.getLogger(__name__)
 
@@ -317,9 +318,21 @@ async def get_job_status(job_id: str) -> JobStatus:
 
 
 @router.get("/download/{job_id}")
-async def download_audio(job_id: str) -> FileResponse:
-    """Download denoised audio."""
+async def download_audio(job_id: str, format: str = Query("wav")) -> FileResponse:
+    """Download restored audio in the requested format.
+
+    The restoration is always rendered at 16kHz mono; the format choice
+    changes the container and encoding, not the audio resolution. Non-WAV
+    formats are converted on first request and cached for the job's lifetime.
+    """
     _validate_job_id(job_id)
+    fmt = format.strip().lower()
+    if fmt not in DOWNLOAD_FORMATS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported format. Choose one of: {', '.join(sorted(DOWNLOAD_FORMATS))}",
+        )
+
     job = job_manager.get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -336,10 +349,16 @@ async def download_audio(job_id: str) -> FileResponse:
         if not output_path.exists():
             raise HTTPException(status_code=404, detail="File not found")
 
+        try:
+            serve_path = await run_in_threadpool(transcode_output, output_path, fmt)
+        except TranscodeError as err:
+            logger.error("Download conversion failed for %s: %s", job_id, err)
+            raise HTTPException(status_code=500, detail="Format conversion failed") from err
+
         return FileResponse(
-            path=output_path,
-            filename=f"{job.download_stem}_restored.wav",
-            media_type="audio/wav",
+            path=serve_path,
+            filename=f"{job.download_stem}_restored.{fmt}",
+            media_type=DOWNLOAD_FORMATS[fmt],
             background=BackgroundTask(job_manager.unmark_downloading, job_id),
         )
     except Exception:
