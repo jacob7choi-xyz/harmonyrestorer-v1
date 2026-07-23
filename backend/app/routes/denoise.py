@@ -285,7 +285,16 @@ async def denoise_audio(
                 detail="Server is busy. Try again later.",
             ) from exc
 
-        task = asyncio.create_task(_run_inference(job_id, input_path))
+        try:
+            task = asyncio.create_task(_run_inference(job_id, input_path))
+        except Exception as err:
+            # Transaction rollback at the ownership-transfer boundary: the
+            # client never received this job_id, so no record or file may
+            # survive; the outer finally returns the admission slot
+            job_manager.discard_job(job_id)
+            input_path.unlink(missing_ok=True)
+            logger.exception("Failed to start inference lifecycle for %s", job_id)
+            raise HTTPException(status_code=500, detail="Failed to start processing") from err
         slot_transferred = True
         _inference_tasks.add(task)
         task.add_done_callback(_observe_inference_task)

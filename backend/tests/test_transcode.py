@@ -61,7 +61,7 @@ class TestTranscodeOutput:
             transcode_output(wav_file, "mp3")
 
         assert not wav_file.with_suffix(".mp3").exists()
-        assert [p for p in wav_file.parent.iterdir()] == [wav_file]
+        assert list(wav_file.parent.iterdir()) == [wav_file]
 
     def test_timeout_raises_and_leaves_no_artifacts(self, wav_file, monkeypatch) -> None:
         def hanging_run(argv, **kwargs):  # type: ignore[no-untyped-def]
@@ -71,7 +71,7 @@ class TestTranscodeOutput:
         with pytest.raises(TranscodeError, match="timed out"):
             transcode_output(wav_file, "mp3")
 
-        assert [p for p in wav_file.parent.iterdir()] == [wav_file]
+        assert list(wav_file.parent.iterdir()) == [wav_file]
 
 
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")

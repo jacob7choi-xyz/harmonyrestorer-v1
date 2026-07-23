@@ -227,6 +227,44 @@ def test_download_filename_falls_back_when_nothing_safe_remains(client, mock_den
     assert "audio_restored.wav" in d.headers["content-disposition"]
 
 
+def test_lifecycle_start_failure_rolls_back_the_job_transaction(
+    client, mock_audio_duration, monkeypatch
+) -> None:
+    """A create_task failure at the ownership-transfer boundary leaves nothing.
+
+    The client never received the job_id, so this is a failed transaction,
+    not a failed job: no record, no input file, and the admission slot is
+    restored for the next upload.
+    """
+    import asyncio as asyncio_module
+
+    from app.routes import denoise as denoise_module
+    from app.services.jobs import job_manager
+
+    real_create_task = asyncio_module.create_task
+
+    def selective_boom(coro, **kwargs):  # type: ignore[no-untyped-def]
+        if getattr(coro, "__name__", "") == "_run_inference":
+            coro.close()
+            raise RuntimeError("loop unavailable")
+        return real_create_task(coro, **kwargs)
+
+    monkeypatch.setattr(denoise_module.asyncio, "create_task", selective_boom)
+
+    files_before = set(settings.upload_dir.iterdir())
+    r = client.post(
+        "/api/v1/denoise",
+        files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
+    )
+
+    assert r.status_code == 500
+    assert job_manager._jobs == {}
+    assert set(settings.upload_dir.iterdir()) == files_before
+    # Admission capacity restored
+    assert denoise_module.admission.try_acquire() is True
+    denoise_module.admission.release()
+
+
 def test_download_rejects_unknown_format(client, mock_denoiser) -> None:
     """Formats outside the allowlist are rejected before any file access."""
     r = client.post(

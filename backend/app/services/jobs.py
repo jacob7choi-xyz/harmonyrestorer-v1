@@ -2,6 +2,7 @@
 
 import logging
 import threading
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -26,6 +27,19 @@ _RESOURCE_STATUSES: frozenset[JobStatusEnum] = frozenset(
 )
 
 
+@dataclass
+class _DownloadGuard:
+    """Reference-counted guard keeping a job's files alive during downloads.
+
+    A single marker is not enough: with concurrent downloads of different
+    formats, the first to finish would drop the guard while the second is
+    still streaming, letting cleanup unlink files under it.
+    """
+
+    count: int
+    started_at: datetime
+
+
 class JobManager:
     """Manages denoising jobs and their lifecycle."""
 
@@ -33,7 +47,7 @@ class JobManager:
         self._jobs: dict[str, JobStatus] = {}
         self._denoiser: DenoiserService | OpGANDenoiserService | None = None
         self._lock = threading.Lock()
-        self._downloading: dict[str, datetime] = {}
+        self._downloading: dict[str, _DownloadGuard] = {}
 
     def _get_denoiser(self) -> DenoiserService | OpGANDenoiserService:
         """Lazy-load the denoiser singleton based on configured engine."""
@@ -127,25 +141,59 @@ class JobManager:
             return self._jobs.get(job_id)
 
     def mark_downloading(self, job_id: str) -> bool:
-        """Mark a job as actively being downloaded. Returns False if job gone."""
+        """Take a download hold on a job. Returns False if the job is gone.
+
+        Holds are reference counted so concurrent downloads of different
+        formats each keep the files alive independently. Acquisition after
+        cleanup has claimed the job is impossible: cleanup removes the job
+        record under the same lock, and this method refuses missing jobs.
+        """
         with self._lock:
             if job_id not in self._jobs:
                 return False
-            self._downloading[job_id] = datetime.now(UTC)
+            guard = self._downloading.get(job_id)
+            if guard is None:
+                self._downloading[job_id] = _DownloadGuard(count=1, started_at=datetime.now(UTC))
+            else:
+                guard.count += 1
+                guard.started_at = datetime.now(UTC)
             return True
 
     def unmark_downloading(self, job_id: str) -> None:
-        """Remove download guard from a job."""
+        """Release one download hold; the guard drops only at zero holds."""
         with self._lock:
-            self._downloading.pop(job_id, None)
+            guard = self._downloading.get(job_id)
+            if guard is None:
+                return
+            guard.count -= 1
+            if guard.count <= 0:
+                del self._downloading[job_id]
+
+    def discard_job(self, job_id: str) -> None:
+        """Remove a job record that was never exposed to any client.
+
+        Rollback for a failed job-creation transaction, not a job outcome:
+        call only before the job_id has been returned in any response.
+        """
+        with self._lock:
+            self._jobs.pop(job_id, None)
 
     def process(self, job_id: str, input_path: Path) -> None:
-        """Run denoising. Called as a background task."""
+        """Run denoising to completion inside the upload request lifecycle.
+
+        Called from the inference lifecycle task via a worker thread.
+        Converts any processing failure into a FAILED job status instead of
+        raising: this is an intentional, documented fail-open boundary so
+        one bad file can never take down the pipeline, and the caller reads
+        the outcome from the job record.
+        """
         start_time = datetime.now(UTC)
+        intermediate_output: Path | None = None
         with self._lock:
             job = self._jobs.get(job_id)
             if job is None:
                 logger.error("Job %s vanished before processing started", job_id)
+                input_path.unlink(missing_ok=True)
                 return
 
         try:
@@ -159,6 +207,7 @@ class JobManager:
 
             denoiser = self._get_denoiser()
             output_path = denoiser.denoise(input_path)
+            intermediate_output = Path(output_path)
 
             final_path = settings.processed_dir / f"{job_id}_denoised.wav"
             processing_time = (datetime.now(UTC) - start_time).total_seconds()
@@ -187,6 +236,11 @@ class JobManager:
                     job.completed_at = datetime.now(UTC)
         finally:
             input_path.unlink(missing_ok=True)
+            # Invariant: the intermediate output never survives process().
+            # After a successful rename this path no longer exists; after
+            # any failure it must not linger (cleanup only globs _denoised.*)
+            if intermediate_output is not None:
+                intermediate_output.unlink(missing_ok=True)
 
     def cleanup_expired(self) -> int:
         """Remove finished jobs older than TTL and delete their output files.
@@ -201,8 +255,8 @@ class JobManager:
             # Evict stale download markers left by disconnected clients
             stale_markers = [
                 job_id
-                for job_id, started_at in self._downloading.items()
-                if (now - started_at).total_seconds() > settings.download_ttl_seconds
+                for job_id, guard in self._downloading.items()
+                if (now - guard.started_at).total_seconds() > settings.download_ttl_seconds
             ]
             for job_id in stale_markers:
                 del self._downloading[job_id]

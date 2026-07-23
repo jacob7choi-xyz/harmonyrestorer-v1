@@ -91,6 +91,72 @@ def test_cleanup_returns_zero_when_nothing_expired():
     assert mgr.cleanup_expired() == 0
 
 
+def test_download_guard_refcount_protects_concurrent_downloads() -> None:
+    """Two holds, one release: cleanup must not claim; last release: it may.
+
+    Pins the B3 regression where a single marker let the first finished
+    download strip protection from a second still-streaming one.
+    """
+    mgr = _make_manager_with_jobs()
+
+    assert mgr.mark_downloading("old") is True
+    assert mgr.mark_downloading("old") is True
+
+    mgr.unmark_downloading("old")
+    assert mgr.cleanup_expired() == 0
+    assert mgr.get_job("old") is not None
+
+    mgr.unmark_downloading("old")
+    assert mgr.cleanup_expired() == 1
+    assert mgr.get_job("old") is None
+
+    # After cleanup claims the job, acquisition is impossible
+    assert mgr.mark_downloading("old") is False
+
+
+def test_process_failure_removes_intermediate_output(tmp_path, monkeypatch) -> None:
+    """A failed final rename marks the job FAILED and leaves no orphan file.
+
+    The intermediate output is not matched by the cleanup glob, so it must
+    never survive process().
+    """
+    from unittest.mock import MagicMock
+
+    from app.config import settings
+
+    mgr = JobManager()
+    mgr.create_job("orphan-test")
+
+    input_file = tmp_path / "orphan-test.wav"
+    input_file.write_bytes(b"RIFF" + b"\x00" * 16)
+
+    intermediate = settings.processed_dir / "orphan-test_opgan.wav"
+    denoiser = MagicMock()
+
+    def fake_denoise(path):  # type: ignore[no-untyped-def]
+        intermediate.write_bytes(b"RIFF" + b"\x00" * 16)
+        return intermediate
+
+    denoiser.denoise.side_effect = fake_denoise
+    mgr._denoiser = denoiser
+
+    # Force the final rename to fail: the destination is a directory
+    final_path = settings.processed_dir / "orphan-test_denoised.wav"
+    final_path.mkdir()
+    try:
+        mgr.process("orphan-test", input_file)
+
+        job = mgr.get_job("orphan-test")
+        assert job is not None
+        assert job.status == JobStatusEnum.FAILED
+        assert not intermediate.exists()
+        assert not input_file.exists()
+    finally:
+        final_path.rmdir()
+        intermediate.unlink(missing_ok=True)
+        mgr._denoiser = None
+
+
 def test_cleanup_deletes_all_cached_format_variants() -> None:
     """Expiry removes the WAV and every cached download conversion beside it."""
     from app.config import settings
@@ -149,8 +215,9 @@ def test_process_sets_failed_on_denoiser_error(tmp_path):
     assert job.progress == -1
 
 
-def test_process_handles_vanished_job(tmp_path):
-    """If a job is removed before processing starts, process() exits cleanly."""
+def test_process_handles_vanished_job(tmp_path) -> None:
+    """If a job is removed before processing starts, process() exits cleanly
+    and still removes the input file."""
     mgr = JobManager()
     input_file = tmp_path / "input.wav"
     input_file.write_bytes(b"fake audio")
@@ -161,6 +228,7 @@ def test_process_handles_vanished_job(tmp_path):
 
     # Should not raise
     mgr.process("vanish-job", input_file)
+    assert not input_file.exists()
 
 
 # --- download guard ---
@@ -322,8 +390,11 @@ def test_cleanup_evicts_stale_downloading_job() -> None:
         created_at=datetime.now(UTC) - timedelta(hours=2),
         completed_at=datetime.now(UTC) - timedelta(hours=2),
     )
-    mgr._downloading["stale-dl"] = datetime.now(UTC) - timedelta(
-        seconds=settings.download_ttl_seconds + 1
+    from app.services.jobs import _DownloadGuard
+
+    mgr._downloading["stale-dl"] = _DownloadGuard(
+        count=1,
+        started_at=datetime.now(UTC) - timedelta(seconds=settings.download_ttl_seconds + 1),
     )
     removed = mgr.cleanup_expired()
     assert removed == 1
