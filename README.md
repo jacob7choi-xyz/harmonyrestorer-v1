@@ -5,7 +5,7 @@ AI-powered audio denoising. Upload noisy audio, get clean audio back.
 - **Model**: Custom-trained OpGAN (1D Operational GAN), with UVR-DeNoise as fallback via [audio-separator](https://github.com/karaokenerds/python-audio-separator)
 - **Formats**: WAV, MP3, FLAC, OGG, M4A, AAC (max 50 MB, 10 minutes)
 - **Stack**: FastAPI + React/TypeScript, Docker-ready
-- **Tests**: 399 passing (backend + dataset 315, frontend 84)
+- **Tests**: 462 passing (backend + dataset 359, frontend 103)
 
 Live at [harmonyrestorer.online](https://harmonyrestorer.online).
 
@@ -39,9 +39,11 @@ curl -X POST http://localhost:8000/api/v1/denoise -F "file=@audio.wav"
 # Check status
 curl http://localhost:8000/api/v1/status/{job_id}
 
-# Download result
-curl -O http://localhost:8000/api/v1/download/{job_id}
+# Download result (format: wav, mp3, flac, ogg, or m4a; default wav)
+curl -O "http://localhost:8000/api/v1/download/{job_id}?format=mp3"
 ```
+
+Processing runs synchronously inside the upload request; the response carries the terminal job status, and the status endpoint exists for compatibility with polling clients. Restored audio is always rendered at 16 kHz mono, the model's native resolution; the format choice changes container and encoding only. Downloads are named after the uploaded file with a `_restored` suffix.
 
 > **Note:** Interactive docs are disabled by default. Set `ENABLE_DOCS=true` in `.env` to enable `/api/docs` and `/api/redoc` for local development.
 
@@ -64,15 +66,18 @@ backend/app/
 ├── services/
 │   ├── opgan_denoiser.py  # OpGAN inference service (default)
 │   ├── denoiser.py        # UVR wrapper, lazy model loading (fallback)
-│   └── jobs.py            # JobManager, background processing
+│   ├── admission.py       # Fail-fast inference admission (one at a time)
+│   ├── transcode.py       # Download format conversion, own admission slot
+│   ├── artifacts.py       # Atomic byte budget for the memory-backed filesystem
+│   └── jobs.py            # JobManager; processing runs inside the upload request
 
 frontend/src/
 ├── main.tsx             # Vite entry point
 ├── App.tsx              # Wizard orchestrator (upload/processing/complete)
 ├── types.ts             # Shared types
 ├── api/client.ts        # Backend API calls + polling
-├── hooks/               # useAudioDecoder, useAudioPlayback
-└── components/          # TechnoBackground, UploadArea, WaveformCanvas, AudioPlayer, ComparisonView, ErrorBoundary
+├── hooks/               # useAudioDecoder, useAudioPlayback, useCrossfadePlayback
+└── components/          # TapeStrip, UploadArea, AudioPlayer, WaveformCanvas, ErrorBoundary
 ```
 
 ## Security
@@ -83,6 +88,10 @@ frontend/src/
 - Atomic file writes (temp file + fsync + atomic rename; no partial files on crash)
 - Per-IP and global job caps (MAX_JOBS_PER_IP, MAX_TOTAL_JOBS) with automatic stale cleanup
 - Rate limiting (10 req/min per IP on upload)
+- Inference admission control: one inference at a time, owned by the work's lifecycle so a cancelled request cannot free capacity early; busy uploads fail fast with 503 and Retry-After
+- Transcode admission control: one single-threaded ffmpeg conversion at a time with the same thread-owned lifetime; cached formats bypass conversion entirely
+- Artifact byte budget: persisted plus reserved bytes are bounded atomically (the Cloud Run filesystem is memory-backed, so this bounds instance memory); oversubscription by concurrent producers is impossible by construction
+- Download files protected by a reference-counted guard, so concurrent format downloads cannot lose cleanup protection mid-stream
 - CORS restricted to configured origins (GET and POST only)
 - Error sanitization (no stack traces in responses)
 - API schema (OpenAPI JSON, Swagger UI, ReDoc) disabled by default; enable with `ENABLE_DOCS=true`
@@ -192,7 +201,7 @@ Three before/after/restored triplets for each model. Click to listen in the brow
 - [x] Working denoising API (UVR)
 - [x] Security hardening (P0/P1 complete)
 - [x] React frontend with wizard flow, real waveform, audio playback, before/after comparison
-- [x] Frontend redesign: animated canvas background, blue accent, social footer, 84 tests
+- [x] Frontend redesign: aurora tape strip, live A/B crossfade compare, 103 tests
 - [x] Docker + CI/CD
 - [x] Build/acquire paired training dataset (146,200 pairs from 14 composers)
 - [x] Train OpGAN (100 epochs on T4)
