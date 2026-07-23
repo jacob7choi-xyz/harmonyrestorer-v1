@@ -29,6 +29,22 @@ const DRIFT_THRESHOLD = 0.08;
 const TIME_UPDATE_THRESHOLD = 0.03;
 /** Below this volume the element is also muted (covers platforms that ignore volume). */
 const MUTE_FLOOR = 0.02;
+/** Below this volume a track counts as background and is safe to hard-resync. */
+const BACKGROUND_VOLUME = 0.4;
+/** Drift beyond this is corrected even on an audible track. */
+const HARD_DRIFT_LIMIT = 0.5;
+
+
+/** Decide whether the background track's clock may be snapped to the master.
+
+    Seeking is frame-imprecise for compressed formats, so a snapped MP3 can
+    land outside the drift threshold and re-trigger every frame; snapping an
+    audible track therefore produces continuous stutter. Corrections are
+    restricted to quiet tracks unless drift becomes severe. */
+export function shouldResyncSlave(driftSeconds: number, slaveVolume: number): boolean {
+  if (driftSeconds > HARD_DRIFT_LIMIT) return true;
+  return driftSeconds > DRIFT_THRESHOLD && slaveVolume < BACKGROUND_VOLUME;
+}
 
 /**
  * Drive two audio elements in lockstep with a continuous crossfade between
@@ -79,14 +95,24 @@ export function useCrossfadePlayback(
     applyMix();
   }, [applyMix]);
 
-  /** The enhanced element is the clock master; the original follows it. */
+  /** The audible element is the clock master; the background one follows it.
+
+      Seeking the track the listener can hear causes audible stutter, so the
+      master flips with the mix and corrections land on the background track.
+  */
   const getMaster = useCallback((): {
     master: HTMLAudioElement | null;
     slave: HTMLAudioElement | null;
-  } => ({
-    master: enhancedRef.current ?? originalRef.current,
-    slave: enhancedRef.current ? originalRef.current : null,
-  }), []);
+  } => {
+    const original = originalRef.current;
+    const enhanced = enhancedRef.current;
+    if (!original || !enhanced) {
+      return { master: enhanced ?? original, slave: null };
+    }
+    return mixRef.current >= 0.5
+      ? { master: enhanced, slave: original }
+      : { master: original, slave: enhanced };
+  }, []);
 
   useEffect(() => {
     const original = originalRef.current;
@@ -161,9 +187,12 @@ export function useCrossfadePlayback(
           lastReportedTimeRef.current = master.currentTime;
           setState(prev => ({ ...prev, currentTime: master.currentTime }));
         }
-        // Bound clock drift between the two elements
-        if (slave && Math.abs(slave.currentTime - master.currentTime) > DRIFT_THRESHOLD) {
-          slave.currentTime = master.currentTime;
+        // Bound clock drift, but never stutter the audible track
+        if (slave) {
+          const drift = Math.abs(slave.currentTime - master.currentTime);
+          if (shouldResyncSlave(drift, slave.volume)) {
+            slave.currentTime = master.currentTime;
+          }
         }
         rafRef.current = requestAnimationFrame(tick);
       }
