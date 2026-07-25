@@ -22,8 +22,10 @@ interface TapeStripProps {
   /** Playback position 0..1. */
   playhead?: number;
   onSeek?: (fraction: number) => void;
-  /** Continuous mix updates while the divider moves (0 = noisy, 1 = restored). */
-  onMixChange?: (mix: number) => void;
+  /** Divider position updates (0 = all original shown, 1 = all restored shown). */
+  onDividerChange?: (position: number) => void;
+  /** Where the divider starts. 1 marks the whole track as restored. */
+  initialDivider?: number;
   palette?: TapeStripPalette;
   /** Draw ruler tick marks along the top edge. */
   ticks?: boolean;
@@ -171,7 +173,8 @@ export function TapeStrip({
   progress = 0,
   playhead = 0,
   onSeek,
-  onMixChange,
+  onDividerChange,
+  initialDivider = 0.5,
   palette = DEFAULT_PALETTE,
   ticks = false,
   className = '',
@@ -179,13 +182,13 @@ export function TapeStrip({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const thumbRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number>(0);
-  const dividerRef = useRef<number>(0.5);
+  const dividerRef = useRef<number>(initialDivider);
   const draggingRef = useRef<boolean>(false);
   const userInteractedRef = useRef<boolean>(false);
   const playheadRef = useRef<number>(playhead);
   const progressRef = useRef<number>(progress);
   // Settled divider value for aria; updated on drag end and keyboard moves
-  const [dividerSettled, setDividerSettled] = useState(0.5);
+  const [dividerSettled, setDividerSettled] = useState(initialDivider);
 
   useEffect(() => {
     playheadRef.current = playhead;
@@ -205,9 +208,9 @@ export function TapeStrip({
     const clamped = Math.max(0, Math.min(1, value));
     dividerRef.current = clamped;
     syncThumb(clamped);
-    onMixChange?.(clamped);
+    onDividerChange?.(clamped);
     if (settle) setDividerSettled(clamped);
-  }, [onMixChange, syncThumb]);
+  }, [onDividerChange, syncThumb]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -219,11 +222,12 @@ export function TapeStrip({
       const time = now / 1000;
 
       if (mode === 'demo' && !userInteractedRef.current && !reduced) {
-        // Idle sweep advertises the interaction and crossfades while playing
+        // Idle sweep advertises the interaction and alternates the audible
+        // source as it crosses the midpoint, showing off before and after
         const swept = 0.5 + Math.sin(time * SWEEP_SPEED) * SWEEP_RANGE;
         dividerRef.current = swept;
         syncThumb(swept);
-        onMixChange?.(swept);
+        onDividerChange?.(swept);
       }
 
       const divider = mode === 'processing' ? progressRef.current
@@ -260,7 +264,7 @@ export function TapeStrip({
       cancelAnimationFrame(rafRef.current);
       observer.disconnect();
     };
-  }, [mode, noisyPeaks, cleanPeaks, onMixChange, syncThumb, palette, ticks]);
+  }, [mode, noisyPeaks, cleanPeaks, onDividerChange, syncThumb, palette, ticks]);
 
   // Redraw on playhead/progress changes under reduced motion (no RAF loop)
   useEffect(() => {
@@ -326,17 +330,17 @@ export function TapeStrip({
           ref={thumbRef}
           role="slider"
           tabIndex={0}
-          aria-label="Restoration blend"
+          aria-label="Comparison divider"
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={Math.round(dividerSettled * 100)}
-          aria-valuetext={`${Math.round(dividerSettled * 100)}% restored`}
+          aria-valuetext={`Showing ${Math.round(dividerSettled * 100)}% restored waveform`}
           onPointerDown={handleThumbPointerDown}
           onPointerMove={handleThumbPointerMove}
           onPointerUp={handleThumbPointerUp}
           onKeyDown={handleThumbKeyDown}
           className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-7 h-7 rounded-full bg-ink border border-glass-active shadow-lg cursor-ew-resize touch-none flex items-center justify-center"
-          style={{ left: '50%' }}
+          style={{ left: `${initialDivider * 100}%` }}
         >
           <ChevronsLeftRight aria-hidden="true" className="w-3.5 h-3.5" style={{ color: 'var(--color-base)' }} />
         </div>

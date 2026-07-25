@@ -6,7 +6,7 @@ import { TapeStrip, type TapeStripPalette } from './components/TapeStrip';
 import { Analytics } from '@vercel/analytics/react';
 import { useAudioDecoder, decodeBlobToWaveform } from './hooks/useAudioDecoder';
 import { useAudioPlayback } from './hooks/useAudioPlayback';
-import { useCrossfadePlayback } from './hooks/useCrossfadePlayback';
+import { useCrossfadePlayback, type ComparisonSource } from './hooks/useCrossfadePlayback';
 import type { ProcessingStatus, WizardStep } from './types';
 
 const INITIAL_STATUS: ProcessingStatus = {
@@ -100,6 +100,29 @@ function StripLabels({ time }: StripLabelsProps): React.JSX.Element {
   );
 }
 
+interface NowHearingProps {
+  source: ComparisonSource;
+}
+
+/** Names the audible source, so a hard switch never feels like a glitch.
+ *
+ * Announced politely: a screen-reader user dragging the divider gets the
+ * source change the sighted user hears. */
+function NowHearing({ source }: NowHearingProps): React.JSX.Element {
+  const restored = source === 'restored';
+  return (
+    <p
+      aria-live="polite"
+      className="text-[0.65rem] font-semibold uppercase tracking-[0.25em] text-ink-muted"
+    >
+      Hearing{' '}
+      <span className={restored ? 'text-violet-soft' : 'text-amber-soft'}>
+        {restored ? 'Restored' : 'Original'}
+      </span>
+    </p>
+  );
+}
+
 interface PlayButtonProps {
   isPlaying: boolean;
   onClick: () => void;
@@ -152,7 +175,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
   const demoPlayback = useCrossfadePlayback(
     demo?.noisyUrl ?? null,
     demo?.cleanUrl ?? null,
-    { loop: true },
+    { loop: true, initialDivider: 0.5 },
   );
   const resultPlayback = useCrossfadePlayback(originalBlobUrl, enhancedBlobUrl);
   // The selected file stays playable before and during processing; the audio
@@ -452,7 +475,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
                     mode="demo"
                     playhead={demoPlayhead}
                     onSeek={demoPlayback.seek}
-                    onMixChange={demoPlayback.setMix}
+                    onDividerChange={demoPlayback.setDividerPosition}
                     palette={AURORA_PALETTE}
                   />
                 </StripStage>
@@ -464,6 +487,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
                     isPlaying={demoPlayback.state.isPlaying}
                     onClick={handleDemoPlayPause}
                   />
+                  <NowHearing source={demoPlayback.state.activeSource} />
                   <p className="max-w-sm text-center text-xs leading-relaxed text-ink-muted">
                     Bach, degraded to tape-era noise and restored live by the model.
                     Press play, then drag the line to hear the difference.
@@ -598,7 +622,8 @@ export default function HarmonyRestorer(): React.JSX.Element {
                 mode="compare"
                 playhead={resultPlayhead}
                 onSeek={resultPlayback.seek}
-                onMixChange={resultPlayback.setMix}
+                onDividerChange={resultPlayback.setDividerPosition}
+                initialDivider={1}
                 palette={AURORA_PALETTE}
               />
             </StripStage>
@@ -612,6 +637,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
                 onClick={handleResultPlayPause}
                 disabled={!originalBlobUrl && !enhancedBlobUrl}
               />
+              <NowHearing source={resultPlayback.state.activeSource} />
               <p className="max-w-sm text-center text-xs text-ink-muted">
                 Drag the line while it plays to compare your original with the restoration.
               </p>
