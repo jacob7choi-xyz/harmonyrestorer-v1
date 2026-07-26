@@ -22,8 +22,12 @@ interface TapeStripProps {
   /** Playback position 0..1. */
   playhead?: number;
   onSeek?: (fraction: number) => void;
-  /** Divider position updates (0 = all original shown, 1 = all restored shown). */
-  onDividerChange?: (position: number) => void;
+  /** Divider position updates (0 = all original shown, 1 = all restored shown).
+   *
+   * pointerBand is the drag's stability margin as a fraction of the strip,
+   * derived from a fixed pixel distance so pointer jitter near the playhead
+   * does not flip the audible source. Zero for non-pointer movement. */
+  onDividerChange?: (position: number, pointerBand?: number) => void;
   /** Where the divider starts. 1 marks the whole track as restored. */
   initialDivider?: number;
   palette?: TapeStripPalette;
@@ -35,12 +39,12 @@ interface TapeStripProps {
 const BAR_WIDTH = 3;
 const BAR_GAP = 2;
 const MIN_BAR_HEIGHT = 2;
-const SWEEP_SPEED = 0.5;
-const SWEEP_RANGE = 0.35;
 const JITTER_AMOUNT = 0.22;
 const SPECKLE_COUNT = 32;
 const TICK_MINOR_SPACING = 10;
 const TICK_MAJOR_EVERY = 5;
+/** Pointer jitter is spatial, so the drag's stability margin is measured in pixels. */
+const POINTER_DEAD_ZONE_PX = 6;
 
 const DEFAULT_PALETTE: TapeStripPalette = {
   clean: '#9d8bf0',
@@ -208,7 +212,8 @@ export function TapeStrip({
     const clamped = Math.max(0, Math.min(1, value));
     dividerRef.current = clamped;
     syncThumb(clamped);
-    onDividerChange?.(clamped);
+    const width = canvasRef.current?.getBoundingClientRect().width ?? 0;
+    onDividerChange?.(clamped, width > 0 ? POINTER_DEAD_ZONE_PX / width : 0);
     if (settle) setDividerSettled(clamped);
   }, [onDividerChange, syncThumb]);
 
@@ -221,14 +226,9 @@ export function TapeStrip({
     const frame = (now: number): void => {
       const time = now / 1000;
 
-      if (mode === 'demo' && !userInteractedRef.current && !reduced) {
-        // Idle sweep advertises the interaction and alternates the audible
-        // source as it crosses the midpoint, showing off before and after
-        const swept = 0.5 + Math.sin(time * SWEEP_SPEED) * SWEEP_RANGE;
-        dividerRef.current = swept;
-        syncThumb(swept);
-        onDividerChange?.(swept);
-      }
+      /* The divider is moved by the listener alone. Its position determines
+         the audible source, so animating it would either misdescribe what is
+         playing or generate a source transition on every crossing. */
 
       const divider = mode === 'processing' ? progressRef.current
         : mode === 'file' ? 0

@@ -5,8 +5,10 @@ import {
   resolvePlaybackTransition,
   isTargetPlayable,
   isAbortError,
-  sourceForPlayhead,
+  sourceForBoundary,
   AUDIBLE_FLOOR,
+  BOUNDARY_BAND_SECONDS,
+  SWITCH_ACCEPT_TOLERANCE,
   type ComparisonSource,
 } from '../useCrossfadePlayback';
 
@@ -17,11 +19,15 @@ function gainOf(el: HTMLAudioElement): number {
 
 interface FakeControls {
   setTime: (t: number) => void;
+  /** Make seeks land this far from where they were asked to go. */
+  setSeekOffset: (offset: number) => void;
   setEnded: (ended: boolean) => void;
   /** Hold seeks open so a transaction can be interrupted mid-flight. */
   deferSeeks: (defer: boolean) => void;
   releaseSeek: () => void;
   playMock: ReturnType<typeof vi.fn>;
+  /** Outstanding seeked listeners, to prove waiters clean up after themselves. */
+  seekedListeners: () => number;
 }
 
 /**
@@ -42,7 +48,8 @@ function stubMedia(
   let paused = true;
   let ended = false;
   let deferred = false;
-  let pendingSeek: (() => void) | null = null;
+  const pendingSeeks: Array<() => void> = [];
+  let seekOffset = 0;
   let volume = 1;
   let muted = false;
 
@@ -75,11 +82,11 @@ function stubMedia(
     get: () => time,
     set: (v: number) => {
       const land = (): void => {
-        time = v;
+        time = v + seekOffset;
         el.dispatchEvent(new Event('seeked'));
       };
       if (deferred) {
-        pendingSeek = land;
+        pendingSeeks.push(land);
       } else {
         land();
       }
@@ -88,6 +95,18 @@ function stubMedia(
   Object.defineProperty(el, 'duration', { configurable: true, get: () => duration });
   Object.defineProperty(el, 'paused', { configurable: true, get: () => paused });
   Object.defineProperty(el, 'ended', { configurable: true, get: () => ended });
+
+  let seekedListeners = 0;
+  const addListener = el.addEventListener.bind(el);
+  const removeListener = el.removeEventListener.bind(el);
+  el.addEventListener = ((type: string, fn: EventListener) => {
+    if (type === 'seeked') seekedListeners += 1;
+    addListener(type, fn);
+  }) as HTMLAudioElement['addEventListener'];
+  el.removeEventListener = ((type: string, fn: EventListener) => {
+    if (type === 'seeked') seekedListeners -= 1;
+    removeListener(type, fn);
+  }) as HTMLAudioElement['removeEventListener'];
 
   const playMock = vi.fn(() => {
     paused = false;
@@ -103,6 +122,9 @@ function stubMedia(
     setTime: (t: number) => {
       time = t;
     },
+    setSeekOffset: (offset: number) => {
+      seekOffset = offset;
+    },
     setEnded: (v: boolean) => {
       ended = v;
     },
@@ -110,11 +132,10 @@ function stubMedia(
       deferred = v;
     },
     releaseSeek: () => {
-      const seek = pendingSeek;
-      pendingSeek = null;
-      seek?.();
+      pendingSeeks.shift()?.();
     },
     playMock,
+    seekedListeners: () => seekedListeners,
   };
 }
 
@@ -131,18 +152,21 @@ interface Harness {
 function setup(
   initialSource: ComparisonSource = 'restored',
   initialDivider = 1,
+  opts: { loop?: boolean; durations?: [number, number] } = {},
 ): Harness {
+  const { loop = false, durations = [182.12, 182.06] } = opts;
   const violations: string[] = [];
   const original = document.createElement('audio');
   const enhanced = document.createElement('audio');
   // Container padding makes a compressed original run slightly longer
-  const originalCtl = stubMedia(original, 182.12, violations, () => enhanced);
-  const enhancedCtl = stubMedia(enhanced, 182.06, violations, () => original);
+  const originalCtl = stubMedia(original, durations[0], violations, () => enhanced);
+  const enhancedCtl = stubMedia(enhanced, durations[1], violations, () => original);
 
   const { result, unmount } = renderHook(() => {
     const playback = useCrossfadePlayback('orig.mp3', 'enh.wav', {
       initialSource,
       initialDivider,
+      loop,
       rampMs: 0,
     });
     playback.originalRef.current = original;
@@ -200,27 +224,50 @@ describe('pure decision helpers', () => {
     expect(isTargetPlayable(100, NaN)).toBe(true);
   });
 
-  it('plays restored while the playhead sits left of the divider', () => {
-    expect(sourceForPlayhead(0.1, 0.5, 'original')).toBe('restored');
-    expect(sourceForPlayhead(0, 1, 'original')).toBe('restored');
+  it('plays restored while the playhead sits before the boundary', () => {
+    expect(sourceForBoundary(10, 91, 'original')).toBe('restored');
+    expect(sourceForBoundary(0, 182, 'original')).toBe('restored');
   });
 
-  it('plays original once the playhead is right of the divider', () => {
-    expect(sourceForPlayhead(0.9, 0.5, 'restored')).toBe('original');
-    expect(sourceForPlayhead(0.5, 0, 'restored')).toBe('original');
+  it('plays original once the playhead is past the boundary', () => {
+    expect(sourceForBoundary(160, 91, 'restored')).toBe('original');
+    expect(sourceForBoundary(5, 0, 'restored')).toBe('original');
   });
 
-  it('holds the current source inside the hysteresis band', () => {
+  it('holds the current source inside the boundary band', () => {
     // A divider dragged onto the playhead would otherwise chatter
-    expect(sourceForPlayhead(0.5, 0.5, 'original')).toBe('original');
-    expect(sourceForPlayhead(0.5, 0.5, 'restored')).toBe('restored');
-    expect(sourceForPlayhead(0.498, 0.5, 'original')).toBe('original');
+    expect(sourceForBoundary(91, 91, 'original')).toBe('original');
+    expect(sourceForBoundary(91, 91, 'restored')).toBe('restored');
+    expect(sourceForBoundary(90.95, 91, 'original')).toBe('original');
   });
 
-  it('switches when the divider crosses a stationary playhead', () => {
-    // Dragging the boundary from right of the playhead to left of it
-    expect(sourceForPlayhead(0.4, 0.6, 'restored')).toBe('restored');
-    expect(sourceForPlayhead(0.4, 0.2, 'restored')).toBe('original');
+  it('switches when the boundary crosses a stationary playhead', () => {
+    // Dragging the boundary from after the playhead to before it
+    expect(sourceForBoundary(72, 109, 'restored')).toBe('restored');
+    expect(sourceForBoundary(72, 36, 'restored')).toBe('original');
+  });
+
+  it('leaves the boundary band wider than the largest accepted commit offset', () => {
+    // Structural guard: if a handoff may commit further out than the boundary
+    // band tolerates, a crossing can reverse itself purely from clock change.
+    expect(SWITCH_ACCEPT_TOLERANCE).toBeLessThan(BOUNDARY_BAND_SECONDS);
+  });
+
+  it('holds just inside the band and switches just outside it, in both directions', () => {
+    for (const boundary of [1, 91, 300]) {
+      expect(sourceForBoundary(boundary + 0.07, boundary, 'restored')).toBe('restored');
+      expect(sourceForBoundary(boundary + 0.09, boundary, 'restored')).toBe('original');
+      expect(sourceForBoundary(boundary - 0.07, boundary, 'original')).toBe('original');
+      expect(sourceForBoundary(boundary - 0.09, boundary, 'original')).toBe('restored');
+    }
+  });
+
+  it('applies the same absolute band whatever the track length', () => {
+    // The band is seconds, not a fraction of the track. Expressed as a
+    // fraction it would be 10 ms on a short clip and seconds on a long one,
+    // so a long track would keep playing the old source well past the divider.
+    expect(sourceForBoundary(91.5, 91, 'restored')).toBe('original');
+    expect(sourceForBoundary(1.5, 1, 'restored')).toBe('original');
   });
 
   it('classifies AbortError as cancellation rather than target failure', () => {
@@ -433,9 +480,10 @@ describe('useCrossfadePlayback state machine', () => {
     const h = setup('restored', 1);
     await flush();
     await announceDuration(h);
-    // Halfway through the shorter track
-    h.enhancedCtl.setTime(91);
-    h.originalCtl.setTime(91);
+    // Command the transport to the middle of the shared timeline
+    await act(async () => {
+      h.result.current.seek(0.5);
+    });
 
     await act(async () => {
       h.result.current.setDividerPosition(0.2);
@@ -463,6 +511,450 @@ describe('useCrossfadePlayback state machine', () => {
 
     await waitFor(() => expect(h.result.current.state.activeSource).toBe('original'));
     expect(h.violations).toEqual([]);
+  });
+
+  it('switches promptly on a long track instead of lagging by a fraction of it', async () => {
+    const h = setup('restored', 0.5);
+    await flush();
+    await announceDuration(h);
+    await startPlaying(h);
+
+    // Boundary is 91.03s. Half a second past it is a sliver of a 182s strip,
+    // and would have fallen inside a band expressed as a percentage.
+    h.enhancedCtl.setTime(91.53);
+    await act(async () => {
+      h.result.current.setDividerPosition(0.5);
+    });
+
+    await waitFor(() => expect(h.result.current.state.activeSource).toBe('original'));
+    expect(h.violations).toEqual([]);
+  });
+
+  it('does not bounce back when handoff substitutes the clock across the boundary', async () => {
+    const h = setup('restored', 0.5);
+    await flush();
+    await announceDuration(h);
+    await startPlaying(h);
+
+    h.enhancedCtl.setTime(91.2);
+    await act(async () => {
+      h.result.current.setDividerPosition(0.5);
+    });
+    await waitFor(() => expect(h.result.current.state.activeSource).toBe('original'));
+
+    // The incoming decoder trails the outgoing one by the largest offset the
+    // handoff will accept, which lands it back on the restored side of the
+    // boundary. Crossing must produce one transition, not an oscillation.
+    h.originalCtl.setTime(91.0);
+    for (let i = 0; i < 5; i++) {
+      await act(async () => {
+        h.result.current.setDividerPosition(0.5);
+      });
+    }
+
+    expect(h.result.current.state.activeSource).toBe('original');
+    expect(h.result.current.switchStats.current.switches).toBe(1);
+    expect(h.violations).toEqual([]);
+  });
+
+  it('stays inert while the boundary decision is unchanged', async () => {
+    const h = setup('restored', 1);
+    await flush();
+    await announceDuration(h);
+    await startPlaying(h);
+
+    const playsBefore =
+      h.originalCtl.playMock.mock.calls.length + h.enhancedCtl.playMock.mock.calls.length;
+    const switchesBefore = h.result.current.switchStats.current.switches;
+    const seeksBefore = h.result.current.switchStats.current.switchesNeedingSeek;
+
+    // The evaluation runs on every animation frame; a stable decision must
+    // not open a transaction, restart playback, or seek anything.
+    for (let i = 0; i < 100; i++) {
+      await act(async () => {
+        h.result.current.setDividerPosition(1);
+      });
+    }
+
+    expect(h.result.current.switchStats.current.switches).toBe(switchesBefore);
+    expect(h.result.current.switchStats.current.switchesNeedingSeek).toBe(seeksBefore);
+    expect(
+      h.originalCtl.playMock.mock.calls.length + h.enhancedCtl.playMock.mock.calls.length,
+    ).toBe(playsBefore);
+    expect(h.result.current.state.activeSource).toBe('restored');
+    expect(h.violations).toEqual([]);
+  });
+
+  it('does not reverse a paused switch when the new decoder reports a different time', async () => {
+    // The exact incident: while paused there is no animation frame to fall
+    // through to the temporal rule, so if the committed decoder's clock were
+    // authoritative the next pointer event would flip the source straight back.
+    const h = setup('restored', 1);
+    await flush();
+    await announceDuration(h);
+    await act(async () => {
+      h.result.current.seek(0.5);
+    });
+    const transportAfterSeek = h.result.current.state.currentTime;
+
+    await act(async () => {
+      h.result.current.setDividerPosition(0.2, 0.01);
+    });
+    await waitFor(() => expect(h.result.current.state.activeSource).toBe('original'));
+
+    // The newly audible decoder sits 40 ms behind, inside what the handoff
+    // accepts but wider than the pointer tolerance
+    h.originalCtl.setTime(transportAfterSeek - 0.04);
+    for (let i = 0; i < 5; i++) {
+      await act(async () => {
+        h.result.current.setDividerPosition(0.2, 0.01);
+      });
+    }
+
+    expect(h.result.current.state.activeSource).toBe('original');
+    expect(h.result.current.state.currentTime).toBeCloseTo(transportAfterSeek, 5);
+    expect(h.result.current.switchStats.current.switches).toBe(1);
+    expect(h.violations).toEqual([]);
+  });
+
+  it('rejects a handoff whose seek lands but stays out of tolerance', async () => {
+    const h = setup('restored', 1);
+    await flush();
+    await announceDuration(h);
+    // Paused, so the boundary rule and the request agree and no animation
+    // frame re-requests the switch while alignment is being attempted
+    await act(async () => {
+      h.result.current.seek(0.5);
+    });
+
+    // Target is far enough away to require a corrective seek, and its seeks
+    // complete but never land near enough. A completed seek is not alignment.
+    h.originalCtl.setTime(10);
+    h.originalCtl.setSeekOffset(5);
+    await act(async () => {
+      h.result.current.setDividerPosition(0, 0.01);
+    });
+    await waitFor(
+      () => expect(h.result.current.state.switchError).toBe('alignment-failed'),
+      { timeout: 3000 },
+    );
+
+    expect(h.result.current.state.activeSource).toBe('restored');
+    expect(h.result.current.state.requestedSource).toBe('restored');
+    expect(gainOf(h.enhanced)).toBeGreaterThan(AUDIBLE_FLOOR);
+    expect(h.result.current.switchStats.current.alignmentFailures).toBe(1);
+    expect(h.violations).toEqual([]);
+  });
+
+  it('records a verified offset within tolerance on every commit', async () => {
+    const h = setup('restored', 1);
+    await flush();
+    await announceDuration(h);
+    await startPlaying(h);
+
+    h.originalCtl.setTime(140);
+    await act(async () => {
+      h.result.current.setSource('original');
+    });
+    await waitFor(() => expect(h.result.current.state.activeSource).toBe('original'));
+
+    expect(h.result.current.switchStats.current.maxCommitOffset).toBeLessThanOrEqual(0.05);
+  });
+
+  it('keeps a commanded seek from being overwritten by a lagging decoder', async () => {
+    const h = setup('restored', 1);
+    await flush();
+    await announceDuration(h);
+    await startPlaying(h);
+
+    // The decoder has not caught up yet; the animation loop must not drag the
+    // commanded position back to where the element still happens to be.
+    h.enhancedCtl.deferSeeks(true);
+    await act(async () => {
+      h.result.current.seek(0.5);
+    });
+    const commanded = h.result.current.state.currentTime;
+    await flush();
+    await flush();
+
+    expect(h.result.current.state.currentTime).toBeCloseTo(commanded, 5);
+    expect(commanded).toBeGreaterThan(90);
+  });
+
+  it('keeps a seek inside the shared comparison timeline', async () => {
+    const h = setup('restored', 1);
+    await flush();
+    await announceDuration(h);
+
+    await act(async () => {
+      h.result.current.seek(1);
+    });
+
+    // The shorter recording bounds the timeline, not whichever is audible
+    expect(h.result.current.state.currentTime).toBeLessThan(182.06);
+    expect(h.result.current.state.currentTime).toBeGreaterThan(181.9);
+  });
+
+  it('does not let a superseded seek mutate the silent decoder', async () => {
+    const h = setup('restored', 1);
+    await flush();
+    await announceDuration(h);
+
+    h.enhancedCtl.deferSeeks(true);
+    await act(async () => {
+      h.result.current.seek(0.2);
+    });
+    await act(async () => {
+      h.result.current.seek(0.8);
+    });
+    const commanded = h.result.current.state.currentTime;
+
+    // The first seek lands late. Its continuation is stale and must not write
+    // its old target into either element on the way out.
+    await act(async () => {
+      h.enhancedCtl.releaseSeek();
+    });
+    await flush();
+
+    expect(h.original.currentTime).not.toBeCloseTo(0.2 * 182.06, 2);
+    expect(h.result.current.state.currentTime).toBeCloseTo(commanded, 5);
+    expect(commanded).toBeGreaterThan(140);
+  });
+
+  it('does not let an older seek timeout release a newer seek', async () => {
+    vi.useFakeTimers();
+    try {
+      const h = setup('restored', 1);
+      await flush();
+      await announceDuration(h);
+
+      h.enhancedCtl.deferSeeks(true);
+      await act(async () => {
+        h.result.current.seek(0.2);
+      });
+      // Stagger the commands so only the older timeout comes due
+      await act(async () => {
+        vi.advanceTimersByTime(300);
+      });
+      await act(async () => {
+        h.result.current.seek(0.8);
+      });
+      const commanded = h.result.current.state.currentTime;
+
+      // The first seek's timeout fires while the second still owns transport.
+      // A flag would have been freed here; an owner token is not.
+      await act(async () => {
+        vi.advanceTimersByTime(150);
+      });
+
+      expect(h.result.current.state.currentTime).toBeCloseTo(commanded, 5);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('attempts a failing boundary demand once rather than forever', async () => {
+    const h = setup('restored', 1);
+    await flush();
+    await announceDuration(h);
+    await act(async () => {
+      h.result.current.seek(0.5);
+    });
+    // Let the seek's continuation settle both clocks before displacing one,
+    // otherwise it lands afterwards and removes the misalignment under test
+    await flush();
+
+    h.originalCtl.setTime(10);
+    h.originalCtl.setSeekOffset(5);
+    await act(async () => {
+      h.result.current.setDividerPosition(0, 0.01);
+    });
+    await waitFor(
+      () => expect(h.result.current.state.switchError).toBe('alignment-failed'),
+      { timeout: 3000 },
+    );
+
+    // Geometry still demands the source that just failed. Each attempt is
+    // bounded, but the sequence must be too.
+    for (let i = 0; i < 20; i++) {
+      await act(async () => {
+        h.result.current.setDividerPosition(0, 0.01);
+      });
+    }
+    await flush();
+
+    expect(h.result.current.switchStats.current.alignmentFailures).toBe(1);
+    expect(h.result.current.state.activeSource).toBe('restored');
+  });
+
+  it('retries only after the demand genuinely changes', async () => {
+    const h = setup('restored', 1);
+    await flush();
+    await announceDuration(h);
+    await act(async () => {
+      h.result.current.seek(0.5);
+    });
+    // Let the seek's continuation settle both clocks before displacing one,
+    // otherwise it lands afterwards and removes the misalignment under test
+    await flush();
+
+    h.originalCtl.setTime(10);
+    h.originalCtl.setSeekOffset(5);
+    await act(async () => {
+      h.result.current.setDividerPosition(0, 0.01);
+    });
+    await waitFor(
+      () => expect(h.result.current.state.switchError).toBe('alignment-failed'),
+      { timeout: 3000 },
+    );
+
+    // Geometry asks for the other side, then comes back: that is new intent
+    await act(async () => {
+      h.result.current.setDividerPosition(1, 0.01);
+    });
+    h.originalCtl.setSeekOffset(0);
+    await act(async () => {
+      h.result.current.setDividerPosition(0, 0.01);
+    });
+
+    await waitFor(() => expect(h.result.current.state.activeSource).toBe('original'));
+    expect(h.violations).toEqual([]);
+  });
+
+  it('services a newer intent after an older transaction is superseded', async () => {
+    const h = setup('restored', 1);
+    await flush();
+    await announceDuration(h);
+    await act(async () => {
+      h.result.current.seek(0.5);
+    });
+
+    // First transition blocks on a seek that has not landed
+    h.originalCtl.deferSeeks(true);
+    h.originalCtl.setTime(10);
+    await act(async () => {
+      h.result.current.setDividerPosition(0, 0.01);
+    });
+    expect(h.result.current.state.activeSource).toBe('restored');
+
+    // A scrub supersedes it. Nothing else happens: no pointer move, no play,
+    // no animation frame. The pending intent must still be serviced.
+    h.originalCtl.deferSeeks(false);
+    await act(async () => {
+      h.result.current.seek(0.6);
+    });
+
+    await waitFor(() => expect(h.result.current.state.activeSource).toBe('original'));
+    expect(h.violations).toEqual([]);
+  });
+
+  it('removes its seek listener when a seek never converges', async () => {
+    const h = setup('restored', 1);
+    await flush();
+    await announceDuration(h);
+    await act(async () => {
+      h.result.current.seek(0.5);
+    });
+    await flush();
+
+    /* Relative to a baseline, not zero: other subscribers may legitimately
+       hold a seeked listener, and counting them would make this assert the
+       observer rather than the waiter. */
+    const baseline = h.originalCtl.seekedListeners();
+
+    h.originalCtl.setTime(10);
+    h.originalCtl.setSeekOffset(5);
+    await act(async () => {
+      h.result.current.setDividerPosition(0, 0.01);
+    });
+    await waitFor(
+      () => expect(h.result.current.state.switchError).toBe('alignment-failed'),
+      { timeout: 3000 },
+    );
+
+    // The listener deliberately survives unrelated events, so its removal on
+    // the timeout path is what keeps waiters from accumulating.
+    await flush();
+    expect(h.originalCtl.seekedListeners()).toBe(baseline);
+  });
+
+  it('does not let a superseded transaction commit or roll back the winner', async () => {
+    const h = setup('restored', 1);
+    await flush();
+    await announceDuration(h);
+    await act(async () => {
+      h.result.current.seek(0.5);
+    });
+    await flush();
+
+    // First transaction blocks partway through aligning the target
+    h.originalCtl.setTime(10);
+    h.originalCtl.deferSeeks(true);
+    await act(async () => {
+      h.result.current.setDividerPosition(0, 0.01);
+    });
+    expect(h.result.current.state.activeSource).toBe('restored');
+
+    // A scrub supersedes it and its own reconciliation completes the switch
+    h.originalCtl.deferSeeks(false);
+    await act(async () => {
+      h.result.current.seek(0.6);
+    });
+    await waitFor(() => expect(h.result.current.state.activeSource).toBe('original'));
+    const switchesAfterWinner = h.result.current.switchStats.current.switches;
+
+    // The abandoned transaction's seek finally lands. It must not commit
+    // again, roll intent back, touch gains, or release the winner's claim.
+    await act(async () => {
+      h.originalCtl.releaseSeek();
+    });
+    await flush();
+
+    expect(h.result.current.switchStats.current.switches).toBe(switchesAfterWinner);
+    expect(h.result.current.state.activeSource).toBe('original');
+    expect(h.result.current.state.requestedSource).toBe('original');
+    expect(h.result.current.state.switchError).toBeNull();
+    expect(gainOf(h.original)).toBeGreaterThan(AUDIBLE_FLOOR);
+    expect(gainOf(h.enhanced)).toBe(0);
+    expect(h.violations).toEqual([]);
+  });
+
+  it('converges on the last intent after the boundary is thrashed', async () => {
+    /* The contract under pathological input is not that every intermediate
+       crossing is honored audibly. It is that work stays bounded, nothing is
+       left owned, and the final stable intent wins once input stops. */
+    const h = setup('restored', 1);
+    await flush();
+    await announceDuration(h);
+    await act(async () => {
+      h.result.current.seek(0.5);
+    });
+    await flush();
+
+    for (let i = 0; i < 20; i++) {
+      await act(async () => {
+        h.result.current.setDividerPosition(i % 2 === 0 ? 0 : 1, 0.01);
+      });
+    }
+    // Settle on the original side
+    await act(async () => {
+      h.result.current.setDividerPosition(0, 0.01);
+    });
+
+    await waitFor(() => expect(h.result.current.state.activeSource).toBe('original'));
+    expect(h.result.current.state.requestedSource).toBe('original');
+    expect(h.result.current.state.switchError).toBeNull();
+    // Bounded: at most one commit per demand, never a runaway sequence
+    expect(h.result.current.switchStats.current.switches).toBeLessThanOrEqual(21);
+    expect(gainOf(h.original)).toBeGreaterThan(AUDIBLE_FLOOR);
+    expect(gainOf(h.enhanced)).toBe(0);
+    expect(h.violations).toEqual([]);
+
+    // Nothing keeps working after input stops
+    const settled = h.result.current.switchStats.current.switches;
+    await flush();
+    await flush();
+    expect(h.result.current.switchStats.current.switches).toBe(settled);
   });
 
   it('counts switches that needed a corrective seek', async () => {

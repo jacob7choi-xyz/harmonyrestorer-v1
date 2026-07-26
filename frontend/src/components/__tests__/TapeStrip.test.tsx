@@ -62,10 +62,30 @@ describe('TapeStrip', () => {
 
     fireEvent.keyDown(slider, { key: 'ArrowRight' });
     expect(slider).toHaveAttribute('aria-valuenow', '55');
-    expect(onDividerChange).toHaveBeenCalledWith(0.55);
+    expect(onDividerChange).toHaveBeenCalledWith(0.55, expect.any(Number));
 
     fireEvent.keyDown(slider, { key: 'ArrowLeft' });
     expect(slider).toHaveAttribute('aria-valuenow', '50');
+  });
+
+  it('derives the drag stability margin from a fixed pixel distance', () => {
+    // Pointer jitter is spatial, so the margin must come from pixels and not
+    // from a fraction of the track, which would scale with its duration.
+    const onDividerChange = vi.fn();
+    const rect = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue({ width: 600, height: 96 } as DOMRect);
+
+    render(
+      <TapeStrip noisyPeaks={PEAKS} cleanPeaks={PEAKS} mode="demo" onDividerChange={onDividerChange} />,
+    );
+    fireEvent.keyDown(screen.getByRole('slider', { name: 'Comparison divider' }), {
+      key: 'ArrowRight',
+    });
+
+    // 6 px of tolerance across a 600 px strip
+    expect(onDividerChange).toHaveBeenCalledWith(0.55, 0.01);
+    rect.mockRestore();
   });
 
   it('clamps the divider at the range edges', () => {
