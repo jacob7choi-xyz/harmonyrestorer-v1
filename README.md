@@ -156,25 +156,11 @@ From-scratch implementation of **1D Operational GANs** based on [Kiranyaz et al.
 
 ### Benchmark Results
 
-Trained 100 epochs on Tesla T4 (~51 hours, ~$100 total GCP). Model operates at 16kHz mono. Evaluated on 131,027 noisy/clean pairs:
+**Withdrawn pending re-evaluation.** Trained 100 epochs on Tesla T4 (~51 hours, ~$100 total GCP). Model operates at 16 kHz mono.
 
-| Metric   | Mean  | Median |
-|----------|-------|--------|
-| SDR (dB) | 23.74 | 23.85  |
-| PESQ     | 4.04  | 4.28   |
-| STOI     | 0.960 | 0.989  |
+Previously published SDR, PESQ, and STOI figures were computed across the full generated pair corpus rather than a source-track-disjoint evaluation set. Training and evaluation therefore shared source recordings, and in many cases the identical clean 2-second frame: the dataset holds five noise variants per frame, and the 90/10 split was drawn over pairs rather than over recordings, so roughly 41% of clean frames are expected to have sibling variants on both sides. Those figures characterize reconstruction over the corpus; they do not support a claim about generalization to unseen recordings, and the head-to-head margin against UVR is the most affected claim, since UVR never trained on any of this data and OpGAN trained on most of it.
 
-### UVR Baseline
-
-UVR-DeNoise.pth evaluated on the same dataset (131,013 files evaluated, 15,182 skipped for quiet frames, resampled to 16kHz mono for fair comparison):
-
-| Metric   | OpGAN  | UVR   | Delta       |
-|----------|--------|-------|-------------|
-| SDR (dB) | **23.74** | 11.86 | +11.88 dB |
-| PESQ     | **4.04**  | 3.72  | +0.32     |
-| STOI     | **0.960** | 0.953 | +0.007    |
-
-OpGAN outperforms UVR across all metrics. See [docs/benchmarks.md](docs/benchmarks.md) for details.
+The figures and their full context are retained in [docs/benchmarks.md](docs/benchmarks.md). A track-disjoint benchmark on newly acquired recordings, evaluating both models over an identical declared population, is in progress.
 
 ## Samples
 

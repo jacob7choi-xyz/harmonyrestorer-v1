@@ -30,17 +30,17 @@ describe('TapeStrip', () => {
     expect(canvas.tagName).toBe('CANVAS');
   });
 
-  it('renders the blend slider in demo mode', () => {
+  it('renders the comparison slider in demo mode', () => {
     render(<TapeStrip noisyPeaks={PEAKS} cleanPeaks={PEAKS} mode="demo" />);
-    const slider = screen.getByRole('slider', { name: 'Restoration blend' });
+    const slider = screen.getByRole('slider', { name: 'Comparison divider' });
     expect(slider).toHaveAttribute('aria-valuemin', '0');
     expect(slider).toHaveAttribute('aria-valuemax', '100');
     expect(slider).toHaveAttribute('aria-valuenow', '50');
   });
 
-  it('renders the blend slider in compare mode', () => {
+  it('renders the comparison slider in compare mode', () => {
     render(<TapeStrip noisyPeaks={PEAKS} cleanPeaks={PEAKS} mode="compare" />);
-    expect(screen.getByRole('slider', { name: 'Restoration blend' })).toBeInTheDocument();
+    expect(screen.getByRole('slider', { name: 'Comparison divider' })).toBeInTheDocument();
   });
 
   it('does not render the slider in processing mode', () => {
@@ -53,24 +53,44 @@ describe('TapeStrip', () => {
     expect(screen.queryByRole('slider')).not.toBeInTheDocument();
   });
 
-  it('moves the blend with arrow keys and reports the mix', () => {
-    const onMixChange = vi.fn();
+  it('moves the divider with arrow keys and reports the position', () => {
+    const onDividerChange = vi.fn();
     render(
-      <TapeStrip noisyPeaks={PEAKS} cleanPeaks={PEAKS} mode="demo" onMixChange={onMixChange} />,
+      <TapeStrip noisyPeaks={PEAKS} cleanPeaks={PEAKS} mode="demo" onDividerChange={onDividerChange} />,
     );
-    const slider = screen.getByRole('slider', { name: 'Restoration blend' });
+    const slider = screen.getByRole('slider', { name: 'Comparison divider' });
 
     fireEvent.keyDown(slider, { key: 'ArrowRight' });
     expect(slider).toHaveAttribute('aria-valuenow', '55');
-    expect(onMixChange).toHaveBeenCalledWith(0.55);
+    expect(onDividerChange).toHaveBeenCalledWith(0.55, expect.any(Number));
 
     fireEvent.keyDown(slider, { key: 'ArrowLeft' });
     expect(slider).toHaveAttribute('aria-valuenow', '50');
   });
 
-  it('clamps the blend at the range edges', () => {
+  it('derives the drag stability margin from a fixed pixel distance', () => {
+    // Pointer jitter is spatial, so the margin must come from pixels and not
+    // from a fraction of the track, which would scale with its duration.
+    const onDividerChange = vi.fn();
+    const rect = vi
+      .spyOn(HTMLCanvasElement.prototype, 'getBoundingClientRect')
+      .mockReturnValue({ width: 600, height: 96 } as DOMRect);
+
+    render(
+      <TapeStrip noisyPeaks={PEAKS} cleanPeaks={PEAKS} mode="demo" onDividerChange={onDividerChange} />,
+    );
+    fireEvent.keyDown(screen.getByRole('slider', { name: 'Comparison divider' }), {
+      key: 'ArrowRight',
+    });
+
+    // 6 px of tolerance across a 600 px strip
+    expect(onDividerChange).toHaveBeenCalledWith(0.55, 0.01);
+    rect.mockRestore();
+  });
+
+  it('clamps the divider at the range edges', () => {
     render(<TapeStrip noisyPeaks={PEAKS} cleanPeaks={PEAKS} mode="demo" />);
-    const slider = screen.getByRole('slider', { name: 'Restoration blend' });
+    const slider = screen.getByRole('slider', { name: 'Comparison divider' });
 
     for (let i = 0; i < 15; i++) {
       fireEvent.keyDown(slider, { key: 'ArrowRight' });
