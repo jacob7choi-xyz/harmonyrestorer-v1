@@ -175,6 +175,9 @@ export default function HarmonyRestorer(): React.JSX.Element {
   const demoPlayback = useCrossfadePlayback(
     demo?.noisyUrl ?? null,
     demo?.cleanUrl ?? null,
+    /* The demo boundary starts mid-strip so the control is visibly there to
+       grab. On a short looping clip that means the playhead crosses it each
+       loop, which is a real source transition every time. */
     { loop: true, initialDivider: 0.5 },
   );
   const resultPlayback = useCrossfadePlayback(originalBlobUrl, enhancedBlobUrl);
@@ -476,6 +479,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
                     playhead={demoPlayhead}
                     onSeek={demoPlayback.seek}
                     onDividerChange={demoPlayback.setDividerPosition}
+                    initialDivider={0.5}
                     palette={AURORA_PALETTE}
                   />
                 </StripStage>
@@ -489,7 +493,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
                   />
                   <NowHearing source={demoPlayback.state.activeSource} />
                   <p className="max-w-sm text-center text-xs leading-relaxed text-ink-muted">
-                    Bach, degraded to tape-era noise and restored live by the model.
+                    Bach, degraded to tape-era noise and restored by the model.
                     Press play, then drag the line to hear the difference.
                   </p>
                 </div>
