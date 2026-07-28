@@ -1,0 +1,733 @@
+{
+ "description": "Source recordings used to train checkpoints/final.pt. Any benchmark recording must be disjoint from every entry here.",
+ "count": 145,
+ "corpus_sha256": "91ca67de8c6858fb9c8a1ea33d3f9cbafb9c722696fa9b0b6a4ada73ec80e07d",
+ "checkpoint_sha256": "7c47dd70703d3431c363001300ead8d9628a2e69b5e7f0a43fe38a3bfc613a80",
+ "recordings": [
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-01-GoldbergVariationsBwv.988-Aria.flac",
+   "bytes": 13519283,
+   "sha256": "1ebc90d079dd76009b871b4cd962e243a5f0e055e7c3e49441ec291e589d25d4"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-02-GoldbergVariationsBwv.988-Variation1.flac",
+   "bytes": 6273290,
+   "sha256": "048037b577df7d534281d68a9d458e9b87d870034e640deac2372752d77975a7"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-03-GoldbergVariationsBwv.988-Variation2.flac",
+   "bytes": 4569446,
+   "sha256": "a74d50ec87868b3f03b77a469bbbe3e7de52a36ca8035891acb13e4fc876940d"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-04-GoldbergVariationsBwv.988-Variation3.CanonOnTheUnison.flac",
+   "bytes": 6053073,
+   "sha256": "6c7b288391aa2b8cbc41a03d90f3735aafbe8ae74bbf8fcfe64dcbde827c5061"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-05-GoldbergVariationsBwv.988-Variation4.flac",
+   "bytes": 3015744,
+   "sha256": "aea4357164861cf9f8f3341bf3abe5c2fb1309affddcafcff5fdec4da7a45148"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-06-GoldbergVariationsBwv.988-Variation5.flac",
+   "bytes": 4745762,
+   "sha256": "0a0d1fe9fd387446fb2323e4c19f7a58147dfce555d02066a8724128a571da1a"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-07-GoldbergVariationsBwv.988-Variation6.CanonOnTheSecond.flac",
+   "bytes": 3361539,
+   "sha256": "269f23f86fb6f7b94e83ad70b190c9c9e096dce14ca9abd7ecaa3f8f95adf564"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-08-GoldbergVariationsBwv.988-Variation7.flac",
+   "bytes": 7588122,
+   "sha256": "2e773573721b9f206e653716a4777c74f33cf4f33652dee09c84c0929a1fa59b"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-09-GoldbergVariationsBwv.988-Variation8.flac",
+   "bytes": 6109516,
+   "sha256": "a4e1b9c630e5be2fbed73d1273c43d548da0d09adc11377f8a8bee56f5d05615"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-10-GoldbergVariationsBwv.988-Variation9.CanonOnTheThird.flac",
+   "bytes": 5122474,
+   "sha256": "19a09b348e2744e8d4d0b9cdc42e4b12970898dcb1b63835e31622d97ed75393"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-11-GoldbergVariationsBwv.988-Variation10.Fughetta.flac",
+   "bytes": 5843886,
+   "sha256": "301d1c6ea7d03e58a861c4c9cd03689426e92e719a145ae13d978f9f31e2bde7"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-12-GoldbergVariationsBwv.988-Variation11.flac",
+   "bytes": 5501269,
+   "sha256": "060cd6554508fb0937ba3e4ccf317589a9a38c4f1d3f33ba3bd0941da6127205"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-13-GoldbergVariationsBwv.988-Variation12.CanonOnTheFourth.flac",
+   "bytes": 7961873,
+   "sha256": "e19da5219ab82391032656acdb70eb7e5fd82742f44b6f284dffabe005af9870"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-14-GoldbergVariationsBwv.988-Variation13.flac",
+   "bytes": 14125815,
+   "sha256": "074efef635c2b4a8d3b10ff6d4471512272f7747248036ca19c40595cefd9083"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-15-GoldbergVariationsBwv.988-Variation14.flac",
+   "bytes": 8003048,
+   "sha256": "4542f1e420d6f57ef5f04835f007ce3100d3aab1942180c8c6997cdfd8f200a4"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-16-GoldbergVariationsBwv.988-Variation15.CanonOnTheFifth.flac",
+   "bytes": 12733953,
+   "sha256": "5eaacaad4cddd35a37a9adbb1aa2880d89846a616c469e4f3e4c80c05b57cea7"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-17-GoldbergVariationsBwv.988-Variation16.Overture.flac",
+   "bytes": 6501964,
+   "sha256": "2255563be3264cf7041db7f52057b0eb129ba70480feb4e35f988fa81c5487c5"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-18-GoldbergVariationsBwv.988-Variation17.flac",
+   "bytes": 5581570,
+   "sha256": "c4b1a14650d89e79d6e60c347f8799b587bb771e3ce06d8095cc8c90900f1d0f"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-19-GoldbergVariationsBwv.988-Variation18.CanonOnTheSixth.flac",
+   "bytes": 4245288,
+   "sha256": "b25a9b8a23fdb5b35693d70fb821f44352d01a596fd2a22328f0ceac4daa72fc"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-20-GoldbergVariationsBwv.988-Variation19.flac",
+   "bytes": 3689944,
+   "sha256": "f507571e6ab4a29e8724ab7b9137316e55b801488f23a61b2c7138165d152e58"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-21-GoldbergVariationsBwv.988-Variation20.flac",
+   "bytes": 6867248,
+   "sha256": "7caaae9e049b5cc2ff71674bb5df1de4fcf5f3f4fce765507a3ddb39aa228dc3"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-22-GoldbergVariationsBwv.988-Variation21.CanonOnTheSeventh.flac",
+   "bytes": 5156464,
+   "sha256": "abe76678cce397d3f23861d0caa2feef2496c7265c158a85498fed64ea0238f1"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-23-GoldbergVariationsBwv.988-Variation22.flac",
+   "bytes": 5079882,
+   "sha256": "ea475974d44cc1e05c86e7efa43431e4c9ac7b73499ac6d25dcbe44fb0ab4d56"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-24-GoldbergVariationsBwv.988-Variation23.flac",
+   "bytes": 6970521,
+   "sha256": "952f544bd5cf257cd77a591613c9e13eff07d028a8023501a24bec3c207db4fc"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-25-GoldbergVariationsBwv.988-Variation24.CanonOnTheOctave.flac",
+   "bytes": 8372759,
+   "sha256": "3ad704ad8ffcc255d2358e26a327b7c43721cef5690e176de10ad1861c502f35"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-26-GoldbergVariationsBwv.988-Variation25.flac",
+   "bytes": 17916122,
+   "sha256": "ddba7e33945dbc8804df4c2c93d7238e0d6ad978aa751b4cddb938b530c86fc2"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-27-GoldbergVariationsBwv.988-Variation26.flac",
+   "bytes": 7370923,
+   "sha256": "d395a11e341f55ca29a930bdc09a7b40dffbb2c2ac503414f622b90f1858a7ef"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-28-GoldbergVariationsBwv.988-Variation27.CanonOnTheNinth.flac",
+   "bytes": 5432743,
+   "sha256": "ae4f0ab015d21617f44ca6b519da26d53b051d129264ae86f8913cde47f5fb5f"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-29-GoldbergVariationsBwv.988-Variation28.flac",
+   "bytes": 7355796,
+   "sha256": "f114a33f76ee9ee3b7792e9b20f89a4e1867dbfe67f7b8d488b4b52b22d32c53"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-30-GoldbergVariationsBwv.988-Variation29.flac",
+   "bytes": 7877807,
+   "sha256": "df1808a30b59e66c77e3ca188d7a08b4d46e1aff268e7fcbd73db18080105ec5"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-31-GoldbergVariationsBwv.988-Variation30.Quodlibet.flac",
+   "bytes": 6102617,
+   "sha256": "554467d16f8d3a1c6fdaa282cf27834ea6716c31142ec7bb7ba49612ffe6d3f0"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Bach_GoldbergVariations_JohannSebastianBach-32-GoldbergVariationsBwv.988-AriaDaCapo.flac",
+   "bytes": 13085948,
+   "sha256": "037ff85920f1f7b625b203a565ee633655f368569134fa67873464e94c61ecf5"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Beethoven_CoriolanOverture_LudwigVanBeethoven-CoriolanOverture.flac",
+   "bytes": 88400932,
+   "sha256": "2949526b38864ba2cee698f3e29e6881c93c1462df97606630940987e81ef0c3"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Beethoven_EgmontOvertureOp.84_LudwigVanBeethoven-EgmontOvertureOp.84.flac",
+   "bytes": 94777164,
+   "sha256": "d7dbae975631508bf579a518cc90922edce0448a59f4ede181e2e377f4cd38de"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Beethoven_StringQuartetNo.6inBFlatMajorOp.18_LudwigVanBeethoven-StringQuartetNo.6InBFlatMajorOp.18No.6-01-AllegroConBrio.flac",
+   "bytes": 44564991,
+   "sha256": "08c046f56ac87b26d66ec31c1bbd64f14e9b242bed8c22f343a90266a6686132"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Beethoven_StringQuartetNo.6inBFlatMajorOp.18_LudwigVanBeethoven-StringQuartetNo.6InBFlatMajorOp.18No.6-02-AdagioMaNonTroppo.flac",
+   "bytes": 63109280,
+   "sha256": "8b29c98e88aa54e518916dc8fed2ae2855a93c360b9818a34cecd4eb6300de12"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Beethoven_StringQuartetNo.6inBFlatMajorOp.18_LudwigVanBeethoven-StringQuartetNo.6InBFlatMajorOp.18No.6-03-ScherzoAllegro.flac",
+   "bytes": 40128599,
+   "sha256": "49f663acb9f0b7b81d7030a26d00c274bff0063b56d2858ddc883dd29bcfe941"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Beethoven_StringQuartetNo.6inBFlatMajorOp.18_LudwigVanBeethoven-StringQuartetNo.6InBFlatMajorOp.18No.6-04-adagioLaMalinconia.flac",
+   "bytes": 74340097,
+   "sha256": "2a30c535faf6df53eb2c9b427dd52dd4a8025351c847fb05a37c94a2af9b253e"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Beethoven_SymphonyNo.3Eroica_LudwigVanBeethoven-SymphonyNo.3InEFlatMajorEroicaOp.55-01-AllegroConBrio.flac",
+   "bytes": 159115806,
+   "sha256": "7a4b4d89c3107d2e57964879f2ff75ed2a36a88ea758f12f584ac9a35430f24a"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Beethoven_SymphonyNo.3Eroica_LudwigVanBeethoven-SymphonyNo.3InEFlatMajorEroicaOp.55-02-MarciaFunebreAdagioAssai.flac",
+   "bytes": 150441484,
+   "sha256": "5ce7b5542ce9bd2798ca38861cf3de7341573158448122443be5a880f730f82d"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Beethoven_SymphonyNo.3Eroica_LudwigVanBeethoven-SymphonyNo.3InEFlatMajorEroicaOp.55-03-ScherzoAllegroVivace.flac",
+   "bytes": 56950797,
+   "sha256": "3e2aa89f9b54a48ec38550091d887090647ef9a554219e2259d2ed5162e67eba"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Beethoven_SymphonyNo.3Eroica_LudwigVanBeethoven-SymphonyNo.3InEFlatMajorEroicaOp.55-04-FinaleAllegroMolto.flac",
+   "bytes": 121351486,
+   "sha256": "3d4cd62a55a405037911b5e23bc95f0755d7d490ab316721f64eedf3c2a418de"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Borodin_InTheSteppesOfCentralAsia_AlexanderBorodin-InTheSteppesOfCentralAsia.flac",
+   "bytes": 73785694,
+   "sha256": "6e53a2e3b48b070ef8abe95a9d411d29be68d7b2163347360405f33072648857"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Borodin_StringQuartetNo.1inAMajor_AlexanderBorodin-StringQuartetNo.1InAMajor-01-Moderato-Allegro.flac",
+   "bytes": 145369692,
+   "sha256": "6a5391cddd6d3f37d6b5ffd221175e5b6a6c91cd6cb17ea715096c9e2324e899"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Borodin_StringQuartetNo.1inAMajor_AlexanderBorodin-StringQuartetNo.1InAMajor-02-AndanteConMoto.flac",
+   "bytes": 83356507,
+   "sha256": "94ae78a7eaf2c817001508620ac39de108c1d2f258908ed6ed17abe751e2d82c"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Borodin_StringQuartetNo.1inAMajor_AlexanderBorodin-StringQuartetNo.1InAMajor-03-ScherzoPrestissimo.flac",
+   "bytes": 17623623,
+   "sha256": "72065126cd6e23cde69901e9bc07f36bf39c97571ef537f8a4e683abcb4799d1"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Borodin_StringQuartetNo.1inAMajor_AlexanderBorodin-StringQuartetNo.1InAMajor-04-Andante-AllegroRisoluto.flac",
+   "bytes": 85858451,
+   "sha256": "ed5182a2379422586f954fb614a4089306cf4b97adadd16be0d5d52b4b7c8621"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Borodin_StringQuartetNo.2inDMajor_AlexanderBorodin-StringQuartetNo.2InDMajor-01-AllegroModerato.flac",
+   "bytes": 90242936,
+   "sha256": "00206dc8c1bc9fe5f31d1cbc9063d6d961cb4561bdc2fec95974ba49dcc0864f"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Borodin_StringQuartetNo.2inDMajor_AlexanderBorodin-StringQuartetNo.2InDMajor-02-ScherzoAllegro.flac",
+   "bytes": 55826382,
+   "sha256": "c38f230785a72835ebdbebba35c20a8d183e10ebe903dce25b07191ed3b99fb8"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Borodin_StringQuartetNo.2inDMajor_AlexanderBorodin-StringQuartetNo.2InDMajor-03-NocturneAndante.flac",
+   "bytes": 89501570,
+   "sha256": "74c334709f823179123cfe119eb7041cb00db3b780eb38a3d9fefcadd4f05abd"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Borodin_StringQuartetNo.2inDMajor_AlexanderBorodin-StringQuartetNo.2InDMajor-04-FinaleAndante-Vivace.flac",
+   "bytes": 70025343,
+   "sha256": "102080d3dccd2fc2f5e3507bcf2175be43373964cb0ab846311d7bcc796e16ee"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Brahms_SymphonyNo.1inCMinor_JohannesBrahms-SymphonyNo.1InCMinorOp.68-01-UnPocoSostenuto-Allegro.flac",
+   "bytes": 140673511,
+   "sha256": "767fe2e4021bb78f12c49737a448e11ffa58e630da38e5ac64e15ffedd26ec87"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Brahms_SymphonyNo.1inCMinor_JohannesBrahms-SymphonyNo.1InCMinorOp.68-02-AndanteSostenuto.flac",
+   "bytes": 78251360,
+   "sha256": "b69bc7546ae702a6b9ae5b7f61e0ae886a5ae6bff9471dc1dbf09a7cde259ecc"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Brahms_SymphonyNo.1inCMinor_JohannesBrahms-SymphonyNo.1InCMinorOp.68-03-UnPocoAllegrettoEGrazioso.flac",
+   "bytes": 46687877,
+   "sha256": "a524d45bde3194dccdd09ed643bb88419590f406f0670c92335804ae0ae5eb34"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Brahms_SymphonyNo.1inCMinor_JohannesBrahms-SymphonyNo.1InCMinorOp.68-04-Adagio-PiAndante-AllegroNonTroppoMaConBrio.flac",
+   "bytes": 166468316,
+   "sha256": "a1872e0bb0b541756af29d36572b07ab0aacc43737b397e91282c3c57402c30e"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Brahms_SymphonyNo.2inDMajor_JohannesBrahms-SymphonyNo.2InDMajorOp.73-01-AllegroNonTroppo.flac",
+   "bytes": 158019140,
+   "sha256": "55df40aa08056621f5d4697658198f8d4af57068b789d4dd68c9620f9388e3a9"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Brahms_SymphonyNo.2inDMajor_JohannesBrahms-SymphonyNo.2InDMajorOp.73-02-AdagioNonToppo.flac",
+   "bytes": 87241267,
+   "sha256": "c68d024b4d845afbfee1010dffaa54f5ee4f5c648b80daa107e0555f0d8558fa"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Brahms_SymphonyNo.2inDMajor_JohannesBrahms-SymphonyNo.2InDMajorOp.73-03-AllegrettoGraziosotake1.flac",
+   "bytes": 43769872,
+   "sha256": "e8d601ddb1894888879dccb114446ac4583f3364b1c4926a8b9f9886c540b80c"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Brahms_SymphonyNo.2inDMajor_JohannesBrahms-SymphonyNo.2InDMajorOp.73-03-AllegrettoGraziosotake2.flac",
+   "bytes": 43551290,
+   "sha256": "459210ce9af38ed0a4d3c70a765d639d7e692c7f50f040417b6243cc5812fe7a"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Brahms_SymphonyNo.2inDMajor_JohannesBrahms-SymphonyNo.2InDMajorOp.73-04-AllegroConSpirito.flac",
+   "bytes": 96974400,
+   "sha256": "ca65c6133b23d65b9f2493846be4d81a329068aa56e18d078f45e342ea19f290"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Brahms_SymphonyNo.3inFMajor_JohannesBrahms-SymphonyNo.3InFMajorOp.90-01-AllegroConBrio.flac",
+   "bytes": 93111879,
+   "sha256": "f9dff2bb2361c657e0654a4e40e7cc37bdf1a596f8c0c37482e73fb5abe78c09"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Brahms_SymphonyNo.3inFMajor_JohannesBrahms-SymphonyNo.3InFMajorOp.90-02-Andante.flac",
+   "bytes": 74458296,
+   "sha256": "58c8927bd0d4360860d9c8e7c5ab7cf5d2e2311410bcbc851e3f33f9202459c8"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Brahms_SymphonyNo.3inFMajor_JohannesBrahms-SymphonyNo.3InFMajorOp.90-03-PocoAllegretto.flac",
+   "bytes": 52705826,
+   "sha256": "c8dc985872aed9497f0429d8655a98092d8cab4ac54fc54d662b37c2072afd60"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Brahms_SymphonyNo.3inFMajor_JohannesBrahms-SymphonyNo.3InFMajorOp.90-04-Allegro.flac",
+   "bytes": 91371893,
+   "sha256": "18c300b3cc11d64ed8eddba4d8cf3795075b9ba272a77488174e024a6cc8c2f2"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Brahms_SymphonyNo.4inEMinor_JohannesBrahms-SymphonyNo.4InEMinorOp.98-01-AllegroNonTroppo.flac",
+   "bytes": 125892314,
+   "sha256": "8c796e3044e15489283caa9a7c63b94ec3abc0c922a85dbd8dc4520d8bd0f074"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Brahms_SymphonyNo.4inEMinor_JohannesBrahms-SymphonyNo.4InEMinorOp.98-02-AndanteModerato.flac",
+   "bytes": 103707971,
+   "sha256": "4888b6b24e8a9fb0b0da2a373a81d8d432e68adab4e7af7f30dc7ff65f4569be"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Brahms_SymphonyNo.4inEMinor_JohannesBrahms-SymphonyNo.4InEMinorOp.98-03-AllegroGiocoso.flac",
+   "bytes": 63381927,
+   "sha256": "fde97bc38da47dc0a46364997c4f2631a7d4c28b2d67c632b1942e7f8c5463b9"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Brahms_SymphonyNo.4inEMinor_JohannesBrahms-SymphonyNo.4InEMinorOp.98-04-AllegroEnergicoEPassionato.flac",
+   "bytes": 107058979,
+   "sha256": "a180d289dd7f7297110e3411becfda382a88f773159bdaaca0562235639cccb0"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Brahms_TragicOverture_JohannesBrahms-TragicOverture.flac",
+   "bytes": 134270870,
+   "sha256": "540f340e6433c622ed1f58598693b04a1f596e07550768b0bd119e979a7a345a"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Dvorak_StringQuartetNo.10inEFlatOp.51_AntonnDvorak-StringQuartetNo.10InEFlatOp.51-01-AllegroMaNonTroppo.flac",
+   "bytes": 109185802,
+   "sha256": "da7d832f33c931fc1afe798a8d5964aad461c6d60a574f9313b2e0a18c471352"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Dvorak_StringQuartetNo.10inEFlatOp.51_AntonnDvorak-StringQuartetNo.10InEFlatOp.51-02-Dumka.flac",
+   "bytes": 73182454,
+   "sha256": "67b72df004cd4fc1f98ba512c2535d9eb3c3e3a0772dba47a6ca721a22accdd7"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Dvorak_StringQuartetNo.10inEFlatOp.51_AntonnDvorak-StringQuartetNo.10InEFlatOp.51-03-Romanza.flac",
+   "bytes": 56985407,
+   "sha256": "352417df0e134b63b3c4200a070572fb59e249d869e36117dbd6e2e9f18d5058"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Dvorak_StringQuartetNo.10inEFlatOp.51_AntonnDvorak-StringQuartetNo.10InEFlatOp.51-04-FinaleAllegroAssai.flac",
+   "bytes": 70820388,
+   "sha256": "461a5b479a92d6dd1095400f198d920cffe708fc5c9c5fc4588cc4e96b739b1b"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Dvorak_StringQuartetNo.12inFMajorOp.96_AntonnDvorak-StringQuartetNo.12InFMajorOp.96American-01-AllegroMaNonTroppo.flac",
+   "bytes": 75455956,
+   "sha256": "d475f08fdca1a0a091722a5708c7378239f78bae349288e479dc4e5c024ff0ce"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Dvorak_StringQuartetNo.12inFMajorOp.96_AntonnDvorak-StringQuartetNo.12InFMajorOp.96American-02-Lento.flac",
+   "bytes": 72971300,
+   "sha256": "ca6ecec4c7508ddf886757d6f968244d11be0059f48d697b9979debf035762f9"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Dvorak_StringQuartetNo.12inFMajorOp.96_AntonnDvorak-StringQuartetNo.12InFMajorOp.96American-03-MoltoVivace.flac",
+   "bytes": 38625555,
+   "sha256": "7cecc875156fb7bc5c46ca3852cf6f4a534f19ff355d24d91185b124686e1f65"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Dvorak_StringQuartetNo.12inFMajorOp.96_AntonnDvorak-StringQuartetNo.12InFMajorOp.96American-04-Finale-VivaceMaNonTroppo.flac",
+   "bytes": 55135418,
+   "sha256": "209b4ca2ecb55da01cdde9c7dd727a81a7dadb61389e8348f35500f7e9e84807"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Greig_PeerGynt_EdvardGrieg-PeerGyntSuiteNo.1Op.46-01-Morning.flac",
+   "bytes": 39347119,
+   "sha256": "b667041ee4766e81b77e062e8fb1861c8aae418b4747fb0e3fec1dc0c80e3292"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Greig_PeerGynt_EdvardGrieg-PeerGyntSuiteNo.1Op.46-02-AasesDeath.flac",
+   "bytes": 43766391,
+   "sha256": "5010b1911dd02d63731c21cb6ecd7914a7cdb17acf844a6418264716ce562335"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Greig_PeerGynt_EdvardGrieg-PeerGyntSuiteNo.1Op.46-03-AnitrasDream.flac",
+   "bytes": 38024956,
+   "sha256": "24fbafd74ca36262b7481c01ec8ec5442119925e3bb7329af44db972c7f65026"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Greig_PeerGynt_EdvardGrieg-PeerGyntSuiteNo.1Op.46-04-InTheHallOfTheMountainKing.flac",
+   "bytes": 25778747,
+   "sha256": "1c1be6b3e0042ee031cee42a8d151b04c78bfccf3126c4de6271e7b2fdcb6937"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Haydn_StringQuartetInDMajorOp.64_JosephHaydn-StringQuartetInDOp.645H363Lark-01-AllegroModerato.flac",
+   "bytes": 58213773,
+   "sha256": "5098ab8cde7978c032ccdfd6e78a4ef1a6add2dd79d75d3b88e5ef1c9f0b31d8"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Haydn_StringQuartetInDMajorOp.64_JosephHaydn-StringQuartetInDOp.645H363Lark-02-AdagioCantabile.flac",
+   "bytes": 43505187,
+   "sha256": "b319b834818fa13dbe5163e066d2b87465e3de94a700e272ec48b30e7a80525c"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Haydn_StringQuartetInDMajorOp.64_JosephHaydn-StringQuartetInDOp.645H363Lark-03-MenuettoAllegretto.flac",
+   "bytes": 33882001,
+   "sha256": "8038ab3435dc2f0e20a8bf165c5377c43b13176530afe33a78fee384c8fd02bb"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Haydn_StringQuartetInDMajorOp.64_JosephHaydn-StringQuartetInDOp.645H363Lark-04-FinaleVivace.flac",
+   "bytes": 14666229,
+   "sha256": "987f7cb9a4ea194e23e29efaea8c57a3a37685c4f117deee8a98b9219b24c16c"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Mendelssohn_Hebrides_FelixMendelssohn-HebridesOvertureFingalsCave.flac",
+   "bytes": 104081780,
+   "sha256": "48e0ed748a461e1f8a04686f438477ac181390c2dc870788f8d3dfda88416952"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Mendelssohn_ItalianSymphony_FelixMendelssohn-SymphonyNo.4InAMajorOp.90italian-01-AllegroVivace.flac",
+   "bytes": 73828214,
+   "sha256": "f4e03fee1ac19c23e56f19496c6d1a00652336c7e0d49c140fa9625d51b4aed5"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Mendelssohn_ItalianSymphony_FelixMendelssohn-SymphonyNo.4InAMajorOp.90italian-02-AndanteConMoto.flac",
+   "bytes": 51532576,
+   "sha256": "49331532589692cc88e22eda18ad624ba43cf33e10f4c2191f948b893c3a7c08"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Mendelssohn_ItalianSymphony_FelixMendelssohn-SymphonyNo.4InAMajorOp.90italian-03-ConMotoModerato.flac",
+   "bytes": 65043430,
+   "sha256": "46c4fdc665121b3b9c9918ef115dc6d61bad5a063401f890f24fbcf435957a89"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Mendelssohn_ItalianSymphony_FelixMendelssohn-SymphonyNo.4InAMajorOp.90italian-04-Saltarellopresto.flac",
+   "bytes": 57948023,
+   "sha256": "d0fbce0b48b50bbbc51568b483ea4dd14126acf284b6dfc9444b82ac3818ff86"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Mendelssohn_ScottishSymphony_FelixMendelssohn-SymphonyNo.3InAMinorscottishOp.56-01-AndanteConMoto.flac",
+   "bytes": 127834276,
+   "sha256": "0a4be05584fce3810c25c94ba01b88db430b4dc31dde095a415c763da29d615c"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Mendelssohn_ScottishSymphony_FelixMendelssohn-SymphonyNo.3InAMinorscottishOp.56-02-VivaceNonTroppo.flac",
+   "bytes": 38319188,
+   "sha256": "6627e28d9a3341632155e772f644ab4fb2814d5297e840b34245f186470a1d93"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Mendelssohn_ScottishSymphony_FelixMendelssohn-SymphonyNo.3InAMinorscottishOp.56-03-Adagio.flac",
+   "bytes": 82606968,
+   "sha256": "9b65ccae1286a08c6789877c0d1c47ffda8a2a71a861da2bff6e554bc8d9b004"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Mendelssohn_ScottishSymphony_FelixMendelssohn-SymphonyNo.3InAMinorscottishOp.56-04-AllegroVivacissimo.flac",
+   "bytes": 105883052,
+   "sha256": "479235d413c5e94c7321dc2ba4e394024e27b59a6e4d5d8cda84c871ad0d5b6f"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Mendelssohn_StringQuartetNo.6inFMinorOp.80_FelixMendelssohn-StringQuartetNo.6InFMinorOp.80-01-AllegroVivaceAssai.flac",
+   "bytes": 76738307,
+   "sha256": "16730724ef5375970d8851acae58eb78341e0f213667e2f55c6326fec5e49633"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Mendelssohn_StringQuartetNo.6inFMinorOp.80_FelixMendelssohn-StringQuartetNo.6InFMinorOp.80-02-AllegroAssai.flac",
+   "bytes": 48120299,
+   "sha256": "0167f49589d15f42222c0d1aaa48d5824cfe897aa09238a5490cc3f37fbbf070"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Mendelssohn_StringQuartetNo.6inFMinorOp.80_FelixMendelssohn-StringQuartetNo.6InFMinorOp.80-03-Adagio.flac",
+   "bytes": 77347176,
+   "sha256": "186f2130257a1d9f694a52bcf915ae9891262f30f1a2c2a6a7b2cb6a5a4c7af4"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Mendelssohn_StringQuartetNo.6inFMinorOp.80_FelixMendelssohn-StringQuartetNo.6InFMinorOp.80-04-Fuga.flac",
+   "bytes": 62990665,
+   "sha256": "16c0a8db179655eb7a0dbb29bae0d18a1454df72f636af62f0b33737bb00e130"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Mozart_MagicFluteOverture_WolfgangAmadeusMozart-MagicFluteOverture.flac",
+   "bytes": 71765512,
+   "sha256": "d0482d54438d784ab6c0ff2d2279e10fa821f7b6fec9f7da43bfed5701cb25ac"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Mozart_MarriageOfFigaro_WolfgangAmadeusMozart-MarriageOfFigaro.flac",
+   "bytes": 44098215,
+   "sha256": "484cb77a1a5ba764c17128e385058baefc0cf2076c542bc07cb91b05450d121d"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Mozart_StringQuartetNo.15inDMinorK421_WolfgangAmadeusMozart-StringQuartetNo.15InDMinorK421-01-AllegroModerato.flac",
+   "bytes": 71122696,
+   "sha256": "890ded851f9f8c89d0d1bd01e22304f24bd097017096d26d1f9c36477e05ea4d"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Mozart_StringQuartetNo.15inDMinorK421_WolfgangAmadeusMozart-StringQuartetNo.15InDMinorK421-02-Andante.flac",
+   "bytes": 45814596,
+   "sha256": "944b6a75f252b60d1054d81df4bbb535660b817ff956e39465834c661385b996"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Mozart_StringQuartetNo.15inDMinorK421_WolfgangAmadeusMozart-StringQuartetNo.15InDMinorK421-03-Minuetto.flac",
+   "bytes": 38277849,
+   "sha256": "6681b969b7751dc4b6d66a384589ff58ba256a8733cb97cd6a12c3603c314aef"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Mozart_StringQuartetNo.15inDMinorK421_WolfgangAmadeusMozart-StringQuartetNo.15InDMinorK421-04-AllegroMaNonTroppo.flac",
+   "bytes": 60886240,
+   "sha256": "697c41c151c4ba142261fb23e1ffaf127ffca2f0dbd4c274b75dcf244efde023"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Mozart_StringQuartetNo.19inCMajorK465_WolfgangAmadeusMozart-StringQuartetNo.19InCK465Dissonance-01-AdagioAllegro.flac",
+   "bytes": 83398705,
+   "sha256": "4e1cddda40b6a609d62a648680973ab1fb7e5d29d18b895be0a28aa63c4f22ed"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Mozart_StringQuartetNo.19inCMajorK465_WolfgangAmadeusMozart-StringQuartetNo.19InCK465Dissonance-02-AndanteCantabile.flac",
+   "bytes": 72104295,
+   "sha256": "6cad13a5c312515d135b76d8faa85b48fdb737f4f954dafdd93bbc1eefcaf643"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Mozart_StringQuartetNo.19inCMajorK465_WolfgangAmadeusMozart-StringQuartetNo.19InCK465Dissonance-03-MinuettoAllegretto.flac",
+   "bytes": 51487779,
+   "sha256": "9783b5c5f1d3f5d6284b32541c19d9b1d0d3ba4ddee6eb9f01bd620545e79bce"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Mozart_StringQuartetNo.19inCMajorK465_WolfgangAmadeusMozart-StringQuartetNo.19InCK465Dissonance-04-AllegroVolto.flac",
+   "bytes": 56831055,
+   "sha256": "6f63ee37c5717c8fce2fd35477330dd04f081f02fb9b3171147e7d49bb39ad33"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Mozart_SymphonyNo.40inGMinor_WolfgangAmadeusMozart-SymphonyNo.40InGMinorK.550-01-MoltoAllegro.flac",
+   "bytes": 65272320,
+   "sha256": "e291748465d6a8972b79ea60e075bab56dc845eca48d6abcdc3d49f87144f005"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Mozart_SymphonyNo.40inGMinor_WolfgangAmadeusMozart-SymphonyNo.40InGMinorK.550-02-Andante.flac",
+   "bytes": 75011718,
+   "sha256": "ae3e45623e02b8b7417a174f1f4ce1c50f01f28fa213049e7e38ac5ceb88fd58"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Mozart_SymphonyNo.40inGMinor_WolfgangAmadeusMozart-SymphonyNo.40InGMinorK.550-03-MenuettoAllegretto.flac",
+   "bytes": 46611265,
+   "sha256": "3f0cf2bb5938f2986b1a29503e35d05b4e6ee55512ff16fa255457c3540b1120"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Mozart_SymphonyNo.40inGMinor_WolfgangAmadeusMozart-SymphonyNo.40InGMinorK.550-04-AllegroAssai.flac",
+   "bytes": 52487841,
+   "sha256": "41c293db57f1a9f62836d87c6eddf04854057a4ba1b467f8e91b50d7cdcdf1d8"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Rimsky-Korsakov_RussianOverture_NikolaiRimsky-korsakov-RussianEasterFestivalOvertureOp.36.flac",
+   "bytes": 162994552,
+   "sha256": "f6ea5c024e307cad413705f91dc0222b2f79ae6ce1c45d0089afc6313a675ba6"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Schubert_SonataInAMajorD.664_FranzSchubert-SonataInAMajorD.664-01-AllegroModerato.flac",
+   "bytes": 26756850,
+   "sha256": "735ea6b5676fe56d74e147aae3d178bb6d1566133aaf02c35bc2e0b1a4fbf74b"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Schubert_SonataInAMajorD.664_FranzSchubert-SonataInAMajorD.664-02-Andante.flac",
+   "bytes": 15055413,
+   "sha256": "bb043879de6339173c31b0549f686ce0961610acc9584eb5eb06c3f3f5ee0040"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Schubert_SonataInAMajorD.664_FranzSchubert-SonataInAMajorD.664-03-Allegro.flac",
+   "bytes": 21142011,
+   "sha256": "91228d09f75a2da0202ff5ce1624372759e03ee379e260c1b337eb1980851b36"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Schubert_SonataInAMinorD.784_FranzSchubert-SonataInAMinorD.784-01-AllegroGiusto.flac",
+   "bytes": 30391918,
+   "sha256": "8b2ea5967225d52ad192c8a7298ee1d923b97478202d693f6eb799dbef7cdb7d"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Schubert_SonataInAMinorD.784_FranzSchubert-SonataInAMinorD.784-02-Andante.flac",
+   "bytes": 12222732,
+   "sha256": "f9d5687aa3897d2a6973b6e6731bb062104b7f7d18d27c0cadd0fda96c5ea30b"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Schubert_SonataInAMinorD.784_FranzSchubert-SonataInAMinorD.784-03-AllegroVivace.flac",
+   "bytes": 22322128,
+   "sha256": "973b275df87577a320aafa229e4e882e57b5e6fdbe8e9ecb08a20239af9e44d3"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Schubert_SonataInAMinorD.845_FranzSchubert-SonataInAMinorD.845-01-Moderato.flac",
+   "bytes": 37249111,
+   "sha256": "5667ab77269467678602319e5a2455f69b806d393bb4de01b6669ee6ed3641d4"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Schubert_SonataInAMinorD.845_FranzSchubert-SonataInAMinorD.845-02-AndantePocoMosso.flac",
+   "bytes": 41670217,
+   "sha256": "ca239b8984e57784a3db8e2f974037db9e18da471014e8b934912f61d5aacb21"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Schubert_SonataInAMinorD.845_FranzSchubert-SonataInAMinorD.845-03-Scherzo.AllegroVivace-Trio.UnPocoPiuLento.flac",
+   "bytes": 24853042,
+   "sha256": "cde92b9e7d3539506183ff1607474f656117c153c2188b3609f1c331e9d6e8cd"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Schubert_SonataInAMinorD.845_FranzSchubert-SonataInAMinorD.845-04-Rondo.AllegroVivace.flac",
+   "bytes": 21014756,
+   "sha256": "e2548be85279f414713ccc9652376efa5b5cd36bf2241a72ce6f25b652b544ac"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Schubert_SonataInAMinorD.959_FranzSchubert-SonataInAMinorD.959-01-Allegro.flac",
+   "bytes": 41196743,
+   "sha256": "dbf502dc47cf44cc3d172a1bf09db4d76c37902d4096ff04ebc3e0f0ab6c8830"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Schubert_SonataInAMinorD.959_FranzSchubert-SonataInAMinorD.959-02-Andantino.flac",
+   "bytes": 29286217,
+   "sha256": "674286fcf1bc0d3b67fa321f67fe744068086c31475c0afe7d2646ab65d1b1be"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Schubert_SonataInAMinorD.959_FranzSchubert-SonataInAMinorD.959-03-Scherzo.AllegroVivace.flac",
+   "bytes": 19098848,
+   "sha256": "e8b7025322a047acb6d72afc752360ac264bc601422b74de34314da2c00af5a1"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Schubert_SonataInAMinorD.959_FranzSchubert-SonataInAMinorD.959-04-Rondo.Allegretto.flac",
+   "bytes": 44612440,
+   "sha256": "fb2c2f8429606d628511c375234b7dfc64f8bb94de78f33f4fe44b48e7b9c93c"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Schubert_SonataInCMinorD.958_FranzSchubert-SonataInCMinorD.958-01-Allegro.flac",
+   "bytes": 40766329,
+   "sha256": "0f2f7c9c3b26c2074a3b56816d7dca7ae817023be7120ed7dc012d36f9c28db7"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Schubert_SonataInCMinorD.958_FranzSchubert-SonataInCMinorD.958-02-Adagio.flac",
+   "bytes": 23477591,
+   "sha256": "96173e645c664a3cdd2d96dadfa5c570494aeda2c8e48894a45d0cdbb9636c60"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Schubert_SonataInCMinorD.958_FranzSchubert-SonataInCMinorD.958-03-MenuettoAllegro.flac",
+   "bytes": 10805637,
+   "sha256": "8077ecdc73d0d87929f14b190a75521345fdb9cba44179fb58691346f26f2b53"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Schubert_SonataInCMinorD.958_FranzSchubert-SonataInCMinorD.958-04-Allegro.flac",
+   "bytes": 39817784,
+   "sha256": "56f228967059659c0adf51b1a0cdab722644e5b711e1550c280340120e4c8016"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Schubert_SonataInDMajorD.850_FranzSchubert-SonataInDMajorD.850-01-AllegroVivace.flac",
+   "bytes": 34342244,
+   "sha256": "807b961c8506610a7d170641c98a3dcfe6e28aa89b3493341881081d38b1a9ec"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Schubert_SonataInDMajorD.850_FranzSchubert-SonataInDMajorD.850-02-ConMoto.flac",
+   "bytes": 35537786,
+   "sha256": "f109974a55ab177d8953930a12a14407dacf74cb8fe03c4e355e2875bd579e72"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Schubert_SonataInDMajorD.850_FranzSchubert-SonataInDMajorD.850-03-Scherzo.AllegroVivace.flac",
+   "bytes": 33279299,
+   "sha256": "8f4439421010073bc7224aaf3b5d3ed8d7c088ba298ebf01c0fdd1b5c82769d9"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Schubert_SonataInDMajorD.850_FranzSchubert-SonataInDMajorD.850-04-Rondo.AllegroModerato.flac",
+   "bytes": 28096432,
+   "sha256": "c7b76e14fea11c2a2469aedffd18c7a75223eb77a5533b074bc82179da574e4b"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Schubert_SonataInEFlatMajorD.568_FranzSchubert-SonataInEFlatMajorD.568-01-AllegroModerato.flac",
+   "bytes": 35882878,
+   "sha256": "2a977faf05635c835be785a45d375895a770258c5eb67c70fcc6ea5a0e2c6678"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Schubert_SonataInEFlatMajorD.568_FranzSchubert-SonataInEFlatMajorD.568-02-AndanteMolto.flac",
+   "bytes": 20534028,
+   "sha256": "65b9e749db5e4dc79c8daadfd6aa2f01da2b53a907eb8d1d1960d9db7c217246"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Schubert_SonataInEFlatMajorD.568_FranzSchubert-SonataInEFlatMajorD.568-03-MenuettoAllegretto.flac",
+   "bytes": 15019468,
+   "sha256": "12706249479d58e4cc72756e6abe01510e4b6a30d72f837e36f3eb36fa6073f6"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Schubert_SonataInEFlatMajorD.568_FranzSchubert-SonataInEFlatMajorD.568-04-AllegroModerato.flac",
+   "bytes": 27591115,
+   "sha256": "a2ae39fd8885172c7ae099f657de2089fb1f6586ae660d97a9e7c1bfbd225020"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Smetana_Vltava_BedichSmetana-MVlast-Vltava.flac",
+   "bytes": 143713118,
+   "sha256": "eaba28529d19169d1685f9fc047bd911ac42ee58184ef0655f359f6e8322a761"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Suk_Meditation_JosefSuk-Meditation.flac",
+   "bytes": 65797149,
+   "sha256": "6a8015cef8733a9755eec9ac7ac23a1afa90fc8bdae605e8c64d0855248e9e92"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Tchaikovsky_SymphonyPathetique_PyotrIlyichTchaikovsky-SymphonyNo.6InBMinorOp.74pathtique-01-AdagioAllegroNonTroppo.flac",
+   "bytes": 147106209,
+   "sha256": "d00a50d86ad87e572ba586ad3f99f17de3b93860e93d031b153eff4a4494ca7f"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Tchaikovsky_SymphonyPathetique_PyotrIlyichTchaikovsky-SymphonyNo.6InBMinorOp.74pathtique-02-AllegroConGracia.flac",
+   "bytes": 72084637,
+   "sha256": "c666606075d788e1e887d638324dac623d639077fd6b33c3b73e50fc63cedfc4"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Tchaikovsky_SymphonyPathetique_PyotrIlyichTchaikovsky-SymphonyNo.6InBMinorOp.74pathtique-03-AllegroMoltoVivace.flac",
+   "bytes": 90689821,
+   "sha256": "20c62b1d6a98c8821887532b53ba42dcddc0d2fe2b131c350acef6dd7f083b8d"
+  },
+  {
+   "filename": "MusopenCollectionAsFlac__Tchaikovsky_SymphonyPathetique_PyotrIlyichTchaikovsky-SymphonyNo.6InBMinorOp.74pathtique-04-FinaleAdagioLamentoso.flac",
+   "bytes": 84418166,
+   "sha256": "fb9df5ea8d598138bf5568a9ff632717aa7048705783a7851f18ea449c40915e"
+  }
+ ]
+}
