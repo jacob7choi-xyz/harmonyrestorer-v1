@@ -29,6 +29,26 @@ from benchmark.protocol import (
     load_protocol,
 )
 
+REPO_ROOT = _PROTOCOL_PATH.parents[2]
+
+# Digests of the v1 artifacts as frozen at 64ff87e. A tripwire, not a trust root:
+# git history and review establish which protocol was approved. This exists so that
+# editing an archived artifact together with the digest recorded in v2 fails here
+# rather than passing quietly.
+V1_ARTIFACTS = {
+    "benchmark/protocols/v1.json": (
+        "b25a964a6a3415a998959d63f0222fe45e207629a90048c3226635fe9e5f9efd"
+    ),
+    "docs/benchmark-protocol-v1.md": (
+        "8a24244281fe9a20e58b1558f503f0974b45583df853937ffc1d7253fcca45e2"
+    ),
+}
+
+
+def digest_of(relative_path: str) -> str:
+    """SHA-256 of a repository file, read as bytes."""
+    return hashlib.sha256((REPO_ROOT / relative_path).read_bytes()).hexdigest()
+
 
 def variant(tmp_path: Path, mutate: Callable[[dict[str, Any]], None]) -> Path:
     """Write a copy of the real config with one deliberate change applied."""
@@ -43,7 +63,7 @@ class TestRealProtocol:
     """The checked-in config must load and describe itself accurately."""
 
     def test_it_loads(self) -> None:
-        assert load_protocol().protocol_version == 1
+        assert load_protocol().protocol_version == 2
 
     def test_digest_is_of_the_exact_file_bytes(self) -> None:
         """The provenance claim is 'these bytes governed this run', so the digest
@@ -78,7 +98,7 @@ class TestImmutability:
     def test_top_level_field_cannot_be_reassigned(self) -> None:
         protocol = load_protocol()
         with pytest.raises(dataclasses.FrozenInstanceError):
-            protocol.protocol_version = 2  # type: ignore[misc]
+            protocol.protocol_version = 99  # type: ignore[misc]
 
     def test_nested_field_cannot_be_reassigned(self) -> None:
         protocol = load_protocol()
@@ -162,11 +182,11 @@ class TestEnvironmentEnforcement:
 
 
 class TestVersionCommitments:
-    """v1 promises are enforced at load, so weakening one requires a version bump."""
+    """Protocol promises are enforced at load, so weakening one requires a version bump."""
 
     def test_unsupported_version(self, tmp_path: Path) -> None:
-        path = variant(tmp_path, lambda d: d.update({"protocol_version": 2}))
-        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 2"):
+        path = variant(tmp_path, lambda d: d.update({"protocol_version": 3}))
+        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 3"):
             _load_from_path(path)
 
     def test_composite_score_cannot_be_enabled(self, tmp_path: Path) -> None:
@@ -312,12 +332,14 @@ class TestNumericBounds:
         with pytest.raises(ProtocolValueError, match="leave samples unanalysed"):
             _load_from_path(path)
 
-    def test_zero_magnitude_floor_is_rejected(self, tmp_path: Path) -> None:
+    def test_zero_log_magnitude_offset_is_rejected(self, tmp_path: Path) -> None:
         path = variant(
             tmp_path,
-            lambda d: d["metrics"]["log_spectral_distance"].update({"magnitude_floor": 0.0}),
+            lambda d: d["metrics"]["log_spectral_distance"]["log_magnitude"].update(
+                {"offset": 0.0}
+            ),
         )
-        with pytest.raises(ProtocolValueError, match="magnitude_floor must be positive"):
+        with pytest.raises(ProtocolValueError, match=r"log_magnitude\.offset must be positive"):
             _load_from_path(path)
 
     def test_positive_dbfs_floor_is_rejected(self, tmp_path: Path) -> None:
@@ -396,7 +418,7 @@ class TestCanonicalAccessPath:
     something reached for by accident, not to make it impossible.
     """
 
-    FORBIDDEN = ("v1.json", "_PROTOCOL_PATH", "_load_from_path", "protocols/")
+    FORBIDDEN = ("v1.json", "v2.json", "_PROTOCOL_PATH", "_load_from_path", "protocols/")
 
     def test_no_other_production_module_reaches_the_config_directly(self) -> None:
         package = _PROTOCOL_PATH.parents[1]
@@ -436,7 +458,7 @@ class TestOnlyOneApprovedConfiguration:
             d["aggregation"]["bootstrap"]["iterations"] = 50_000
 
         parsed = _load_from_path(variant(tmp_path, alternate))
-        assert parsed.protocol_version == 1
+        assert parsed.protocol_version == 2
         assert parsed.selection.seed == 999
 
         approved = load_protocol()
@@ -444,3 +466,229 @@ class TestOnlyOneApprovedConfiguration:
         assert approved.selection.partitions["test"] != 50
         assert approved.aggregation.bootstrap.iterations != 50_000
         assert approved.source_sha256 != parsed.source_sha256
+
+
+class TestAmendmentChain:
+    """A superseded protocol stays in the tree and is named by digest, not by number."""
+
+    def test_chain_names_the_archived_v1_artifacts(self) -> None:
+        amends = load_protocol().amends
+        assert amends.protocol_version == 1
+        assert amends.protocol_path == "benchmark/protocols/v1.json"
+        assert amends.document_path == "docs/benchmark-protocol-v1.md"
+
+    def test_recorded_digests_match_the_archived_files(self) -> None:
+        amends = load_protocol().amends
+        assert digest_of(amends.protocol_path) == amends.protocol_sha256
+        assert digest_of(amends.document_path) == amends.document_sha256
+
+    def test_archived_v1_artifacts_are_byte_identical_to_their_frozen_state(self) -> None:
+        for relative_path, expected in V1_ARTIFACTS.items():
+            assert digest_of(relative_path) == expected, relative_path
+
+    def test_a_modified_predecessor_is_detected(self, tmp_path: Path) -> None:
+        """Recording a digest is worth little unless something recomputes it."""
+        wrong = "0" * 64
+        path = variant(tmp_path, lambda d: d["amends"].update({"protocol_sha256": wrong}))
+        with pytest.raises(ProtocolValueError, match="has been modified"):
+            _load_from_path(path)
+
+    def test_a_pruned_predecessor_is_detected(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The paths are frozen, so this cannot be provoked from config. It is still
+        reachable the way it would actually happen: someone tidies the archived
+        artifacts out of the tree and the chain has nothing left to verify against."""
+        monkeypatch.setattr("benchmark.protocol._REPO_ROOT", tmp_path)
+        with pytest.raises(ProtocolValueError, match="is missing"):
+            _load_from_path(_PROTOCOL_PATH)
+
+    def test_a_malformed_digest_is_rejected(self, tmp_path: Path) -> None:
+        path = variant(tmp_path, lambda d: d["amends"].update({"protocol_sha256": "abc123"}))
+        with pytest.raises(ProtocolValueError, match="64 lowercase hex digits"):
+            _load_from_path(path)
+
+    def test_an_amendment_without_a_reason_is_rejected(self, tmp_path: Path) -> None:
+        path = variant(tmp_path, lambda d: d["amends"].update({"reason": "   "}))
+        with pytest.raises(ProtocolValueError, match="indistinguishable from an edit"):
+            _load_from_path(path)
+
+    def test_the_predecessor_must_be_the_immediately_previous_version(self, tmp_path: Path) -> None:
+        path = variant(tmp_path, lambda d: d["amends"].update({"protocol_version": 0}))
+        with pytest.raises(ProtocolValueError, match=r"amends\.protocol_version must be 1"):
+            _load_from_path(path)
+
+    def test_the_superseded_config_is_not_loadable_as_current(self) -> None:
+        """Proof the version bump is real rather than cosmetic: the archived v1 file
+        still parses, and the current validator refuses it."""
+        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 1"):
+            _load_from_path(REPO_ROOT / "benchmark" / "protocols" / "v1.json")
+
+
+class TestFrozenTransform:
+    """Two LSD conventions were unspecified in v1 and each moved the number.
+
+    Pre-evaluation characterisation on non-benchmark fixtures: window symmetry shifted
+    LSD by about 0.0015 dB and FFT normalisation by about 0.088 dB. Those figures
+    describe the fixtures examined, not a bound on benchmark impact. Both conventions
+    are now pinned to a single value.
+    """
+
+    @staticmethod
+    def lsd_field(data: dict[str, Any], section: str) -> dict[str, Any]:
+        return data["metrics"]["log_spectral_distance"][section]
+
+    def test_symmetric_window_is_rejected(self, tmp_path: Path) -> None:
+        """np.hanning gives the symmetric window and scipy gives the periodic one.
+        Both answer to the name 'hann' and they are different windows."""
+        path = variant(
+            tmp_path, lambda d: self.lsd_field(d, "window").update({"symmetry": "symmetric"})
+        )
+        with pytest.raises(ProtocolValueError, match=r"window\.symmetry must be 'periodic'"):
+            _load_from_path(path)
+
+    @pytest.mark.parametrize("norm", ["ortho", "forward"])
+    def test_other_fft_normalisations_are_rejected(self, tmp_path: Path, norm: str) -> None:
+        """Normalisation would cancel in a pure log ratio. It does not cancel here,
+        because the offset is additive: scaling moves magnitudes relative to it."""
+        path = variant(tmp_path, lambda d: self.lsd_field(d, "fft").update({"norm": norm}))
+        with pytest.raises(ProtocolValueError, match=r"fft\.norm must be 'backward'"):
+            _load_from_path(path)
+
+    def test_unstated_pad_value_is_rejected(self, tmp_path: Path) -> None:
+        """'constant' padding without a value inherits whatever the library defaults to."""
+        path = variant(tmp_path, lambda d: self.lsd_field(d, "framing").update({"pad_value": 1.0}))
+        with pytest.raises(ProtocolValueError, match=r"pad_value must be 0\.0"):
+            _load_from_path(path)
+
+    def test_asymmetric_padding_is_rejected(self, tmp_path: Path) -> None:
+        """Stating padding per side is why 'width 512' cannot quietly mean 512 total."""
+        path = variant(
+            tmp_path, lambda d: self.lsd_field(d, "framing").update({"pad_right_samples": 0})
+        )
+        with pytest.raises(ProtocolValueError, match=r"pad_right_samples must be n_fft // 2"):
+            _load_from_path(path)
+
+    def test_partial_trailing_frame_is_rejected(self, tmp_path: Path) -> None:
+        path = variant(
+            tmp_path,
+            lambda d: self.lsd_field(d, "framing").update({"partial_trailing_frame": True}),
+        )
+        with pytest.raises(ProtocolValueError, match="differently shaped window"):
+            _load_from_path(path)
+
+    def test_clamp_semantics_are_rejected(self, tmp_path: Path) -> None:
+        """max(|X|, offset) is a different metric from |X| + offset. v1 specified the
+        additive form, so v2 carries it unchanged rather than improving it in passing."""
+        path = variant(
+            tmp_path,
+            lambda d: self.lsd_field(d, "log_magnitude").update({"operation": "clamp_then_log10"}),
+        )
+        with pytest.raises(ProtocolValueError, match=r"log_magnitude\.operation must be"):
+            _load_from_path(path)
+
+    def test_reduction_order_is_pinned(self, tmp_path: Path) -> None:
+        """RMS across bins then mean across frames is not the same as mean then RMS."""
+        path = variant(
+            tmp_path, lambda d: self.lsd_field(d, "reduction").update({"bins": "arithmetic_mean"})
+        )
+        with pytest.raises(ProtocolValueError, match=r"reduction\.bins must be 'rms'"):
+            _load_from_path(path)
+
+    def test_the_operation_names_the_amplitude_convention(self) -> None:
+        """The dB factor is carried by the operation's name, not by a setting, so a
+        config cannot select the power convention by editing a number."""
+        log_magnitude = load_protocol().metrics.log_spectral_distance.log_magnitude
+        assert log_magnitude.operation == "amplitude_db_additive_offset"
+        assert not hasattr(log_magnitude, "multiplier")
+
+
+class TestAmendmentChainIsNotRedirectable:
+    """Digest verification alone would not establish which artifacts are amended.
+
+    A config naming some other file together with that file's own hash satisfies
+    "named file matches named digest" perfectly well. Freezing the paths in code also
+    means a relative path escaping the repository is never reachable.
+    """
+
+    def test_pointing_the_protocol_path_at_another_real_file_is_rejected(
+        self, tmp_path: Path
+    ) -> None:
+        """The substitute exists and its recorded digest is correct, so only the frozen
+        path check stands between this config and a redirected chain."""
+        substitute = "benchmark/manifests/training_corpus.json"
+
+        def redirect(d: dict[str, Any]) -> None:
+            d["amends"]["protocol_path"] = substitute
+            d["amends"]["protocol_sha256"] = digest_of(substitute)
+
+        path = variant(tmp_path, redirect)
+        with pytest.raises(ProtocolValueError, match="not redirectable by configuration"):
+            _load_from_path(path)
+
+    def test_pointing_the_document_path_at_another_real_file_is_rejected(
+        self, tmp_path: Path
+    ) -> None:
+        substitute = "docs/benchmark-protocol.md"
+
+        def redirect(d: dict[str, Any]) -> None:
+            d["amends"]["document_path"] = substitute
+            d["amends"]["document_sha256"] = digest_of(substitute)
+
+        path = variant(tmp_path, redirect)
+        with pytest.raises(ProtocolValueError, match="not redirectable by configuration"):
+            _load_from_path(path)
+
+    def test_a_path_escaping_the_repository_is_rejected(self, tmp_path: Path) -> None:
+        path = variant(
+            tmp_path, lambda d: d["amends"].update({"document_path": "../../../etc/hosts"})
+        )
+        with pytest.raises(ProtocolValueError, match="not redirectable by configuration"):
+            _load_from_path(path)
+
+
+class TestAmplitudeConventionIsPinned:
+    """Amplitude against power dB is a kind of measurement, so code owns it."""
+
+    def test_power_convention_is_rejected(self, tmp_path: Path) -> None:
+        """Naming the power convention is the readable way to get 10*log10, and the
+        closed vocabulary refuses it. There is no factor to edit instead."""
+        path = variant(
+            tmp_path,
+            lambda d: d["metrics"]["log_spectral_distance"]["log_magnitude"].update(
+                {"operation": "power_db_additive_offset"}
+            ),
+        )
+        with pytest.raises(ProtocolValueError, match=r"log_magnitude\.operation must be"):
+            _load_from_path(path)
+
+    def test_reintroducing_a_configurable_factor_is_rejected(self, tmp_path: Path) -> None:
+        """Unknown-key rejection is what stops the factor coming back as a setting."""
+        path = variant(
+            tmp_path,
+            lambda d: d["metrics"]["log_spectral_distance"]["log_magnitude"].update(
+                {"multiplier": 10.0}
+            ),
+        )
+        with pytest.raises(ProtocolSchemaError, match="unknown key"):
+            _load_from_path(path)
+
+    def test_magnitudes_are_not_duplicated_into_code(self, tmp_path: Path) -> None:
+        """The counterpart to the rule above, asserted so the division stays honest.
+
+        A different transform length is well formed and is not the approved experiment.
+        The config digest is what distinguishes them, which is why `load_protocol` takes
+        no path. Copying these numbers into the validator would create a second
+        authority for a fact the digest already pins.
+        """
+
+        def resize(d: dict[str, Any]) -> None:
+            lsd = d["metrics"]["log_spectral_distance"]
+            lsd["n_fft"] = 2048
+            lsd["win_length"] = 2048
+            lsd["framing"]["pad_left_samples"] = 1024
+            lsd["framing"]["pad_right_samples"] = 1024
+
+        parsed = _load_from_path(variant(tmp_path, resize))
+        assert parsed.metrics.log_spectral_distance.n_fft == 2048
+        assert load_protocol().metrics.log_spectral_distance.n_fft != 2048

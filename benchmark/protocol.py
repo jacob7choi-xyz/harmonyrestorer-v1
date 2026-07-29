@@ -1,10 +1,27 @@
 """Immutable, validated access to the frozen benchmark protocol.
 
-Two things share the authority here, with different jobs. `benchmark/protocols/v1.json`
-holds the frozen values a run executes against. This module is the executable
-definition of what counts as a valid v1 protocol, which is why the gate set, the
-supported version, and the direction-to-effect mapping live in code rather than in
-the file they validate: a config cannot be the sole judge of its own validity.
+Two things share the authority here, with different jobs. `benchmark/protocols/v2.json`
+holds the frozen values a run executes against; its digest is what establishes *which*
+values those are. This module defines what counts as a *well-formed* protocol, which is
+why the gate set, the supported version, the transform vocabulary, and the
+direction-to-effect mapping live in code rather than in the file they validate: a
+config cannot be the sole judge of its own validity.
+
+The division is deliberate, and the line is whether a value expresses a kind or a
+magnitude. Kinds are pinned in code: periodic rather than symmetric, additive rather
+than clamped, backward rather than orthonormal, RMS before mean, amplitude dB rather
+than power dB. Magnitudes stay in the config alone: the seed, the partition sizes, the
+transform lengths, the offset. Copying those into code would create a second authority
+for the same fact, and the file digest already pins them. Where a factor follows from a
+kind, such as the 20 in amplitude dB, it is carried by the operation's name and is not a
+setting at all. Validation therefore answers "is this well formed", never "is this
+the approved experiment", which is the question `load_protocol` answers by refusing to
+take a path at all.
+
+Superseded versions stay in the tree rather than being replaced, so an artifact
+recording an older `protocol_version` remains interpretable without archaeology
+through git history. The current version names its predecessor by digest, and the
+loader recomputes those digests, so the chain is checked rather than asserted.
 
 `load_protocol` is the only supported way for production code to reach either. The
 config path is private and a test flags direct reads, so a bypass has to be written
@@ -44,9 +61,38 @@ logger = logging.getLogger(__name__)
 
 # Private so that production code has no supported affordance for reading the file
 # itself. `load_protocol` is the way in.
-_PROTOCOL_PATH = Path(__file__).resolve().parent / "protocols" / "v1.json"
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+_PROTOCOL_PATH = _REPO_ROOT / "benchmark" / "protocols" / "v2.json"
 
-SUPPORTED_PROTOCOL_VERSION = 1
+SUPPORTED_PROTOCOL_VERSION = 2
+
+# Which protocol v2 supersedes, and the artifacts it supersedes, as historical facts
+# rather than as arithmetic. `SUPPORTED_PROTOCOL_VERSION - 1` would encode a universal
+# rule that every version amends its immediate predecessor, which is not something the
+# governance model promises. The paths are frozen here so the config cannot redirect
+# the amendment chain at another file whose digest it also records, and so a relative
+# path out of the tree is not reachable at all.
+_PREDECESSOR_VERSION = 1
+_PREDECESSOR_PROTOCOL_PATH = "benchmark/protocols/v1.json"
+_PREDECESSOR_DOCUMENT_PATH = "docs/benchmark-protocol-v1.md"
+
+# Closed vocabularies for the frozen LSD transform. Each admits exactly one value in
+# v2. The fields exist so an independent implementer reads each convention from the
+# config instead of inheriting a library default, and so code branches on an enum
+# rather than parsing an equation string.
+_WINDOW_KIND = "hann"
+_WINDOW_SYMMETRY = "periodic"
+_FFT_KIND = "rfft"
+_FFT_NORM = "backward"
+_PAD_MODE = "constant"
+_FRAME_STARTS = "multiples_of_hop_from_zero"
+# Names the amplitude convention rather than exposing its factor as a setting. The 20
+# in 20*log10 distinguishes amplitude spectra from power spectra, so it belongs to the
+# kind of measurement, not to the list of numbers a config may choose. Storing it
+# separately would put the same authoritative value in two places.
+_LOG_MAGNITUDE_OPERATION = "amplitude_db_additive_offset"
+_BIN_REDUCTION = "rms"
+_FRAME_REDUCTION = "arithmetic_mean"
 
 # A positive paired effect must favour OpGAN for every metric, so the effect
 # expression follows from the metric's direction instead of being chosen per metric.
@@ -55,7 +101,7 @@ EFFECT_FOR_DIRECTION = MappingProxyType(
     {"higher_better": "opgan_minus_uvr", "lower_better": "uvr_minus_opgan"}
 )
 
-# The exact publication gates of protocol v1. Neither removals nor additions are
+# The exact publication gates of the current protocol. Neither removals nor additions are
 # permitted without a version bump. Dropping a gate obviously weakens the run, but
 # adding one is not automatically safer: a gate invented once results exist decides
 # which results get published, which is the preregistration failure this whole
@@ -77,6 +123,7 @@ _ROOT_KEYS = frozenset(
         "protocol_version",
         "protocol_document",
         "note",
+        "amends",
         "environment",
         "selection",
         "eligibility",
@@ -205,20 +252,77 @@ class SiSnr:
 
 
 @dataclass(frozen=True)
+class WindowSpec:
+    """Analysis window, defined by equation rather than by library function name."""
+
+    kind: str
+    symmetry: str
+    note: str
+
+
+@dataclass(frozen=True)
+class FftSpec:
+    """Transform and its normalisation convention.
+
+    Normalisation is result-sensitive for this metric: the additive log-magnitude
+    offset stops a uniform scaling from cancelling between the two spectra.
+    """
+
+    kind: str
+    norm: str
+    note: str
+
+
+@dataclass(frozen=True)
+class FramingSpec:
+    """Padding and frame placement, stated per side so 'width' cannot mean total."""
+
+    center: bool
+    pad_mode: str
+    pad_value: float
+    pad_left_samples: int
+    pad_right_samples: int
+    frame_starts: str
+    partial_trailing_frame: bool
+
+
+@dataclass(frozen=True)
+class LogMagnitudeSpec:
+    """The log operation, as a named operation rather than a parsable equation.
+
+    The dB factor is not a field. It follows from the named operation, so amplitude
+    and power conventions are distinguished by kind instead of by a number a config
+    could set to either.
+    """
+
+    operation: str
+    offset: float
+    note: str
+
+
+@dataclass(frozen=True)
+class ReductionSpec:
+    """Order and kind of the two aggregation steps, bins first then frames."""
+
+    bins: str
+    frames: str
+
+
+@dataclass(frozen=True)
 class LogSpectralDistance:
     """Spectral magnitude fidelity; blind to phase."""
 
     direction: str
+    paired_effect: str
     n_fft: int
     win_length: int
     hop_length: int
-    window: str
-    center: bool
-    pad_mode: str
-    magnitude_floor: float
-    log_scale: float
     bins: str
-    paired_effect: str
+    window: WindowSpec
+    fft: FftSpec
+    framing: FramingSpec
+    log_magnitude: LogMagnitudeSpec
+    reduction: ReductionSpec
 
 
 MetricConfig = ReconstructionSnr | SiSnr | LogSpectralDistance
@@ -294,12 +398,32 @@ class PublicationGates:
 
 
 @dataclass(frozen=True)
+class Amends:
+    """Which protocol this one replaces, identified by digest rather than by number.
+
+    The loader recomputes both digests from the archived files, so the chain is
+    checked rather than merely recorded. That establishes that the predecessor
+    present in the tree is the one this version claims to amend. It does not
+    establish that the predecessor was externally approved; git history and review
+    carry that, and no amount of repo-local hashing can substitute for them.
+    """
+
+    protocol_version: int
+    protocol_path: str
+    protocol_sha256: str
+    document_path: str
+    document_sha256: str
+    reason: str
+
+
+@dataclass(frozen=True)
 class Protocol:
     """The validated, immutable benchmark protocol."""
 
     protocol_version: int
     protocol_document: str
     note: str
+    amends: Amends
     environment: Environment
     selection: Selection
     eligibility: Eligibility
@@ -370,6 +494,21 @@ def _parse_duplicate_detection(data: Mapping[str, Any]) -> DuplicateDetection:
     )
 
 
+def _parse_log_spectral_distance(data: Mapping[str, Any]) -> LogSpectralDistance:
+    """Build the LSD section and its five transform sub-objects."""
+    at = "metrics.log_spectral_distance"
+    return _build(
+        LogSpectralDistance,
+        data,
+        at,
+        window=_build(WindowSpec, data["window"], f"{at}.window"),
+        fft=_build(FftSpec, data["fft"], f"{at}.fft"),
+        framing=_build(FramingSpec, data["framing"], f"{at}.framing"),
+        log_magnitude=_build(LogMagnitudeSpec, data["log_magnitude"], f"{at}.log_magnitude"),
+        reduction=_build(ReductionSpec, data["reduction"], f"{at}.reduction"),
+    )
+
+
 def _parse_metrics(data: Mapping[str, Any]) -> Metrics:
     """Build the metrics section and its three per-metric configs."""
     return _build(
@@ -382,11 +521,7 @@ def _parse_metrics(data: Mapping[str, Any]) -> Metrics:
             ReconstructionSnr, data["reconstruction_snr"], "metrics.reconstruction_snr"
         ),
         si_snr=_build(SiSnr, data["si_snr"], "metrics.si_snr"),
-        log_spectral_distance=_build(
-            LogSpectralDistance,
-            data["log_spectral_distance"],
-            "metrics.log_spectral_distance",
-        ),
+        log_spectral_distance=_parse_log_spectral_distance(data["log_spectral_distance"]),
     )
 
 
@@ -408,6 +543,7 @@ def _parse(data: Mapping[str, Any], digest: str, source: Path) -> Protocol:
         Protocol,
         data,
         "(root)",
+        amends=_build(Amends, data["amends"], "amends"),
         environment=_build(Environment, data["environment"], "environment"),
         selection=_parse_selection(data["selection"]),
         eligibility=_build(Eligibility, data["eligibility"], "eligibility"),
@@ -572,10 +708,103 @@ def _validate_metric_parameters(metrics: Metrics) -> None:
             f"metrics.log_spectral_distance.hop_length {lsd.hop_length} exceeds win_length "
             f"{lsd.win_length}, which would leave samples unanalysed"
         )
-    if lsd.magnitude_floor <= 0:
-        raise ProtocolValueError("metrics.log_spectral_distance.magnitude_floor must be positive")
-    if lsd.log_scale <= 0:
-        raise ProtocolValueError("metrics.log_spectral_distance.log_scale must be positive")
+    _validate_lsd_transform(lsd)
+
+
+def _validate_lsd_transform(lsd: LogSpectralDistance) -> None:
+    """Every convention that moves the number is pinned to one value.
+
+    v1 named a Hann window without fixing periodic against symmetric and never
+    stated an FFT normalisation. Both change the result, so both are frozen here
+    rather than inherited from whichever library happens to be installed.
+    """
+    at = "metrics.log_spectral_distance"
+    for field, actual, expected in (
+        ("window.kind", lsd.window.kind, _WINDOW_KIND),
+        ("window.symmetry", lsd.window.symmetry, _WINDOW_SYMMETRY),
+        ("fft.kind", lsd.fft.kind, _FFT_KIND),
+        ("fft.norm", lsd.fft.norm, _FFT_NORM),
+        ("framing.pad_mode", lsd.framing.pad_mode, _PAD_MODE),
+        ("framing.frame_starts", lsd.framing.frame_starts, _FRAME_STARTS),
+        ("log_magnitude.operation", lsd.log_magnitude.operation, _LOG_MAGNITUDE_OPERATION),
+        ("reduction.bins", lsd.reduction.bins, _BIN_REDUCTION),
+        ("reduction.frames", lsd.reduction.frames, _FRAME_REDUCTION),
+    ):
+        if actual != expected:
+            raise ProtocolValueError(f"{at}.{field} must be {expected!r} in v2, got {actual!r}")
+
+    framing = lsd.framing
+    if framing.center is not True:
+        raise ProtocolValueError(f"{at}.framing.center must be true")
+    if framing.partial_trailing_frame is not False:
+        raise ProtocolValueError(
+            f"{at}.framing.partial_trailing_frame must be false; a partial final frame "
+            "would be analysed against a differently shaped window"
+        )
+    if framing.pad_value != 0.0:
+        raise ProtocolValueError(
+            f"{at}.framing.pad_value must be 0.0, got {framing.pad_value}; constant padding "
+            "with an unstated value inherits a library default"
+        )
+    expected_pad = lsd.n_fft // 2
+    for side, value in (
+        ("pad_left_samples", framing.pad_left_samples),
+        ("pad_right_samples", framing.pad_right_samples),
+    ):
+        if value != expected_pad:
+            raise ProtocolValueError(
+                f"{at}.framing.{side} must be n_fft // 2 = {expected_pad}, got {value}"
+            )
+
+    if lsd.log_magnitude.offset <= 0:
+        raise ProtocolValueError(f"{at}.log_magnitude.offset must be positive")
+
+
+def _validate_amends(amends: Amends) -> None:
+    """The predecessor named here must be the frozen predecessor present in the tree.
+
+    Which artifacts are amended is checked as well as their digests. Verifying only the
+    digests would establish that the named file matches the named hash, a claim any
+    config naming some other file together with that file's hash satisfies equally, and
+    it would read whatever path the config supplied.
+    """
+    if amends.protocol_version != _PREDECESSOR_VERSION:
+        raise ProtocolValueError(
+            f"amends.protocol_version must be {_PREDECESSOR_VERSION}, got {amends.protocol_version}"
+        )
+    if not amends.reason.strip():
+        raise ProtocolValueError(
+            "amends.reason must not be empty; an amendment without a recorded reason is "
+            "indistinguishable from an edit"
+        )
+    for label, stated, frozen in (
+        ("protocol", amends.protocol_path, _PREDECESSOR_PROTOCOL_PATH),
+        ("document", amends.document_path, _PREDECESSOR_DOCUMENT_PATH),
+    ):
+        if stated != frozen:
+            raise ProtocolValueError(
+                f"amends.{label}_path must be {frozen!r}, got {stated!r}; the amendment "
+                "chain is not redirectable by configuration"
+            )
+    for label, rel_path, recorded in (
+        ("protocol", amends.protocol_path, amends.protocol_sha256),
+        ("document", amends.document_path, amends.document_sha256),
+    ):
+        if len(recorded) != 64 or not all(c in "0123456789abcdef" for c in recorded):
+            raise ProtocolValueError(f"amends.{label}_sha256 must be 64 lowercase hex digits")
+        archived = _REPO_ROOT / rel_path
+        if not archived.is_file():
+            raise ProtocolValueError(
+                f"amends.{label}_path {rel_path} is missing; the predecessor artifact must "
+                "stay in the tree so an artifact naming the older version stays interpretable"
+            )
+        actual = hashlib.sha256(archived.read_bytes()).hexdigest()
+        if actual != recorded:
+            raise ProtocolValueError(
+                f"amends.{label}_sha256 records {recorded[:12]} but {rel_path} hashes to "
+                f"{actual[:12]}; the archived predecessor has been modified"
+            )
+    logger.debug("Amendment chain verified against predecessor v%d", amends.protocol_version)
 
 
 def _validate_metrics(metrics: Metrics) -> None:
@@ -677,6 +906,7 @@ def _validate(protocol: Protocol) -> None:
             f"unsupported protocol_version {protocol.protocol_version}; this module implements "
             f"v{SUPPORTED_PROTOCOL_VERSION}"
         )
+    _validate_amends(protocol.amends)
     _validate_environment(protocol.environment)
     _validate_selection(protocol.selection)
     _validate_eligibility(protocol.eligibility)
@@ -734,6 +964,16 @@ def _load_from_path(source: Path) -> Protocol:
         raise ProtocolSchemaError(f"{source}: not valid JSON: {e}") from e
     if not isinstance(data, dict):
         raise ProtocolSchemaError(f"{source}: top level must be a JSON object")
+
+    # Before anything else, because a superseded config fails on whichever key changed
+    # since, and "missing key(s) ['amends']" is a far less useful answer than the
+    # version it actually declares.
+    declared = data.get("protocol_version")
+    if declared != SUPPORTED_PROTOCOL_VERSION:
+        raise ProtocolValueError(
+            f"{source}: unsupported protocol_version {declared!r}; this module implements "
+            f"v{SUPPORTED_PROTOCOL_VERSION}"
+        )
 
     try:
         protocol = _parse(data, digest, source)

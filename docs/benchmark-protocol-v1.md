@@ -1,16 +1,9 @@
-# Benchmark protocol v2
+# Benchmark protocol v1
 
 Frozen before candidate identities are selected, downloaded for evaluation,
 auditioned, or scored. The source collection has already been inspected in general
 terms; what has not happened is any decision about which recordings enter the
 benchmark.
-
-> **Note:** v2 amends v1 before any evaluation ran. The operational values live in
-> `benchmark/protocols/v2.json`, which is normative; this document explains them and
-> its numbers are illustrative. v1 is preserved unmodified as
-> [benchmark-protocol-v1.md](benchmark-protocol-v1.md) and
-> `benchmark/protocols/v1.json`, so an artifact recording `protocol_version: 1`
-> stays interpretable. See [Amendment](#amendment) for what changed and why.
 
 Its purpose is to remove the freedom to make reasonable-sounding choices after
 seeing results. Where a decision could be influenced by an outcome, it is fixed
@@ -308,56 +301,22 @@ si_snr = 10 * log10( (sum(target^2) + eps) / (sum(noise^2) + eps) )
     cap_db = 60.0
 ```
 
-**Log-spectral distance.** Every convention that moves the number is stated, because
-several of them are otherwise inherited from whichever library is installed. v1 fixed
-the parameter values but named the window only as "hann" and never named an FFT
-normalisation; both change the result. The config expresses each as a closed
-vocabulary rather than an equation string, so code branches on a named operation
-instead of parsing prose.
+**Log-spectral distance**, every STFT and floor parameter fixed because the
+magnitude floor alone materially changes the result on quiet bins:
 
 ```
 lsd = mean over frames of
-        sqrt( mean over bins of ( 20*log10(|X|+offset) - 20*log10(|Y|+offset) )^2 )
-
-    n_fft         = 1024
-    win_length    = 1024
-    hop_length    = 256
-    bins          = all, including DC and Nyquist
-
-    window        kind hann, symmetry periodic
-                  w[n] = 0.5 - 0.5*cos(2*pi*n/win_length),  0 <= n < win_length
-    fft           kind rfft, norm backward (unnormalised forward transform)
-    framing       center true, pad_mode constant, pad_value 0.0
-                  pad_left_samples 512, pad_right_samples 512
-                  frame starts at multiples of hop from zero
-                  no partial trailing frame
-    log_magnitude operation amplitude_db_additive_offset, offset 1e-8
-                  that operation is defined as 20*log10(|X| + offset)
-    reduction     rms across bins, then arithmetic mean across frames
+        sqrt( mean over bins of ( 20*log10(|X|+floor) - 20*log10(|Y|+floor) )^2 )
+    sample_rate     = 16000
+    n_fft           = 1024
+    win_length      = 1024
+    hop_length      = 256
+    window          = hann
+    center          = True
+    pad_mode        = constant
+    magnitude_floor = 1e-8
+    bins            = all, including DC and Nyquist
 ```
-
-The dB factor is not a configurable setting. The 20 in `20*log10` is what separates
-amplitude spectra from power spectra, so it belongs to the named operation rather than
-to the list of numbers a config may choose; 10 would halve every distance while looking
-entirely plausible. The offset is a magnitude and does live in the config.
-
-The window is defined by that equation rather than by a library function name. The
-symmetric convention divides by `win_length - 1`, answers to the same name, and is a
-different window: `numpy.hanning` returns the symmetric one and
-`scipy.signal.get_window` returns the periodic one.
-
-Normalisation matters here for a reason specific to this metric. In a pure log ratio
-a uniform magnitude scaling would cancel between the two spectra. The offset is
-additive, so scaling moves magnitudes relative to it and does not cancel.
-
-The offset is an additive term, not a clamp. `max(|X|, offset)` is a different
-metric. The reduction order is also load-bearing: RMS across bins followed by a mean
-across frames is not the same statistic as the reverse.
-
-Worked consequence, for the 2-second evaluation unit at 16 kHz. 32000 samples padded
-by 512 on each side gives 33024; with a 1024-sample window, a hop of 256, and no
-partial trailing frame, that is 126 frames of 513 bins. A production transform
-yielding any other shape for a normal unit is wrong.
 
 All three operate on the 2-second evaluation unit at 16 kHz mono. RMS, where used
 for eligibility, is `sqrt(mean(x^2))` on float samples normalised to full scale
@@ -501,42 +460,6 @@ environment.
 ## Amendment
 
 This document is not edited silently. A protocol defect discovered before results
-exist produces a new version, with the reason recorded, before evaluation runs. A
-defect discovered after results exist invalidates those results rather than
-retroactively changing the rules that produced them. Superseded versions stay in the
-tree rather than being replaced, and each version names its predecessor by digest;
-the loader recomputes those digests, so the chain is checked rather than asserted.
-
-### v1 to v2
-
-Discovered while planning the metric implementation, before any system output,
-candidate-selection outcome, or test-partition result had been generated or
-inspected. Three distinct problems, only two of which were genuine gaps:
-
-**Unspecified conventions.** v1 named its analysis window "hann" without fixing the
-periodic or symmetric convention, and never stated an FFT normalisation. Each is a
-real degree of freedom that changes the metric, so an independent implementation
-working from v1 could not reproduce a v1 number. v2 defines the window by equation
-and pins `norm = backward`.
-
-**Machine-readable underspecification.** v1's config named the additive log term
-`magnitude_floor` and did not encode the operation. The name implies clamping while
-the v1 document had already fixed the additive form, so code reading the config alone
-had to guess. v2 renames the field to `log_magnitude.offset` and states the operation
-as a named kind, `amplitude_db_additive_offset`, which also removes v1's separate
-`log_scale` number: a factor implied by the kind of measurement should not be a
-setting.
-
-**No change of numerical policy.** v2 preserves v1's additive `20*log10(|X| + 1e-8)`
-exactly. Switching to a clamp was tempting and would have been wrong: an amendment
-removes ambiguity, and altering an already-specified computation under cover of a
-clarification is the behaviour this process exists to prevent. No threshold, seed,
-partition size, or metric definition changed.
-
-Pre-evaluation characterisation, for context on why these were treated as defects
-rather than pedantry. On the fixtures examined, one clean 2-second frame from the
-training corpus plus synthetic additive noise, window symmetry moved LSD by roughly
-0.0015 dB and FFT normalisation by roughly 0.088 dB, with the `forward` convention
-pushing a spectral bin below the offset. Those figures describe those fixtures. They
-are not a bound on benchmark impact, and the noise fixture is a far worse restoration
-than either system should produce.
+exist produces v2, with the reason recorded, before evaluation runs. A defect
+discovered after results exist invalidates those results rather than retroactively
+changing the rules that produced them.
