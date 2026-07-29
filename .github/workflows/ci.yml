@@ -25,38 +25,11 @@ jobs:
       - name: Install project dependencies
         run: uv sync --frozen --all-groups --all-extras
 
-      - name: Format check (ruff)
-        run: uv run ruff format --check backend/ dataset/ benchmark/
-
-      - name: Lint (ruff)
-        run: uv run ruff check backend/ dataset/ benchmark/
-
-      - name: Type check (mypy)
-        run: uv run mypy backend/app/
-
-      - name: Security scan (bandit)
-        run: uv run bandit -r backend/app/ -q
-
-      - name: Dependency audit (pip-audit)
-        # CVE-2026-3219 affects pip itself with no fix version available upstream;
-        # ignored until a patched pip release is published.
-        # PYSEC-2026-3447 affects setuptools; the fix (83.0.0) requires torch 2.13,
-        # while the production image pins torch 2.12.1+cpu. setuptools is a
-        # build-time tool and is not used at runtime. Revisit alongside the
-        # planned torch/torchaudio upgrade to a matched release pair.
-        run: uv run pip-audit --ignore-vuln CVE-2026-3219 --ignore-vuln PYSEC-2026-3447
-
-      - name: Tests with coverage
-        run: uv run pytest backend/tests/ -v --tb=short --cov=backend/app --cov-fail-under=80
-
-      - name: Test dataset scripts
-        run: uv run pytest dataset/tests/ -v --tb=short
-
-      - name: Test benchmark protocol
-        run: uv run pytest benchmark/tests/ -v --tb=short
-
-      - name: Secrets scan
-        run: uv run detect-secrets-hook $(git ls-files)
+      # One tracked definition of the gate, invoked identically here and locally, so
+      # local green and CI green cannot drift. Adding a check means editing the script,
+      # not two places. See scripts/gate_python.sh for what runs and why.
+      - name: Gate (lint, types, security, audit, tests, secrets)
+        run: scripts/gate_python.sh
 
   frontend:
     runs-on: ubuntu-latest

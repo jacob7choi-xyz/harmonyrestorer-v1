@@ -36,11 +36,13 @@ REPO_ROOT = _PROTOCOL_PATH.parents[2]
 # editing an archived artifact together with the digest recorded in v2 fails here
 # rather than passing quietly.
 V1_ARTIFACTS = {
+    # Content digests of public, checked-in files. The allowlist pragmas are for the
+    # secrets scanner, which cannot tell a SHA-256 from a 64-character credential.
     "benchmark/protocols/v1.json": (
-        "b25a964a6a3415a998959d63f0222fe45e207629a90048c3226635fe9e5f9efd"
+        "b25a964a6a3415a998959d63f0222fe45e207629a90048c3226635fe9e5f9efd"  # pragma: allowlist secret
     ),
     "docs/benchmark-protocol-v1.md": (
-        "8a24244281fe9a20e58b1558f503f0974b45583df853937ffc1d7253fcca45e2"
+        "8a24244281fe9a20e58b1558f503f0974b45583df853937ffc1d7253fcca45e2"  # pragma: allowlist secret
     ),
 }
 
