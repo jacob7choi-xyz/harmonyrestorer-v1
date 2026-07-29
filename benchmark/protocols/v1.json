@@ -1,0 +1,99 @@
+{
+ "protocol_version": 1,
+ "protocol_document": "docs/benchmark-protocol.md",
+ "note": "Authoritative values for benchmark v1. Code reads this file through benchmark.protocol.load_protocol, which rejects unknown keys, validates semantic relationships, and enforces the pinned environment. Changing a value here changes the benchmark and requires a protocol version bump, not an edit.",
+
+ "environment": {
+  "numpy_version": "2.3.5",
+  "bit_generator": "PCG64"
+ },
+
+ "selection": {
+  "seed": 20260726,
+  "partitions": {"test": 30, "demo": 6, "test_reserve": 6, "development_reserve": 6},
+  "acquisition_retries": 3,
+  "permanent_failure_codes": [404, 410]
+ },
+
+ "eligibility": {
+  "recording_min_duration_s": 60,
+  "recording_rms_dbfs_min": -50.0,
+  "frame_rms_dbfs_min": -45.0,
+  "rms_definition": "20*log10(sqrt(mean(x^2))) on float samples at full scale 1.0"
+ },
+
+ "duplicate_detection": {
+  "flag_threshold": 0.50,
+  "action_on_flag": "adjudicate",
+  "action_on_uncertain": "exclude",
+  "mfcc": {
+   "sample_rate": 16000,
+   "n_mfcc": 20,
+   "hop_length": 512,
+   "normalization": "per_coefficient_zscore",
+   "alignment_search_s": 5.0,
+   "alignment_stride_frames": 2,
+   "min_overlap_frames": 100,
+   "similarity": "best_mean_per_frame_cosine"
+  },
+  "calibration": {
+   "positives_min": 0.8471,
+   "positives_n": 15,
+   "negatives_max": 0.0995,
+   "negatives_n": 28,
+   "same_session_negatives_max": 0.1033,
+   "same_session_negatives_n": 21,
+   "untested_case": "same composition, different performer"
+  }
+ },
+
+ "conditioning": {
+  "sample_rate": 16000,
+  "channels": "mono",
+  "max_length_difference_samples": 160,
+  "length_difference_provenance": "UVR resampling round-trip deficit observed at 128 samples on a 32000-sample unit",
+  "alignment_search": false
+ },
+
+ "metrics": {
+  "primary": ["reconstruction_snr", "si_snr", "log_spectral_distance"],
+  "legacy": ["pesq", "stoi"],
+  "legacy_in_headline": false,
+  "composite_score": false,
+  "reconstruction_snr": {"direction": "higher_better", "residual_floor": 1e-10, "cap_db": 60.0,
+   "paired_effect": "opgan_minus_uvr"},
+  "si_snr": {"direction": "higher_better", "zero_mean": true, "epsilon": 1e-8, "cap_db": 60.0,
+   "paired_effect": "opgan_minus_uvr"},
+  "log_spectral_distance": {"direction": "lower_better", "n_fft": 1024, "win_length": 1024,
+   "hop_length": 256, "window": "hann", "center": true, "pad_mode": "constant",
+   "magnitude_floor": 1e-8, "log_scale": 20.0, "bins": "all",
+   "paired_effect": "uvr_minus_opgan"}
+ },
+
+ "reporting": {
+  "note": "Three co-primary estimands, interpreted individually. The three-or-none rule is a presentation-integrity control against selective emphasis, not a multiple-comparison correction.",
+  "co_primary_reported_together": true,
+  "omnibus_winner": false,
+  "significance_language": false
+ },
+
+ "aggregation": {
+  "within_track": "arithmetic_mean_of_eligible_frames",
+  "across_tracks": ["macro_mean", "median"],
+  "bootstrap": {"unit": "recording", "iterations": 10000, "method": "percentile",
+   "confidence": 0.95, "seed": 20260726, "paired": true}
+ },
+
+ "publication_gates": {
+  "note": "The artifact builder refuses to emit a headline comparison unless every gate passes. Invalid runs publish reasons, never numbers.",
+  "required": [
+   "loaded_protocol_hash_matches_artifact",
+   "candidate_universe_hash_verified",
+   "training_performance_screen_complete",
+   "population_ids_equal_across_systems",
+   "frame_population_ids_equal_across_systems",
+   "coverage_opgan_complete",
+   "coverage_uvr_complete"
+  ]
+ }
+}

@@ -104,7 +104,7 @@ module = "dataset.*"
 warn_return_any = false
 
 [tool.pytest.ini_options]
-testpaths = ["backend/tests", "dataset/tests"]
+testpaths = ["backend/tests", "dataset/tests", "benchmark/tests"]
 pythonpath = ["backend", "."]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]

@@ -26,10 +26,10 @@ jobs:
         run: uv sync --frozen --all-groups --all-extras
 
       - name: Format check (ruff)
-        run: uv run ruff format --check backend/ dataset/
+        run: uv run ruff format --check backend/ dataset/ benchmark/
 
       - name: Lint (ruff)
-        run: uv run ruff check backend/ dataset/
+        run: uv run ruff check backend/ dataset/ benchmark/
 
       - name: Type check (mypy)
         run: uv run mypy backend/app/
@@ -51,6 +51,9 @@ jobs:
 
       - name: Test dataset scripts
         run: uv run pytest dataset/tests/ -v --tb=short
+
+      - name: Test benchmark protocol
+        run: uv run pytest benchmark/tests/ -v --tb=short
 
       - name: Secrets scan
         run: uv run detect-secrets-hook $(git ls-files)

@@ -333,6 +333,33 @@ OpGAN**, which prevents a sign error from inverting a published conclusion:
 | SI-SNR | `OpGAN - UVR` |
 | Log-spectral distance | `UVR - OpGAN` |
 
+### Reporting contract
+
+The three primary metrics are co-primary estimands, reported together and
+interpreted individually. There is no composite score, no majority vote, and no
+omnibus "overall winner", because collapsing three correlated views into a single
+verdict recreates the freedom this protocol exists to remove. Requiring all three to
+agree before anything may be said is the opposite error: SI-SNR is built to ignore
+gain, so letting it veto a claim about gain fidelity would penalise the design that
+makes the three worth reporting.
+
+Two rules follow, and both are enforced by the loader rather than left to editorial
+judgement:
+
+- **Three or none.** Wherever any primary effect appears, all three appear, in the
+  order above. A generator that emits one emits all of them. This is a
+  presentation-integrity rule against selective emphasis. It is not a
+  multiple-comparison correction and is not described as one.
+- **No significance language.** Each interval is a marginal 95% bootstrap interval
+  for its named metric. Results are stated as `reconstruction SNR difference +X dB
+  [95% CI a, b]`, never as "significantly better" and never as "better overall".
+  Allowing a directional claim whenever any one of three intervals excludes zero
+  would inflate the family-wise false-positive rate above the nominal per-metric
+  level. Because the metrics are correlated by construction, the size of that
+  inflation is not the independence figure and is not quantified here. Reporting
+  effects with intervals and drawing no verdict sidesteps the question rather than
+  answering it badly.
+
 ### Legacy diagnostics
 
 PESQ and STOI are computed and recorded in the machine-readable artifact for
@@ -358,10 +385,19 @@ natural direction for a later stratum.
 
 ## Scoring
 
-Both systems receive an identical population by identifier. The run fails closed if
-the scored identifier sets are not equal to each other and to the eligible set.
-Comparing whichever items both systems happened to succeed on rewards failure and
-is not permitted.
+Both systems receive an identical population, checked by identifier at two levels.
+Track identifiers must be equal across systems and equal to the frozen expected set.
+Within each track, frame identifiers must also be equal across systems and equal to
+that track's frozen eligible set: equal counts are not sufficient, because two
+systems can score the same number of different frames and produce per-track means
+that are not comparable.
+
+Eligibility is computed once from the clean reference and frozen, never recomputed
+from a system's own output. The expected population is always read from the
+manifest, never inferred from whichever results exist, because deriving it from
+results makes coverage 100% by construction and turns the coverage gate into
+decoration. Comparing whichever items both systems happened to succeed on rewards
+failure and is not permitted.
 
 Two failure kinds are distinguished, because collapsing them lets a real
 reliability defect hide behind reruns:
@@ -392,9 +428,17 @@ as N overstates confidence by roughly the frames-per-recording factor.
    are formed first and then track indices are resampled once per iteration, so
    the pairing is preserved; the two systems are never resampled independently
 
-Because both systems see the same recordings the comparison is paired, so the
-headline comparison is the per-recording difference `OpGAN − UVR` with its own
-bootstrap interval, which is more informative than two independent intervals.
+Bootstrap reproducibility depends on the pinned runtime, not on the seed alone. A
+seed selects a stream only within a fixed generator implementation, so the protocol
+pins the BitGenerator (`PCG64`), the NumPy version, and the sampling procedure and
+draw order. A runtime whose NumPy version differs from the pinned one fails to load
+the protocol rather than running with a silently weakened guarantee, because a
+skipped integrity check leaves the suite green while the guarantee is gone.
+
+Because both systems see the same recordings the comparison is paired, so each
+primary metric is reported as a per-recording difference with its own bootstrap
+interval, which is more informative than two independent intervals. "Headline"
+means that set of three differences, never a single summary of them.
 
 Reported per metric: per-track mean and median, 95% CI by recording, paired
 difference CI, N recordings, N eligible frames, per-metric applicable frames, and

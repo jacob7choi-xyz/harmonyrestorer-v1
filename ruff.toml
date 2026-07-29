@@ -41,3 +41,4 @@ convention = "google"
 "__init__.py" = ["F401", "D104"]
 "backend/tests/*" = ["D"]
 "dataset/tests/*" = ["D"]
+"benchmark/tests/*" = ["D"]
