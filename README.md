@@ -160,7 +160,9 @@ From-scratch implementation of **1D Operational GANs** based on [Kiranyaz et al.
 
 Previously published SDR, PESQ, and STOI figures were computed across the full generated pair corpus rather than a source-track-disjoint evaluation set. Training and evaluation therefore shared source recordings, and in many cases the identical clean 2-second frame: the dataset holds five noise variants per frame, and the 90/10 split was drawn over pairs rather than over recordings, so roughly 41% of clean frames are expected to have sibling variants on both sides. Those figures characterize reconstruction over the corpus; they do not support a claim about generalization to unseen recordings, and the head-to-head margin against UVR is the most affected claim, since UVR never trained on any of this data and OpGAN trained on most of it.
 
-The figures and their full context are retained in [docs/benchmarks.md](docs/benchmarks.md). A track-disjoint benchmark on newly acquired recordings, evaluating both models over an identical declared population, is in progress.
+The figures and their full context are retained in [docs/benchmarks.md](docs/benchmarks.md).
+
+A replacement is in progress, and its protocol was frozen before any evaluation material was selected: recording-level partitions, per-recording bootstrap intervals rather than per-frame, three signal-fidelity metrics chosen for music instead of the speech metrics used before, and publication gates that withhold a comparison unless both systems covered an identical declared population. The protocol is [documented](docs/benchmark-protocol.md) and, more usefully, enforced by a validating loader that refuses to run a configuration contradicting it.
 
 ## Samples
 
@@ -187,14 +189,20 @@ Three before/after/restored triplets for each model. Click to listen in the brow
 - [x] Working denoising API (UVR)
 - [x] Security hardening (P0/P1 complete)
 - [x] React frontend with wizard flow, real waveform, audio playback, before/after comparison
-- [x] Frontend redesign: aurora tape strip, live A/B crossfade compare, 103 tests
+- [x] Frontend redesign: aurora tape strip, live A/B crossfade compare
 - [x] Docker + CI/CD
 - [x] Build/acquire paired training dataset (146,200 pairs from 14 composers)
 - [x] Train OpGAN (100 epochs on T4)
-- [x] Benchmark OpGAN (SDR 23.74 dB, PESQ 4.04, STOI 0.960)
-- [x] Benchmark UVR on same dataset for head-to-head comparison
-- [x] Swap in OpGAN as default denoiser (outperforms UVR by ~12 dB SDR)
+- [x] Swap in OpGAN as default denoiser
 - [x] Backend cloud deployment (Cloud Run, us-central1)
+- [x] Withdraw the first benchmark: its evaluation population was not disjoint from
+      training at the level of source material. See
+      [benchmarks.md](docs/benchmarks.md)
+- [x] Freeze a replacement protocol before selecting any evaluation material, enforced
+      by a validating loader rather than by prose. See
+      [benchmark-protocol.md](docs/benchmark-protocol.md)
+- [ ] Run the replacement benchmark on track-disjoint recordings and publish the result
+      with per-recording intervals
 - [ ] Out-of-distribution audio evaluation
 
 ## License
