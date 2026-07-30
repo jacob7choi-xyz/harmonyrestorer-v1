@@ -12,6 +12,14 @@ must appear in the report at the same version with no skip reason, and the repor
 not contain identities that were never requested. Name presence is not identity: for a
 vulnerability scanner the version is the security-relevant half.
 
+The reverse direction is not decoration. It caught the audit resolving a different
+distribution than the deployed one: a fabricated base-version torch requirement, fed to
+a pip-audit run that still resolved despite --no-deps, pulled the CUDA closure of
+generic PyPI torch on Linux and reported 19 packages that were neither installed nor
+requested. The run now passes --disable-pip so nothing is resolved. Requested versions
+are runtime identities except where the gate maps one deliberately for advisory lookup,
+which it documents at the call site.
+
 There is deliberately no exception mechanism. An earlier version declared omitted
 identities and covered them through OSV and PyPI lookups, which made every green run
 depend on two live external services in order to work around one package's newest

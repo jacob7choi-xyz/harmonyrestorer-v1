@@ -71,14 +71,26 @@ run "security (bandit)" "${UV_RUN[@]}" bandit -r backend/app/ -q
 # "environment matches lock" check above is what makes this script audit the same
 # dependency set locally and in CI.
 #
-# Local version identifiers are normalised for a closed set of packages, never in
-# general. A local version is not decoration. foo==1.2.3+vendorpatch identifies a
-# different artifact from upstream foo==1.2.3, so rewriting it would claim we audited
-# something we did not. Only torch is listed, because only torch ships here as a +cpu
-# wheel and its advisories are keyed to the base version. Any other package arriving
-# with a local suffix stays unauditable and trips the coverage assertion, which is the
-# intended outcome: a person decides whether base-version matching is valid for it.
-NORMALISABLE_LOCAL_VERSION_PACKAGES="torch"
+# Advisory-version mapping, which is deliberately not called normalisation. PyTorch
+# publishes its CPU build on a separate index under a local version identifier, so the
+# deployed artifact is torch 2.12.1+cpu while vulnerability databases key PyTorch
+# advisories to upstream releases. No scanner indexes 2.12.1+cpu, so the mapping has to
+# happen somewhere; what matters is being clear about which identity each claim is about.
+#
+#   runtime artifact identity   torch==2.12.1+cpu
+#   advisory lookup identity    torch==2.12.1
+#
+# The two are not interchangeable, and treating them as one caused a real defect: an
+# earlier version rewrote the requirement and let pip-audit resolve it, which on Linux
+# pulled the CUDA dependency closure of generic PyPI torch and audited a distribution
+# that is not deployed. The audit now runs with --disable-pip so nothing is resolved and
+# the mapping only affects which advisory record is consulted.
+#
+# Closed to torch alone. Any other package arriving with a local version identifier
+# stays unmapped, is not represented in the report, and trips the coverage assertion,
+# which is the intended outcome: a person decides whether upstream advisory data applies
+# to that artifact.
+ADVISORY_VERSION_MAPPED_PACKAGES="torch"
 #
 # Waived advisories. Each is bound to the assumptions it rests on, so it reopens by
 # itself when those stop holding. A waiver that outlives its cause suppresses a future
@@ -185,8 +197,8 @@ assert_no_sdist_path() {
 
 audit_dependencies() {
   local req="$AUDIT_REQ" skipped normalise
-  # Only the reviewed packages get their local version identifier removed.
-  normalise="s/^(${NORMALISABLE_LOCAL_VERSION_PACKAGES})==([^+]+)\\+[A-Za-z0-9._]+\$/\\1==\\2/"
+  # Only torch is mapped from its runtime identity to its advisory identity.
+  normalise="s/^(${ADVISORY_VERSION_MAPPED_PACKAGES})==([^+]+)\\+[A-Za-z0-9._]+\$/\\1==\\2/"
 
   # Drop the local project, which exists on no index and can never be audited.
   uv pip freeze | grep -vE '^(-e |harmonyrestorer([=<>@ ]|$))' | sed -E "$normalise" >"$req"
@@ -199,7 +211,12 @@ audit_dependencies() {
     "$req" || return 1
   assert_no_sdist_path || return 1
 
-  "${UV_RUN[@]}" pip-audit --requirement "$req" --no-deps --format json \
+  # --disable-pip alongside --no-deps is what actually prevents resolution. --no-deps
+  # by itself still let the pip-backed collector expand the dependency closure, which is
+  # how a fabricated base-version torch requirement dragged 19 CUDA packages into the
+  # report on Linux while passing on macOS, where that closure happened to be a subset
+  # of what was already installed.
+  "${UV_RUN[@]}" pip-audit --requirement "$req" --no-deps --disable-pip --format json \
     --ignore-vuln "$WAIVED_SETUPTOOLS_ADVISORY" \
     --ignore-vuln "$WAIVED_TORCH_ADVISORY" >"$AUDIT_JSON" || return 1
 
