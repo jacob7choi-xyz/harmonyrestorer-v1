@@ -31,11 +31,12 @@ from benchmark.protocol import (
 
 REPO_ROOT = _PROTOCOL_PATH.parents[2]
 
-# Digests of the v1 artifacts as frozen at 64ff87e. A tripwire, not a trust root:
+# Digests of every superseded artifact, as frozen at the commit that archived it. A
+# tripwire, not a trust root:
 # git history and review establish which protocol was approved. This exists so that
 # editing an archived artifact together with the digest recorded in v2 fails here
 # rather than passing quietly.
-V1_ARTIFACTS = {
+SUPERSEDED_ARTIFACTS = {
     # Content digests of public, checked-in files. The allowlist pragmas are for the
     # secrets scanner, which cannot tell a SHA-256 from a 64-character credential.
     "benchmark/protocols/v1.json": (
@@ -43,6 +44,12 @@ V1_ARTIFACTS = {
     ),
     "docs/benchmark-protocol-v1.md": (
         "8a24244281fe9a20e58b1558f503f0974b45583df853937ffc1d7253fcca45e2"  # pragma: allowlist secret
+    ),
+    "benchmark/protocols/v2.json": (
+        "f683218f6eb313a042f0d004c117753ce93827321d5a19dedd2f7071bf6981de"  # pragma: allowlist secret
+    ),
+    "docs/benchmark-protocol-v2.md": (
+        "51d25785235b075bc5b4489163a4d766d2f5b2a066615369b33b7247a14d0df6"  # pragma: allowlist secret
     ),
 }
 
@@ -65,7 +72,7 @@ class TestRealProtocol:
     """The checked-in config must load and describe itself accurately."""
 
     def test_it_loads(self) -> None:
-        assert load_protocol().protocol_version == 2
+        assert load_protocol().protocol_version == 3
 
     def test_digest_is_of_the_exact_file_bytes(self) -> None:
         """The provenance claim is 'these bytes governed this run', so the digest
@@ -187,8 +194,8 @@ class TestVersionCommitments:
     """Protocol promises are enforced at load, so weakening one requires a version bump."""
 
     def test_unsupported_version(self, tmp_path: Path) -> None:
-        path = variant(tmp_path, lambda d: d.update({"protocol_version": 3}))
-        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 3"):
+        path = variant(tmp_path, lambda d: d.update({"protocol_version": 4}))
+        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 4"):
             _load_from_path(path)
 
     def test_composite_score_cannot_be_enabled(self, tmp_path: Path) -> None:
@@ -238,6 +245,16 @@ class TestVersionCommitments:
     def test_bootstrap_cannot_be_unpaired(self, tmp_path: Path) -> None:
         path = variant(tmp_path, lambda d: d["aggregation"]["bootstrap"].update({"paired": False}))
         with pytest.raises(ProtocolValueError, match="discards the pairing"):
+            _load_from_path(path)
+
+    def test_centred_reference_rule_cannot_be_weakened(self, tmp_path: Path) -> None:
+        """v3's whole content. Anything other than invalidating the item lets epsilon
+        return a finite score for a metric with no projection direction."""
+        path = variant(
+            tmp_path,
+            lambda d: d["metrics"]["si_snr"].update({"constant_reference": "score_with_epsilon"}),
+        )
+        with pytest.raises(ProtocolValueError, match="no projection direction"):
             _load_from_path(path)
 
     def test_si_snr_formulation_is_frozen(self, tmp_path: Path) -> None:
@@ -460,7 +477,7 @@ class TestOnlyOneApprovedConfiguration:
             d["aggregation"]["bootstrap"]["iterations"] = 50_000
 
         parsed = _load_from_path(variant(tmp_path, alternate))
-        assert parsed.protocol_version == 2
+        assert parsed.protocol_version == 3
         assert parsed.selection.seed == 999
 
         approved = load_protocol()
@@ -473,11 +490,11 @@ class TestOnlyOneApprovedConfiguration:
 class TestAmendmentChain:
     """A superseded protocol stays in the tree and is named by digest, not by number."""
 
-    def test_chain_names_the_archived_v1_artifacts(self) -> None:
+    def test_chain_names_the_immediately_superseded_artifacts(self) -> None:
         amends = load_protocol().amends
-        assert amends.protocol_version == 1
-        assert amends.protocol_path == "benchmark/protocols/v1.json"
-        assert amends.document_path == "docs/benchmark-protocol-v1.md"
+        assert amends.protocol_version == 2
+        assert amends.protocol_path == "benchmark/protocols/v2.json"
+        assert amends.document_path == "docs/benchmark-protocol-v2.md"
 
     def test_recorded_digests_match_the_archived_files(self) -> None:
         amends = load_protocol().amends
@@ -485,7 +502,7 @@ class TestAmendmentChain:
         assert digest_of(amends.document_path) == amends.document_sha256
 
     def test_archived_v1_artifacts_are_byte_identical_to_their_frozen_state(self) -> None:
-        for relative_path, expected in V1_ARTIFACTS.items():
+        for relative_path, expected in SUPERSEDED_ARTIFACTS.items():
             assert digest_of(relative_path) == expected, relative_path
 
     def test_a_modified_predecessor_is_detected(self, tmp_path: Path) -> None:
@@ -517,14 +534,14 @@ class TestAmendmentChain:
 
     def test_the_predecessor_must_be_the_immediately_previous_version(self, tmp_path: Path) -> None:
         path = variant(tmp_path, lambda d: d["amends"].update({"protocol_version": 0}))
-        with pytest.raises(ProtocolValueError, match=r"amends\.protocol_version must be 1"):
+        with pytest.raises(ProtocolValueError, match=r"amends\.protocol_version must be 2"):
             _load_from_path(path)
 
     def test_the_superseded_config_is_not_loadable_as_current(self) -> None:
         """Proof the version bump is real rather than cosmetic: the archived v1 file
         still parses, and the current validator refuses it."""
-        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 1"):
-            _load_from_path(REPO_ROOT / "benchmark" / "protocols" / "v1.json")
+        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 2"):
+            _load_from_path(REPO_ROOT / "benchmark" / "protocols" / "v2.json")
 
 
 class TestFrozenTransform:

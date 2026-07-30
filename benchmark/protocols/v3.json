@@ -1,0 +1,142 @@
+{
+ "protocol_version": 3,
+ "protocol_document": "docs/benchmark-protocol.md",
+ "note": "Authoritative values for benchmark v3. Code reads this file through benchmark.protocol.load_protocol, which rejects unknown keys, validates semantic relationships, verifies the amendment chain, and enforces the pinned environment. Changing a value here changes the benchmark and requires a protocol version bump, not an edit.",
+
+ "amends": {
+  "protocol_version": 2,
+  "protocol_path": "benchmark/protocols/v2.json",
+  "protocol_sha256": "f683218f6eb313a042f0d004c117753ce93827321d5a19dedd2f7071bf6981de",
+  "document_path": "docs/benchmark-protocol-v2.md",
+  "document_sha256": "51d25785235b075bc5b4489163a4d766d2f5b2a066615369b33b7247a14d0df6",
+  "reason": "Protocol v2 did not state whether SI-SNR is defined when the centred reference has no energy. A constant reference clears the raw energy check and centres to the zero vector, leaving no direction to project onto, and the configured epsilon then makes the arithmetic finite: the observed result was 0.0 dB for a constant estimate and -109.8 dB for a noise estimate, both plausible-looking scores for an undefined metric. Because that decides whether an item receives a score at all, it decides the valid population, so two conforming implementations of v2 could disagree on the denominator. v3 states the rule normatively and changes no formula, constant, or reporting behaviour. No OpGAN or UVR system outputs, test-partition metric scores, aggregates, or comparative conclusions had been generated or inspected when v3 was frozen."
+ },
+
+ "environment": {
+  "numpy_version": "2.3.5",
+  "bit_generator": "PCG64"
+ },
+
+ "selection": {
+  "seed": 20260726,
+  "partitions": {"test": 30, "demo": 6, "test_reserve": 6, "development_reserve": 6},
+  "acquisition_retries": 3,
+  "permanent_failure_codes": [404, 410]
+ },
+
+ "eligibility": {
+  "recording_min_duration_s": 60,
+  "recording_rms_dbfs_min": -50.0,
+  "frame_rms_dbfs_min": -45.0,
+  "rms_definition": "20*log10(sqrt(mean(x^2))) on float samples at full scale 1.0"
+ },
+
+ "duplicate_detection": {
+  "flag_threshold": 0.50,
+  "action_on_flag": "adjudicate",
+  "action_on_uncertain": "exclude",
+  "mfcc": {
+   "sample_rate": 16000,
+   "n_mfcc": 20,
+   "hop_length": 512,
+   "normalization": "per_coefficient_zscore",
+   "alignment_search_s": 5.0,
+   "alignment_stride_frames": 2,
+   "min_overlap_frames": 100,
+   "similarity": "best_mean_per_frame_cosine"
+  },
+  "calibration": {
+   "positives_min": 0.8471,
+   "positives_n": 15,
+   "negatives_max": 0.0995,
+   "negatives_n": 28,
+   "same_session_negatives_max": 0.1033,
+   "same_session_negatives_n": 21,
+   "untested_case": "same composition, different performer"
+  }
+ },
+
+ "conditioning": {
+  "sample_rate": 16000,
+  "channels": "mono",
+  "max_length_difference_samples": 160,
+  "length_difference_provenance": "UVR resampling round-trip deficit observed at 128 samples on a 32000-sample unit",
+  "alignment_search": false
+ },
+
+ "metrics": {
+  "primary": ["reconstruction_snr", "si_snr", "log_spectral_distance"],
+  "legacy": ["pesq", "stoi"],
+  "legacy_in_headline": false,
+  "composite_score": false,
+  "reconstruction_snr": {"direction": "higher_better", "residual_floor": 1e-10, "cap_db": 60.0,
+   "paired_effect": "opgan_minus_uvr"},
+  "si_snr": {"direction": "higher_better", "zero_mean": true, "epsilon": 1e-8, "cap_db": 60.0,
+   "paired_effect": "opgan_minus_uvr",
+   "constant_reference": "invalid_item",
+   "domain_note": "Zero-mean SI-SNR needs a nonzero reference direction. In exact arithmetic the centred reference has zero energy precisely when the reference is constant, so the condition is stated as constancy: after the required float64 conversion and before centring, a reference whose samples are all equal is invalid for this metric. Naming the stage matters, because an implementation testing constancy before conversion could reach a different answer for some input dtypes. Stated that way deliberately, because testing for exactly zero energy after float64 centring is not the same condition. Whether a constant array centres to exactly zero depends on whether its value is representable in binary: 0.5 and 0.25 do, while 0.1, 0.3, 0.7, and 1/3 leave residues near 1e-30 and would be scored, at 0.0 dB, by a rule written that way. epsilon stabilises otherwise-valid arithmetic and must not make a constant reference scoreable. No tolerance is defined and none is needed: constancy is exact, whereas a near-constant threshold would be an unstated protocol parameter."},
+  "log_spectral_distance": {
+   "direction": "lower_better",
+   "paired_effect": "uvr_minus_opgan",
+   "n_fft": 1024,
+   "win_length": 1024,
+   "hop_length": 256,
+   "bins": "all",
+   "window": {
+    "kind": "hann",
+    "symmetry": "periodic",
+    "note": "w[n] = 0.5 - 0.5*cos(2*pi*n/win_length) for 0 <= n < win_length. The symmetric convention divides by win_length-1 and is a different window; naming a library function is not a definition."
+   },
+   "fft": {
+    "kind": "rfft",
+    "norm": "backward",
+    "note": "Unnormalised forward transform, the numpy.fft default. Normalisation is result-sensitive here because the additive log-magnitude offset stops a uniform scaling from cancelling between the two spectra."
+   },
+   "framing": {
+    "center": true,
+    "pad_mode": "constant",
+    "pad_value": 0.0,
+    "pad_left_samples": 512,
+    "pad_right_samples": 512,
+    "frame_starts": "multiples_of_hop_from_zero",
+    "partial_trailing_frame": false
+   },
+   "log_magnitude": {
+    "operation": "amplitude_db_additive_offset",
+    "offset": 1e-8,
+    "note": "Defined as 20*log10(|X| + offset), carried unchanged from v1. The factor is part of the named operation rather than a separate setting, because 20 against 10 distinguishes amplitude from power spectra and is not a magnitude anyone should be free to choose. Additive, not a clamp: max(|X|, offset) is a different metric and is not what v1 specified."
+   },
+   "reduction": {
+    "bins": "rms",
+    "frames": "arithmetic_mean"
+   }
+  }
+ },
+
+ "reporting": {
+  "note": "Three co-primary estimands, interpreted individually. The three-or-none rule is a presentation-integrity control against selective emphasis, not a multiple-comparison correction.",
+  "co_primary_reported_together": true,
+  "omnibus_winner": false,
+  "significance_language": false
+ },
+
+ "aggregation": {
+  "within_track": "arithmetic_mean_of_eligible_frames",
+  "across_tracks": ["macro_mean", "median"],
+  "bootstrap": {"unit": "recording", "iterations": 10000, "method": "percentile",
+   "confidence": 0.95, "seed": 20260726, "paired": true}
+ },
+
+ "publication_gates": {
+  "note": "The artifact builder refuses to emit a headline comparison unless every gate passes. Invalid runs publish reasons, never numbers.",
+  "required": [
+   "loaded_protocol_hash_matches_artifact",
+   "candidate_universe_hash_verified",
+   "training_performance_screen_complete",
+   "population_ids_equal_across_systems",
+   "frame_population_ids_equal_across_systems",
+   "coverage_opgan_complete",
+   "coverage_uvr_complete"
+  ]
+ }
+}

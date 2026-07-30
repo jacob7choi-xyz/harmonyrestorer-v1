@@ -1,17 +1,16 @@
-# Benchmark protocol v3
+# Benchmark protocol v2
 
 Frozen before candidate identities are selected, downloaded for evaluation,
 auditioned, or scored. The source collection has already been inspected in general
 terms; what has not happened is any decision about which recordings enter the
 benchmark.
 
-> **Note:** v3 amends v2, which amended v1, all before any evaluation ran. The
-> operational values live in `benchmark/protocols/v3.json`, which is normative; this
-> document explains them and its numbers are illustrative. Superseded versions are
-> preserved unmodified, as [benchmark-protocol-v1.md](benchmark-protocol-v1.md) and
-> [benchmark-protocol-v2.md](benchmark-protocol-v2.md) with their configs, so an
-> artifact recording an older `protocol_version` stays interpretable. See
-> [Amendment](#amendment) for what changed and why.
+> **Note:** v2 amends v1 before any evaluation ran. The operational values live in
+> `benchmark/protocols/v2.json`, which is normative; this document explains them and
+> its numbers are illustrative. v1 is preserved unmodified as
+> [benchmark-protocol-v1.md](benchmark-protocol-v1.md) and
+> `benchmark/protocols/v1.json`, so an artifact recording `protocol_version: 1`
+> stays interpretable. See [Amendment](#amendment) for what changed and why.
 
 Its purpose is to remove the freedom to make reasonable-sounding choices after
 seeing results. Where a decision could be influenced by an outcome, it is fixed
@@ -309,19 +308,6 @@ si_snr = 10 * log10( (sum(target^2) + eps) / (sum(noise^2) + eps) )
     cap_db = 60.0
 ```
 
-SI-SNR needs a nonzero reference direction, and centring a constant reference leaves
-none. A reference whose samples are all equal is therefore invalid for this metric, while
-clearing the loudness floor comfortably. `eps` stabilises otherwise-valid arithmetic and
-must not make such an item scoreable: without the rule it returns a plausible number,
-measured at 0.0 dB against a constant estimate and -109.8 dB against a noise estimate.
-
-The condition is constancy, not zero energy after centring. Those look equivalent and are
-not. Whether a constant array centres to exactly zero depends on whether its value is
-representable in binary: 0.5 and 0.25 are, while 0.1, 0.3, 0.7, and 1/3 leave residues
-near 1e-30 that a zero-energy rule accepts and then scores at 0.0 dB. Constancy is exact,
-so no tolerance is defined and none is needed; a near-constant threshold would be an
-unstated protocol parameter.
-
 **Log-spectral distance.** Every convention that moves the number is stated, because
 several of them are otherwise inherited from whichever library is installed. v1 fixed
 the parameter values but named the window only as "hann" and never named an FFT
@@ -520,30 +506,6 @@ defect discovered after results exist invalidates those results rather than
 retroactively changing the rules that produced them. Superseded versions stay in the
 tree rather than being replaced, and each version names its predecessor by digest;
 the loader recomputes those digests, so the chain is checked rather than asserted.
-
-### v2 to v3
-
-Discovered while implementing the metrics, before any system output, candidate-selection
-outcome, or test-partition result had been generated or inspected. v2 did not state
-whether SI-SNR is defined when the centred reference has no energy.
-
-A constant reference clears the raw energy check and has nothing left after centring,
-leaving no direction to project onto. The configured epsilon then makes every subsequent
-term finite, so the metric returned a score for an undefined quantity: 0.0 dB against a
-constant estimate, -109.8 dB against a noise estimate. Both look like measurements.
-
-The rule states constancy rather than zero energy after centring, and the distinction is
-not cosmetic. A first draft of v3 said "exactly zero energy in float64, no tolerance",
-which sounds stricter and is less faithful: four of six constant references tested,
-including 0.1 and 1/3, do not centre to exactly zero because their value is not
-binary-representable, and that draft scored all four at 0.0 dB. When the computation
-producing zero is itself rounded, demanding exactness weakens the rule.
-
-That decides whether an item receives a score, and therefore decides the valid
-population, so it belongs in the protocol rather than in one implementation. Two teams
-implementing v2 from the frozen config could otherwise disagree on the denominator, which
-is the ambiguity class that produced v2 itself. v3 states the rule normatively and
-changes no formula, constant, gate, or reporting behaviour.
 
 ### v1 to v2
 

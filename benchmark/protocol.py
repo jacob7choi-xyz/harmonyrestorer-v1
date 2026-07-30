@@ -1,6 +1,6 @@
 """Immutable, validated access to the frozen benchmark protocol.
 
-Two things share the authority here, with different jobs. `benchmark/protocols/v2.json`
+Two things share the authority here, with different jobs. `benchmark/protocols/v3.json`
 holds the frozen values a run executes against; its digest is what establishes *which*
 values those are. This module defines what counts as a *well-formed* protocol, which is
 why the gate set, the supported version, the transform vocabulary, and the
@@ -62,9 +62,9 @@ logger = logging.getLogger(__name__)
 # Private so that production code has no supported affordance for reading the file
 # itself. `load_protocol` is the way in.
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_PROTOCOL_PATH = _REPO_ROOT / "benchmark" / "protocols" / "v2.json"
+_PROTOCOL_PATH = _REPO_ROOT / "benchmark" / "protocols" / "v3.json"
 
-SUPPORTED_PROTOCOL_VERSION = 2
+SUPPORTED_PROTOCOL_VERSION = 3
 
 # Which protocol v2 supersedes, and the artifacts it supersedes, as historical facts
 # rather than as arithmetic. `SUPPORTED_PROTOCOL_VERSION - 1` would encode a universal
@@ -72,12 +72,12 @@ SUPPORTED_PROTOCOL_VERSION = 2
 # governance model promises. The paths are frozen here so the config cannot redirect
 # the amendment chain at another file whose digest it also records, and so a relative
 # path out of the tree is not reachable at all.
-_PREDECESSOR_VERSION = 1
-_PREDECESSOR_PROTOCOL_PATH = "benchmark/protocols/v1.json"
-_PREDECESSOR_DOCUMENT_PATH = "docs/benchmark-protocol-v1.md"
+_PREDECESSOR_VERSION = 2
+_PREDECESSOR_PROTOCOL_PATH = "benchmark/protocols/v2.json"
+_PREDECESSOR_DOCUMENT_PATH = "docs/benchmark-protocol-v2.md"
 
-# Closed vocabularies for the frozen LSD transform. Each admits exactly one value in
-# v2. The fields exist so an independent implementer reads each convention from the
+# Closed vocabularies for the frozen LSD transform. Each admits exactly one value. The
+# fields exist so an independent implementer reads each convention from the
 # config instead of inheriting a library default, and so code branches on an enum
 # rather than parsing an equation string.
 _WINDOW_KIND = "hann"
@@ -91,6 +91,13 @@ _FRAME_STARTS = "multiples_of_hop_from_zero"
 # kind of measurement, not to the list of numbers a config may choose. Storing it
 # separately would put the same authoritative value in two places.
 _LOG_MAGNITUDE_OPERATION = "amplitude_db_additive_offset"
+
+# What SI-SNR does with a constant reference, which is exactly the case where the centred
+# reference has no energy in exact arithmetic. The only value v3 permits is to invalidate
+# the item, because the alternative is letting epsilon manufacture a score for an
+# undefined metric. Declared rather than implied so an independent implementation reading
+# the config alone reaches the same population.
+_CONSTANT_REFERENCE = "invalid_item"
 _BIN_REDUCTION = "rms"
 _FRAME_REDUCTION = "arithmetic_mean"
 
@@ -249,6 +256,8 @@ class SiSnr:
     epsilon: float
     cap_db: float
     paired_effect: str
+    constant_reference: str
+    domain_note: str
 
 
 @dataclass(frozen=True)
@@ -680,6 +689,12 @@ def _validate_metric_parameters(metrics: Metrics) -> None:
         raise ProtocolValueError("metrics.reconstruction_snr.residual_floor must be positive")
     if metrics.si_snr.epsilon <= 0:
         raise ProtocolValueError("metrics.si_snr.epsilon must be positive")
+    if metrics.si_snr.constant_reference != _CONSTANT_REFERENCE:
+        raise ProtocolValueError(
+            f"metrics.si_snr.constant_reference must be {_CONSTANT_REFERENCE!r}, got "
+            f"{metrics.si_snr.constant_reference!r}; the alternative is letting epsilon "
+            "return a finite score for a metric with no projection direction"
+        )
     if metrics.si_snr.zero_mean is not True:
         raise ProtocolValueError(
             "metrics.si_snr.zero_mean must be true; the protocol freezes the zero-mean "
