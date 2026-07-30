@@ -61,6 +61,25 @@ dev = [
 [project.urls]
 Repository = "https://github.com/jacob7choi-xyz/harmonyrestorer-v1"
 
+[tool.uv]
+# packaging 26.2 is the newest release and the advisory service has no record of it, so
+# pip-audit omits it from its report entirely rather than reporting it as skipped. 26.1
+# is covered normally and carries no known advisories. Constrained for auditability
+# rather than because 26.2 is suspect: a version the scanner can examine yields more
+# assurance than the newest version plus a bespoke exception to work around it.
+#
+# This is a scanner-compatibility constraint, not a security judgement, so it should not
+# outlive its cause. Removal trigger, retry whenever dependencies are next revisited:
+#
+#   echo 'packaging==26.2' > /tmp/p.txt
+#   uv run pip-audit -r /tmp/p.txt --no-deps --format json
+#
+# Drop this constraint once the newest release appears as a reported dependency instead
+# of being omitted. An upper bound rather than a pin: it excludes the one identity the
+# scanner cannot report, the lock fixes the concrete version, and the audit checks
+# whatever the synchronised environment actually holds.
+constraint-dependencies = ["packaging<26.2"]
+
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
@@ -104,7 +123,7 @@ module = "dataset.*"
 warn_return_any = false
 
 [tool.pytest.ini_options]
-testpaths = ["backend/tests", "dataset/tests", "benchmark/tests"]
+testpaths = ["backend/tests", "dataset/tests", "benchmark/tests", "scripts/tests"]
 pythonpath = ["backend", "."]
 python_files = ["test_*.py"]
 python_functions = ["test_*"]

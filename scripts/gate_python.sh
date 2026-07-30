@@ -52,8 +52,8 @@ UV_RUN=(uv run --frozen --no-sync)
 # Recorded now, asserted at the end, so a mutation nothing else noticed still fails.
 LOCK_DIGEST_BEFORE="$(shasum -a 256 uv.lock | cut -d" " -f1)"
 
-run "format (ruff)" "${UV_RUN[@]}" ruff format --check backend/ dataset/ benchmark/
-run "lint (ruff)" "${UV_RUN[@]}" ruff check backend/ dataset/ benchmark/
+run "format (ruff)" "${UV_RUN[@]}" ruff format --check backend/ dataset/ benchmark/ scripts/
+run "lint (ruff)" "${UV_RUN[@]}" ruff check backend/ dataset/ benchmark/ scripts/
 run "types (mypy)" "${UV_RUN[@]}" mypy backend/app/
 run "security (bandit)" "${UV_RUN[@]}" bandit -r backend/app/ -q
 
@@ -132,6 +132,8 @@ WAIVED_SETUPTOOLS_ADVISORY="PYSEC-2026-3447"
 WAIVED_SETUPTOOLS_PACKAGE="setuptools"
 WAIVED_SETUPTOOLS_VERSION="81.0.0"
 
+
+
 AUDIT_REQ="$(mktemp)"
 AUDIT_JSON="$(mktemp)"
 # One script-level cleanup. A RETURN trap would not be function-local: it fires again
@@ -201,21 +203,14 @@ audit_dependencies() {
     --ignore-vuln "$WAIVED_SETUPTOOLS_ADVISORY" \
     --ignore-vuln "$WAIVED_TORCH_ADVISORY" >"$AUDIT_JSON" || return 1
 
-  # Fail closed on coverage: a package the service could not audit is not a pass.
-  skipped="$(python3 -c "
-import json, sys
-report = json.load(open(sys.argv[1]))
-for dep in report.get('dependencies', []):
-    if dep.get('skip_reason'):
-        print(f\"{dep.get('name')} {dep.get('version')}: {dep['skip_reason']}\")
-" "$AUDIT_JSON")"
-  if [ -n "$skipped" ]; then
-    printf 'unaudited dependencies (coverage gap, not a pass):\n%s\n' "$skipped"
-    return 1
-  fi
-  # Precise about what was established: torch was matched on its upstream base version
-  # under the normalisation policy above, not on the exact local wheel identity.
-  printf 'every pinned dependency had advisory coverage under the declared normalisation policy, no unwaived findings\n'
+  # Coverage is asserted by identity, not by absence of complaint. Checking only for
+  # skip_reason would miss a package pip-audit drops from its report entirely, since a
+  # dropped package leaves no entry to inspect. Extracted to Python because the check now
+  # canonicalises names and queries a fallback oracle, which is more than shell should
+  # carry, and because it is unit-testable there.
+  "${UV_RUN[@]}" python scripts/audit_dependencies.py \
+    --requirements "$req" \
+    --report "$AUDIT_JSON" || return 1
 }
 
 run "dependency audit (pip-audit, coverage asserted)" audit_dependencies
@@ -224,6 +219,7 @@ run "backend tests" \
   "${UV_RUN[@]}" pytest backend/tests/ -v --tb=short --cov=backend/app --cov-fail-under=80
 run "dataset tests" "${UV_RUN[@]}" pytest dataset/tests/ -v --tb=short
 run "benchmark tests" "${UV_RUN[@]}" pytest benchmark/tests/ -v --tb=short
+run "gate policy tests" "${UV_RUN[@]}" pytest scripts/tests/ -v --tb=short
 
 scan_secrets() {
   # Null-delimited so a tracked filename containing whitespace is scanned rather than

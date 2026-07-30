@@ -42,3 +42,4 @@ convention = "google"
 "backend/tests/*" = ["D"]
 "dataset/tests/*" = ["D"]
 "benchmark/tests/*" = ["D"]
+"scripts/tests/*" = ["D"]
