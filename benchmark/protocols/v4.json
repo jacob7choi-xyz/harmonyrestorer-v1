@@ -1,0 +1,499 @@
+{
+  "protocol_version": 4,
+  "protocol_document": "docs/benchmark-protocol.md",
+  "note": "Authoritative values for benchmark v4. Code reads this file through benchmark.protocol.load_protocol, which rejects unknown keys, validates semantic relationships, verifies the amendment chain, and enforces the pinned environment. Changing a value here changes the benchmark and requires a protocol version bump, not an edit.",
+  "amends": {
+    "protocol_version": 3,
+    "protocol_path": "benchmark/protocols/v3.json",
+    "protocol_sha256": "c22e36dc55b131a6d1708b90f2fecd12df9fbfeace70faf836c3ddbe92145f77",
+    "document_path": "docs/benchmark-protocol-v3.md",
+    "document_sha256": "49fcdee5636519f0871159da03ab6e595c961ede861e2fe4c388f1796324ce35",
+    "reason": "Protocol v3 specified that metrics are computed at 16 kHz mono but never defined the transformation that produces such a waveform from a source file, so every content hash downstream was implementation-defined. Measured on a training FLAC: four resampler modes produce four different canonical digests; mean-of-channels and left-channel downmix differ; and downmix-before-resample differs from resample-before-downmix, both being natural readings of the same prose. Evaluation frame geometry was likewise absent, appearing only incidentally in prose. v4 freezes the whole source-to-canonical-frame transformation, including the exact decode and resample call arguments rather than any library default, the output-length contract in integer arithmetic, the byte format hashes are taken over, and the reproducibility model. No candidate canonical waveforms, candidate frame eligibility outcomes, degraded inputs, system outputs, metric scores, aggregates, or comparative conclusions had been generated or inspected when v4 was frozen."
+  },
+  "canonicalisation": {
+    "note": "The source-to-canonical transformation, frozen end to end. v3 named the output shape (16 kHz mono) and left every step that produces it implementation-defined, which made each downstream content hash undefined. Every library call below names its arguments explicitly rather than relying on a default, because relying on a default is how 'librosa's default res_type' entered the prose in the first place; soxr_hq happens to be that default today and is named anyway. Values that describe a kind are additionally pinned in benchmark/protocol.py; values that describe a magnitude live here alone and are pinned by this file's digest.",
+    "order": [
+      "decode",
+      "validate_source",
+      "downmix",
+      "resample",
+      "normalise_signed_zero",
+      "validate_canonical"
+    ],
+    "order_note": "Downmix precedes resampling. Both orders are natural readings and they produce different bytes, measured at 5.2e-10 maximum absolute difference on a training FLAC. Signed-zero normalisation precedes canonical validation so that exactly one array is validated, hashed, persisted, measured for RMS, and framed. A second normalised-at-hash-time copy would make the stored waveform's bytes differ from the bytes its digest identifies.",
+    "decode": {
+      "library": "soundfile",
+      "library_version": "0.14.0",
+      "libsndfile_version": "1.2.2",
+      "dtype": "float64",
+      "always_2d": true,
+      "metadata_authority": "decoder_reported",
+      "metadata_authority_note": "Container and subtype come from the decoder's own report, never from the filename. A file named .wav whose contents are FLAC was verified to report format=FLAC subtype=PCM_24, so extension-based dispatch would decode it under the wrong contract or refuse it for the wrong reason.",
+      "byte_identity": "bounded_single_buffer_read_hash_inspect_decode",
+      "byte_identity_note": "The artifact is read into memory once under a size bound enforced before the read, and that buffer is hashed, inspected, and decoded. Re-reading the path between hashing and decoding would leave a window in which the recorded digest identifies bytes other than the ones decoded. Verified that soundfile inspects and decodes a buffer identically to the same file read from its path.",
+      "source_formats": [
+        [
+          "FLAC",
+          "PCM_16"
+        ],
+        [
+          "FLAC",
+          "PCM_24"
+        ],
+        [
+          "FLAC",
+          "PCM_32"
+        ]
+      ],
+      "source_formats_note": "Container and subtype are validated as pairs rather than as two independent sets, so an unintended combination cannot be assembled from two individually permitted values. Two separate reasons produce this list and they are not the same reason. Determinism: integer PCM converts exactly into float64 under the frozen full-scale convention, and its decoded amplitude is bounded by construction, neither of which holds for float or lossy subtypes. Reference fidelity: bit depths below 16 are excluded because their quantisation noise would become part of the supposed clean reference and confound the measurement. Admissibility is not a claim that the three subtypes are interchangeable in quality. The whole set is frozen before the candidate universe is acquired, deliberately, so that meeting a PCM_16 candidate later cannot become a reason to widen the contract after seeing the population.",
+      "max_source_bytes": 536870912,
+      "max_identity_stream_bytes": 8589934592,
+      "max_identity_stream_bytes_note": "A second bound, on work rather than memory. Streaming an excluded artifact through SHA-256 bounds memory and bounds nothing else: at 200 MB/s a 100 GB file costs about 8 minutes of I/O and a 2 TB sparse file about 3 hours, all to populate one audit field for a candidate the benchmark has already excluded. A source that has been validly excluded must not be able to buy unbounded work from the harness as its parting act. Above this bound no digest is claimed at all and the record says so, which is the honest outcome; below it the streaming hash runs and the digest identifies the whole artifact. The bound is on bytes processed, not on elapsed time. It is also constrained relative to max_source_bytes rather than left free, so a variant configuration cannot set it to a petabyte while passing every positivity and ordering check; it is required to equal exactly 16 times max_source_bytes. An accepted range would leave a band of configurations that are semantically permitted and have never been analysed, so the value is derived from the bound that triggers it and stated here for readability rather than left as a second free magnitude.",
+      "max_decoded_bytes": 1610612736,
+      "max_source_duration_s": 3600,
+      "resource_bounds_note": "The decoded array, not the file, is what a source can make the process allocate. The largest training source is 166,468,316 bytes and decodes to 807,269,680 bytes of float64, an expansion of 4.85x, so bounding only the buffer would admit a file that then allocates several times its own size. frames and channels are available from inspection before any sample is decoded, so the projection above is evaluated and refused before allocating. Headroom over the observed maxima, stated exactly rather than approximately: source 3.23x, decoded 2.00x, duration 3.42x. The configuration-level bound holds for every admitted channel count, which an earlier draft got wrong. The downmix is never larger than the decoded array, since frames*8 is at most frames*channels*8 for one or more channels, and the canonical waveform is never larger than the downmix, since the source rate is at or above the target. The worst simultaneous set is therefore max_source_bytes + 3 * max_decoded_bytes = 5.00 GiB. The earlier bound of max_source_bytes + 2 * max_decoded_bytes assumed two channels: at one channel the downmix equals the decoded array rather than halving it, which took the same limits to 5.00 GiB against a 4 GiB budget. The corpus is entirely stereo, so the defect was in what the protocol admits rather than in what it currently holds. For a stereo 44.1 kHz source the decoded bound binds at about 38 minutes, well below the 3600 s duration cap, so the duration limit is a statement about the domain rather than the operative resource limit at this format. max_projected_live_bytes is a declared execution assumption, not a measured fact: the 1024 MiB it leaves above the projection is an allowance for the interpreter, NumPy, and resampler temporaries that has not yet been measured. Canonicalisation is obliged to measure peak resident memory on the largest admitted fixture and compare it against the projection; until then the budget is a bound the configuration is checked against, not a proof that the projection is exact.",
+      "note": "always_2d because a mono source otherwise returns a different rank than a multichannel one, so the downmix step would branch on source shape. dtype is pinned for future corpora rather than for this one: the corpus is PCM_24 and a signed 24-bit integer is exactly representable in float32, so float32 and float64 decode identically here. A 32-bit or float source would not.",
+      "read_bound_enforcement": "before_allocation",
+      "read_bound_enforcement_note": "A bound checked after read_bytes() has already returned does not bound the allocation it names. The size is taken from fstat on the open handle, compared against max_source_bytes, and the read is capped at max_source_bytes + 1 so that stale or misleading size metadata cannot defeat the check: a buffer longer than the bound is refused rather than kept.",
+      "require_regular_file": true,
+      "require_regular_file_note": "fstat reports nothing meaningful about a FIFO, a device, or a virtual filesystem object, so the early size check would be an early size check on a number that means nothing. The bounded max+1 read is the real control and fstat is a cheap rejection and a provenance datum, but for a local corpus of ordinary files the honest rule is to require a regular file and refuse anything else, rather than to reason about each exotic case.",
+      "metadata_validation": "validated_before_projection_and_allocation",
+      "metadata_validation_note": "Frames, channels, and sample rate arrive from the container and are therefore metadata-controlled. They are checked against the frozen bounds before they are multiplied into a projection and before that projection decides an allocation. Python integers do not overflow, so the hazard is not arithmetic but trust: absurd metadata must be refused rather than believed and sized.",
+      "max_projected_live_bytes": 6442450944,
+      "canonicalisation_concurrency": 1,
+      "canonicalisation_concurrency_note": "The budget is per process and says nothing on its own about how many processes run. Two concurrent canonicalisations against a 6 GiB budget need 12 GiB, so the concurrency is part of the declared execution assumption rather than an operational detail left outside it. Raising it multiplies the budget and is a protocol change.",
+      "live_bytes_rule": "source_plus_decoded_plus_downmix_plus_canonical_projected_before_decode",
+      "live_bytes_rule_note": "projected = source_bytes + frames*channels*8 + frames*8 + canonical_samples*8, evaluated from inspected metadata before any sample is decoded, so a source that cannot fit is refused rather than discovered halfway through. A closed token rather than a formula in prose, for the same reason the output-length rule is."
+    },
+    "downmix": {
+      "operation": "mono_passthrough_or_stereo_arithmetic_mean_float64",
+      "formula": "C=1: mono = channel 0 unchanged. C=2: mono[i] = (left[i] + right[i]) / 2.0 in float64.",
+      "channels_min": 1,
+      "channels_max": 2,
+      "note": "Stated per channel count rather than as a general mean. At C=2 there is no reduction-order freedom, and np.mean, sum-then-divide, np.add.reduce, and the explicit (L+R)/2 were verified byte-identical on three training recordings. Accepting arbitrary C would instead require a channel-layout policy this benchmark has not analysed, so C>2 is refused rather than silently mean-mixed. All 145 training recordings are 2-channel."
+    },
+    "resample": {
+      "library": "librosa",
+      "library_version": "0.11.0",
+      "soxr_version": "1.1.0",
+      "target_sample_rate": 16000,
+      "res_type": "soxr_hq",
+      "fix": true,
+      "scale": false,
+      "axis": -1,
+      "output_length_rule": "ceil_source_samples_times_target_rate_over_source_rate",
+      "output_length_rule_note": "A closed token, not a formula in prose, so the rule is executable authority rather than a sentence a reader must reimplement. Evaluated as integer arithmetic, (source_samples * target_rate + source_rate - 1) // source_rate, and asserted against the returned length rather than trusted. Verified against 200 random source lengths with no mismatch."
+    },
+    "forbidden_operations": [
+      "integer_quantisation",
+      "dither",
+      "clipping",
+      "peak_normalisation",
+      "loudness_normalisation",
+      "gain_adjustment"
+    ],
+    "signed_zero": "normalise_to_positive",
+    "signed_zero_note": "Positive and negative zero are numerically equal and have different bytes, so they would produce different digests for identical audio. The observed pipeline emits only positive zeros on the fixture examined, making this a latent rather than live hazard; normalising removes a semantically meaningless identity difference.",
+    "non_finite": "reject",
+    "hash_bytes": {
+      "dtype": "float64",
+      "byte_order": "little",
+      "container": "none",
+      "note": "SHA-256 over contiguous little-endian IEEE-754 float64 sample bytes with no header. Byte order and dtype are pinned because both change the digest for identical audio. Array contiguity is deliberately not pinned: numpy serialises in logical C order regardless of stride, so a view and a copy of equal values produce equal bytes."
+    },
+    "reproducibility_model": "reference_artifact_authoritative",
+    "reproducibility_note": "Pinning package versions does not guarantee bit-identical native DSP output across architectures and builds, so the claim is the narrower one: canonical artifacts generated by the pinned reference implementation are authoritative, and their digests identify those artifacts. Other environments verify against the frozen artifacts rather than being assumed to regenerate every bit. A golden fixture in the test suite makes cross-platform agreement an observation rather than an assumption. Python package versions are enforced at load because the lockfile makes them deterministic; native library versions are recorded as provenance rather than enforced, because they vary by platform.",
+    "forbidden_operations_note": "An exact frozen tuple, matched in order, not a set that merely contains something. A non-empty check would accept a list naming one irrelevant operation while omitting every operation that matters. This list is load-bearing rather than declarative: band-limited resampling legitimately overshoots full scale, measured at 1.194538 on a 0.999 square wave and 1.020793 on a 5 kHz sine, and the only ways to force that back inside [-1, 1] are the three operations named here.",
+    "source_validation": {
+      "require_finite": true,
+      "require_non_empty": true,
+      "require_positive_sample_rate": true,
+      "amplitude_min": -1.0,
+      "amplitude_max": 1.0,
+      "amplitude_bounds_inclusive": true,
+      "note": "The amplitude bound follows from the permitted subtypes rather than being imposed on them: integer PCM decodes into [-1.0, 1.0] by construction, with PCM_24 reaching 1.0 only at the negative rail. It is therefore unreachable for the current corpus and is stated for a future one. min_sample_rate must equal the canonical rate, and the loader enforces the equality rather than only positivity: a source below it cannot supply the bandwidth this benchmark measures, so upsampling one would manufacture a clean reference with no content in the band under test. The equality is also what makes the canonical waveform no larger than the downmix, which the live-memory bound depends on, so weakening it would silently invalidate that derivation as well as the scientific rule.",
+      "min_sample_rate": 16000
+    },
+    "canonical_validation": {
+      "dtype": "float64",
+      "ndim": 1,
+      "require_finite": true,
+      "require_non_empty": true,
+      "amplitude_bound": "none",
+      "note": "Deliberately asymmetric with source validation, and the asymmetry is a decision rather than an omission. Band-limited interpolation overshoots: a 0.999 square wave resampled to 16 kHz reaches 1.194538 and a full-scale 5 kHz sine reaches 1.020793. Bounding the canonical waveform would reject loud legitimate material or force a clip, a peak normalisation, or a gain, all three of which are forbidden above. Overflow of the RMS energy sum is a representation limit rather than a fact about audio, unreachable here by 1.1e154, and is a fail-closed harness guard in the implementation rather than a rule stated in this file."
+    }
+  },
+  "framing": {
+    "note": "Evaluation frame geometry, which v3 left to incidental prose. Frames are cut from the canonical waveform after partition assignment, so every derived artifact inherits its recording's partition.",
+    "frame_duration_s": 2,
+    "frame_duration_note": "The duration lives here rather than as a constant in the loader, so the protocol still owns its own magnitude, and frame_samples == frame_duration_s * sample_rate is enforced. A config claiming two seconds can then never carry ten seconds of samples, which prose alone cannot prevent because code cannot read prose.",
+    "frame_samples": 32000,
+    "hop_samples": 32000,
+    "first_frame_start_sample": 0,
+    "partial_trailing_frame": "dropped_and_counted",
+    "partial_trailing_frame_note": "A trailing remainder shorter than one frame is not a candidate and its sample count is recorded, so the manifest shows how the candidate set was formed rather than only what survived."
+  },
+  "environment": {
+    "numpy_version": "2.3.5",
+    "bit_generator": "PCG64"
+  },
+  "selection": {
+    "seed": 20260726,
+    "partitions": {
+      "test": 30,
+      "demo": 6,
+      "test_reserve": 6,
+      "development_reserve": 6
+    },
+    "acquisition_retries": 3,
+    "permanent_failure_codes": [
+      404,
+      410
+    ]
+  },
+  "eligibility": {
+    "recording_min_duration_s": 60,
+    "recording_rms_dbfs_min": -50.0,
+    "frame_rms_dbfs_min": -45.0,
+    "rms_definition": "energy = mean(x*x) in float64; rms = sqrt(energy); dbfs = 20*log10(rms). No epsilon. Zero energy yields negative infinity, which is below every floor and therefore ineligible. Input must be finite. Recording RMS is computed over the complete canonical waveform and frame RMS over the exact samples of a complete frame, in both cases after signed-zero normalisation.",
+    "computed_from": "canonical_waveform",
+    "recording_duration_rule": "canonical_samples >= recording_min_duration_s * sample_rate, in integer arithmetic",
+    "recording_rms_comparator": "greater_than",
+    "frame_rms_comparator": "greater_than",
+    "comparator_note": "The document says RMS 'above' the floor. Strict greater-than is stated here rather than inferred from English, and both floors use the same comparator.",
+    "denominator_note": "Every candidate frame is recorded with its RMS and verdict, not only the eligible ones, so the population considered before filtering is provable rather than asserted.",
+    "rms_operation": "float64_mean_square_sqrt_dbfs_no_epsilon"
+  },
+  "source_outcomes": {
+    "note": "What record exists when the transformation above cannot complete. Frozen here because an implementation needs a deterministic answer before it meets its first unreadable file, and because these verdicts decide population membership.",
+    "evaluation_stage_order": [
+      "local_file_check",
+      "inspection",
+      "metadata_validation",
+      "decode",
+      "decoded_metadata_validation",
+      "waveform_validation"
+    ],
+    "evaluation_stage_order_note": "Eligibility adjudication only. Identity acquisition is deliberately absent, because it is evidence collection rather than adjudication and the two obey different rules. An earlier draft of v4 placed local_identity in this order and produced a contradiction: an oversized artifact terminates at local_file_check, so the derived unevaluated set contained local_identity, while the same record carried a streaming digest that only local_identity could have produced. A stage cannot be both skipped and executed. A stage completes when every check assigned to it in stage_checks has executed, and processing stops after the first stage that establishes a violation. This axis is distinct from precondition_order, which sequences run-level gating such as the golden fixture and does not describe one candidate's journey.",
+    "stage_checks": {
+      "local_file_check": [
+        "regular_file",
+        "source_bytes"
+      ],
+      "inspection": [
+        "decoder_inspection"
+      ],
+      "metadata_validation": [
+        "container",
+        "subtype",
+        "channel_count",
+        "minimum_sample_rate",
+        "duration",
+        "projected_decoded_bytes"
+      ],
+      "decode": [
+        "decoder_decode"
+      ],
+      "decoded_metadata_validation": [
+        "metadata_matches_decoded_array"
+      ],
+      "waveform_validation": [
+        "non_empty",
+        "finite",
+        "amplitude_range"
+      ]
+    },
+    "stage_checks_note": "What each stage evaluates, frozen so that 'every safe check in the reached stage' means the same thing in two implementations. Without it, one implementation could stop at an unsupported subtype and never establish an already-knowable duration violation, and the two would publish different supplemental sets for the same artifact while both claiming conformance. Six checks share metadata_validation, which is where supplemental reasons actually arise.",
+    "attribution_rule": "verified_local_artifact_rejection_is_a_candidate_outcome",
+    "attribution_note": "A decoder error proves that the locally acquired artifact could not be inspected or decoded in a conforming environment. It does not prove the artifact is malformed, truncated, or corrupt, since a rejection can also come from an unusual but valid encoding feature or a decoder limitation, and it does not prove the publisher supplied those bytes, because our own retrieval could have damaged them and no upstream checksum exists to distinguish the cases. The rule is therefore named for what the preconditions actually establish, a verified local artifact, rather than for source ownership. An earlier draft read 'source_owned', which claimed more in the machine-readable field than the note beside it allowed, and a closed field that overstates its own note is worse than prose because tools will quote it.",
+    "precondition_order": [
+      "protocol_semantics",
+      "runtime_conformance",
+      "golden_fixture",
+      "local_artifact_identity",
+      "inspect_and_decode",
+      "classify_outcome"
+    ],
+    "local_identity_basis": "local_sha256_of_the_decoded_buffer_or_of_the_streamed_artifact",
+    "upstream_checksum_available": false,
+    "local_identity_note": "The collection publishes no checksum and the acquisition script records none, so the local SHA-256 identifies the exact artifact this run held and establishes nothing about equivalence to the publisher's original bytes. Two paths establish it and the basis names both, because an artifact excluded before decoding is never decoded: the decode path hashes the single bounded buffer that is also inspected and decoded, and the exclusion path hashes the streamed file without decoding. An earlier draft named only the decoded buffer, which described one of the two paths while claiming to state the basis for both. Publication language must hold that line: 'a locally acquired candidate artifact could not be decoded', never 'a collection file was corrupt'. Re-acquiring and comparing digests is corroboration rather than proof, since differing bytes demonstrate retrieval instability while identical bytes demonstrate only that retrieval is repeatable.",
+    "identity_for_excluded_sources": "bounded_streaming_sha256_within_identity_stream_bound",
+    "identity_for_excluded_sources_note": "SOURCE_EXCEEDS_MAX_BYTES is decided from fstat, before the artifact is buffered, so the in-memory path cannot produce a whole-artifact digest for it. Hashing the bounded max+1 prefix and calling it local_sha256 would be a provenance lie, since that field identifies the whole artifact. Such a source is streamed through SHA-256 in bounded chunks and never decoded or retained, up to max_identity_stream_bytes, which bounds bytes processed and not elapsed time: storage speed, scanning layers, and network-mounted volumes all vary, so a wall-clock guarantee is not something this bound can make. A runner may add a timeout, and a timeout is a harness abort rather than a source verdict. Above that the digest is not computed and identity_status records why, rather than the harness committing unbounded I/O to an already-excluded candidate. The reason code is unchanged either way: how large a file is does not change why it was excluded, only what could be established about it. Two identity paths exist and are named separately: decode identity is the bounded single buffer that is hashed, inspected, and decoded; exclusion identity is this streaming hash with no decode.",
+    "identity_status_values": [
+      "complete_sha256",
+      "unavailable_above_identity_stream_bound"
+    ],
+    "identity_status_note": "A required field on every failure record, so that an absent digest is a stated outcome rather than a missing value a reader has to interpret.",
+    "identity_method_values": [
+      "bounded_single_buffer_sha256",
+      "bounded_streaming_sha256",
+      "not_computed_above_bound"
+    ],
+    "identity_derivation": "by_source_bytes_against_max_source_bytes_then_max_identity_stream_bytes",
+    "identity_derivation_note": "At or below max_source_bytes the digest comes from the single bounded buffer. Above that and at or below max_identity_stream_bytes it comes from the streamed artifact. Above that it is not computed. The first two both report complete_sha256 and reach it by materially different evidence paths, so the method is recorded explicitly rather than left to be inferred from a status that cannot distinguish them. The names describe how the digest was established and nothing else. An earlier draft named the first method for hashing, inspecting, and decoding one buffer, which is the canonicalisation byte-path contract rather than an identity method, and it overstated the record: a source rejected at inspection or on its subtype is never decoded, so a record would have claimed work that did not run. What did run is already carried by the terminating evaluation stage and the unevaluated suffix.",
+    "artifact_stability_check": "same_descriptor_dev_ino_size_mtime_ns_ctime_ns_before_and_after",
+    "artifact_stability_note": "The single-buffer path is stable by construction, since the digest is taken over the exact bytes that were inspected and decoded. The streaming path reads over an interval, so st_dev, st_ino, st_size, st_mtime_ns, and st_ctime_ns are compared before and after on the same open descriptor. Hashing goes through that descriptor and never reopens the path, which is what stops a path replacement from silently changing which inode was read. This detects instability; it does not prove stability. Metadata equality cannot exclude a content mutation that was made and reverted during hashing, and the protocol says so rather than claiming a proof it does not have. What it can say is that no instability was detected by these checks. A mismatch in any of the five values aborts under LOCAL_ARTIFACT_UNSTABLE, because a file mutating on our own disk is a fact about this environment and not about the audio. A failure to obtain the second stat is UNEXPECTED_IO_FAILURE instead, since not knowing is not the same as having detected a change. In both cases any digest computed during that read is discarded rather than retained.",
+    "ineligible_reasons": [
+      "SOURCE_EXCEEDS_MAX_BYTES",
+      "SOURCE_EXCEEDS_MAX_DURATION",
+      "SOURCE_EXCEEDS_MAX_DECODED_BYTES",
+      "SOURCE_BELOW_MIN_SAMPLE_RATE",
+      "UNSUPPORTED_CONTAINER",
+      "UNSUPPORTED_SUBTYPE",
+      "UNSUPPORTED_CHANNEL_COUNT",
+      "SOURCE_INSPECTION_REJECTED",
+      "SOURCE_DECODE_REJECTED",
+      "SOURCE_METADATA_INCONSISTENT",
+      "EMPTY_SOURCE",
+      "NONFINITE_SOURCE",
+      "INVALID_SOURCE_AMPLITUDE"
+    ],
+    "ineligible_reasons_note": "Deliberately neutral about cause. An earlier draft used MALFORMED_OR_TRUNCATED_AUDIO, which asserts more than a decoder error establishes: a rejection can also come from an unusual but valid encoding feature or a decoder limitation, and the bytes may have been damaged by our own retrieval. The native diagnostic is retained beside the code as supplemental provenance and is never the stable classification, because its wording varies by platform and build.",
+    "reason_precedence": [
+      "SOURCE_EXCEEDS_MAX_BYTES",
+      "SOURCE_INSPECTION_REJECTED",
+      "UNSUPPORTED_CONTAINER",
+      "UNSUPPORTED_SUBTYPE",
+      "UNSUPPORTED_CHANNEL_COUNT",
+      "SOURCE_BELOW_MIN_SAMPLE_RATE",
+      "SOURCE_EXCEEDS_MAX_DURATION",
+      "SOURCE_EXCEEDS_MAX_DECODED_BYTES",
+      "SOURCE_DECODE_REJECTED",
+      "SOURCE_METADATA_INCONSISTENT",
+      "EMPTY_SOURCE",
+      "NONFINITE_SOURCE",
+      "INVALID_SOURCE_AMPLITUDE"
+    ],
+    "reason_precedence_note": "A candidate can violate several rules at once, and without a frozen order two conforming implementations would publish different category totals for the same artifact. Exactly one primary reason is recorded and counted, chosen as the first applicable entry in this list. The order follows what can be known at each stage rather than any judgement about severity: the size is known from fstat before anything is read; inspection either succeeds or does not; container, subtype, channels, rate, duration, and decoded footprint all come from the same inspected metadata; decoding either succeeds or does not; and the array checks require a decoded array. Within the metadata stage the order is a frozen convention, listing what the file is before what it contains, and is not a claim that one violation matters more.",
+    "reason_stage": {
+      "SOURCE_EXCEEDS_MAX_BYTES": "local_file_check",
+      "SOURCE_INSPECTION_REJECTED": "inspection",
+      "UNSUPPORTED_CONTAINER": "metadata_validation",
+      "UNSUPPORTED_SUBTYPE": "metadata_validation",
+      "UNSUPPORTED_CHANNEL_COUNT": "metadata_validation",
+      "SOURCE_BELOW_MIN_SAMPLE_RATE": "metadata_validation",
+      "SOURCE_EXCEEDS_MAX_DURATION": "metadata_validation",
+      "SOURCE_EXCEEDS_MAX_DECODED_BYTES": "metadata_validation",
+      "SOURCE_DECODE_REJECTED": "decode",
+      "SOURCE_METADATA_INCONSISTENT": "decoded_metadata_validation",
+      "EMPTY_SOURCE": "waveform_validation",
+      "NONFINITE_SOURCE": "waveform_validation",
+      "INVALID_SOURCE_AMPLITUDE": "waveform_validation"
+    },
+    "reason_stage_note": "Every ineligible reason names exactly one stage, so the stage recorded on a failure is derived rather than chosen. Six reasons share metadata_validation, which is why the within-stage precedence exists and why all six are evaluated before one is selected.",
+    "reason_selection": "all_violations_established_in_the_reached_stage_then_within_stage_precedence",
+    "reason_selection_note": "Processing stops at the first stage that terminates it, but within the stage it reaches, every check that can be evaluated safely is evaluated before the primary reason is chosen. Otherwise an implementation that noticed an unsupported subtype would stop and never record an already-knowable duration violation, and two conforming implementations would publish different supplemental sets for the same artifact.",
+    "supplemental_reasons": "established_before_termination_recorded_not_counted",
+    "supplemental_reasons_note": "Every additional reason established before processing terminated is recorded beside the primary one, and none of them enters a count. An earlier draft said every other applicable reason, which is structurally impossible: an oversized source is rejected from fstat and is never inspected or decoded, so whether its subtype, channel count, rate, or duration would also have failed is unknown and unknowable without doing the work the exclusion exists to avoid. Counting supplementals would also make the category totals overlap and stop them summing to the narrowing they describe.",
+    "unevaluated_stages_recorded": true,
+    "unevaluated_stages_derivation": "suffix_of_evaluation_stage_order_after_the_terminating_stage",
+    "unevaluated_stages_note": "Derived, not authored: the stages after the one that terminated processing, in stage_order, as an ordered tuple. Without it the absence of UNSUPPORTED_SUBTYPE reads as evidence that the subtype was supported, when inspection may never have happened. Not evaluated and passed are different facts and the published taxonomy has to keep them apart. An ordered tuple rather than a set, because two implementations serialising the same stages in different orders would produce different manifest bytes and therefore different digests.",
+    "reason_categories": {
+      "frozen_domain_exclusion": [
+        "SOURCE_EXCEEDS_MAX_BYTES",
+        "SOURCE_EXCEEDS_MAX_DURATION",
+        "SOURCE_EXCEEDS_MAX_DECODED_BYTES",
+        "SOURCE_BELOW_MIN_SAMPLE_RATE"
+      ],
+      "unsupported_representation": [
+        "UNSUPPORTED_CONTAINER",
+        "UNSUPPORTED_SUBTYPE",
+        "UNSUPPORTED_CHANNEL_COUNT"
+      ],
+      "artifact_or_decoder_outcome": [
+        "SOURCE_INSPECTION_REJECTED",
+        "SOURCE_DECODE_REJECTED",
+        "SOURCE_METADATA_INCONSISTENT"
+      ],
+      "decoded_waveform_violation": [
+        "EMPTY_SOURCE",
+        "NONFINITE_SOURCE",
+        "INVALID_SOURCE_AMPLITUDE"
+      ]
+    },
+    "reason_categories_note": "Reported by category, never as one undifferentiated count of bad files. A recording refused for exceeding a frozen size or duration limit has nothing wrong with it; it is outside the domain this benchmark declared before looking. Publishing that beside a decoder rejection would invite readers to conclude the collection is defective. Every ineligible reason belongs to exactly one category and the categories cover the vocabulary completely.",
+    "abort_reasons": [
+      "SOURCE_HASH_MISMATCH",
+      "LOCAL_ARTIFACT_UNSTABLE",
+      "LOCAL_ARTIFACT_NOT_REGULAR_FILE",
+      "GOLDEN_FIXTURE_FAILURE",
+      "ENVIRONMENT_MISMATCH",
+      "ENVIRONMENT_CAPACITY_FAILURE",
+      "UNEXPECTED_IO_FAILURE",
+      "INTERNAL_CANONICALISATION_ERROR"
+    ],
+    "abort_reasons_note": "Held in a separate vocabulary from the eligibility codes so that a harness failure is not merely discouraged from becoming a source verdict but cannot be represented as one. These abort the run and block publication; the eligibility codes are predeclared outcomes and are published as findings. ENVIRONMENT_CAPACITY_FAILURE is listed separately from ENVIRONMENT_MISMATCH, which is about pinned versions, because they fail for unrelated reasons and only one of them is fixed by installing something. A source inside every frozen bound that this machine cannot allocate for is a capacity failure and aborts. It must never become a source-ineligible verdict: MemoryError, an out-of-memory kill, and an undersized container are all facts about where the run happened, and recording them against the recording would publish our own capacity as a property of someone else's audio. An operating-system or container out-of-memory kill terminates the process before any structured record can be written, so recovering that outcome from the worker's exit status and mapping it to this code is an obligation on the runner, not something the loader can implement. LOCAL_ARTIFACT_NOT_REGULAR_FILE closes a gap of the same shape as the missing decoded-size reason: require_regular_file was enforced with no outcome able to record it. It aborts rather than excluding the candidate, because a FIFO or device where a downloaded file should be says something went wrong in this environment and nothing at all about the recording.",
+    "diagnostic_handling": "sanitised_for_publication_raw_retained_in_run_log",
+    "diagnostic_handling_note": "Native decoder diagnostics can carry filesystem paths, local filenames, and platform internals. The published record carries the stable reason code and a sanitised diagnostic; the raw string stays in the run log. Nothing about a defect is worth leaking a local path into a public artifact.",
+    "record_required_core": [
+      "logical_source_id",
+      "terminating_evaluation_stage",
+      "primary_reason_code",
+      "identity_status",
+      "identity_method",
+      "protocol_sha256",
+      "unevaluated_evaluation_stages"
+    ],
+    "record_conditional": {
+      "local_sha256": "when_identity_complete_sha256",
+      "observed_metadata": "when_inspection_succeeded",
+      "decoder_diagnostic": "when_decoder_rejected",
+      "supplemental_reason_codes": "when_additional_reasons_established"
+    },
+    "record_scope": "source_ineligible_outcomes_only",
+    "record_constraints": [
+      "primary_reason_code_in_ineligible_reasons",
+      "supplemental_reason_codes_subset_of_ineligible_reasons",
+      "primary_reason_code_not_in_supplemental_reason_codes",
+      "supplemental_reason_codes_unique",
+      "supplemental_reason_codes_share_primary_reason_stage",
+      "supplemental_reason_codes_ordered_by_reason_precedence",
+      "unevaluated_evaluation_stages_ordered_by_evaluation_stage_order",
+      "identity_status_consistent_with_identity_method",
+      "local_sha256_present_iff_identity_complete",
+      "identity_method_consistent_with_source_byte_bounds",
+      "digest_discarded_when_instability_detected"
+    ],
+    "record_constraints_note": "Constraints on the emitted record, not on this file. The stage-membership constraint is the one that gives 'established before termination' a meaning a machine can check: an earlier stage cannot hold an unrecorded violation, because it would already have terminated processing, and a later stage was never reached, so every valid supplemental comes from the terminating stage itself. Ordering is included because two implementations holding the same set and serialising it differently produce different manifest bytes, and therefore different digests, which would break the content addressing the benchmark rests on. The last constraint is a safety rule rather than a formatting one: a digest present in a record reads as an established identity, so one computed during a read later found unstable must never survive as supplemental evidence. The three identity constraints exist because status, method, digest presence, and source size are four views of one fact and any pair of them can be made to disagree. complete_sha256 beside not_computed_above_bound, an absent digest beside a complete status, or a streaming method for a source small enough to buffer are each individually plausible as a typo and each would publish an identity claim that never happened.",
+    "record_note": "Required core plus stage-specific evidence, rather than one flat tuple every failure must somehow fill. Different failures carry genuinely different evidence: a pre-inspection resource exclusion has no decoder diagnostic and no audio metadata, while a decoded-waveform rejection has both. A universal field list forces placeholders that pretend evidence exists, and a reader cannot then tell an absent value from an inapplicable one. Each condition is a closed token rather than a sentence, for the same reason every other rule here is. This schema covers source-ineligible outcomes only. An abort can happen before any source is in hand, so an environment mismatch or a golden-fixture failure has no logical source id, no stage in this machine, and no reason from this vocabulary. The structure of abort records belongs to the runner and is deliberately not frozen here.",
+    "reduction_chain": [
+      "selected_sources",
+      "local_artifacts_acquired",
+      "inspection_succeeded",
+      "decode_succeeded",
+      "source_domain_supported",
+      "recordings_eligible",
+      "complete_frames_produced",
+      "frames_eligible"
+    ],
+    "reduction_chain_note": "Published with counts and with percentages against both the immediately preceding stage and the originally selected population. One denominator alone permits laundering: a chain of individually respectable step-to-step rates can hide a large total reduction. Every narrowing carries its reason codes."
+  },
+  "duplicate_detection": {
+    "flag_threshold": 0.5,
+    "action_on_flag": "adjudicate",
+    "action_on_uncertain": "exclude",
+    "mfcc": {
+      "sample_rate": 16000,
+      "n_mfcc": 20,
+      "hop_length": 512,
+      "normalization": "per_coefficient_zscore",
+      "alignment_search_s": 5.0,
+      "alignment_stride_frames": 2,
+      "min_overlap_frames": 100,
+      "similarity": "best_mean_per_frame_cosine"
+    },
+    "calibration": {
+      "positives_min": 0.8471,
+      "positives_n": 15,
+      "negatives_max": 0.0995,
+      "negatives_n": 28,
+      "same_session_negatives_max": 0.1033,
+      "same_session_negatives_n": 21,
+      "untested_case": "same composition, different performer"
+    }
+  },
+  "conditioning": {
+    "sample_rate": 16000,
+    "channels": "mono",
+    "max_length_difference_samples": 160,
+    "length_difference_provenance": "UVR resampling round-trip deficit observed at 128 samples on a 32000-sample unit",
+    "alignment_search": false
+  },
+  "metrics": {
+    "primary": [
+      "reconstruction_snr",
+      "si_snr",
+      "log_spectral_distance"
+    ],
+    "legacy": [
+      "pesq",
+      "stoi"
+    ],
+    "legacy_in_headline": false,
+    "composite_score": false,
+    "reconstruction_snr": {
+      "direction": "higher_better",
+      "residual_floor": 1e-10,
+      "cap_db": 60.0,
+      "paired_effect": "opgan_minus_uvr"
+    },
+    "si_snr": {
+      "direction": "higher_better",
+      "zero_mean": true,
+      "epsilon": 1e-08,
+      "cap_db": 60.0,
+      "paired_effect": "opgan_minus_uvr",
+      "constant_reference": "invalid_item",
+      "domain_note": "Zero-mean SI-SNR needs a nonzero reference direction. In exact arithmetic the centred reference has zero energy precisely when the reference is constant, so the condition is stated as constancy: after the required float64 conversion and before centring, a reference whose samples are all equal is invalid for this metric. Naming the stage matters, because an implementation testing constancy before conversion could reach a different answer for some input dtypes. Stated that way deliberately, because testing for exactly zero energy after float64 centring is not the same condition. Whether a constant array centres to exactly zero depends on whether its value is representable in binary: 0.5 and 0.25 do, while 0.1, 0.3, 0.7, and 1/3 leave residues near 1e-30 and would be scored, at 0.0 dB, by a rule written that way. epsilon stabilises otherwise-valid arithmetic and must not make a constant reference scoreable. No tolerance is defined and none is needed: constancy is exact, whereas a near-constant threshold would be an unstated protocol parameter."
+    },
+    "log_spectral_distance": {
+      "direction": "lower_better",
+      "paired_effect": "uvr_minus_opgan",
+      "n_fft": 1024,
+      "win_length": 1024,
+      "hop_length": 256,
+      "bins": "all",
+      "window": {
+        "kind": "hann",
+        "symmetry": "periodic",
+        "note": "w[n] = 0.5 - 0.5*cos(2*pi*n/win_length) for 0 <= n < win_length. The symmetric convention divides by win_length-1 and is a different window; naming a library function is not a definition."
+      },
+      "fft": {
+        "kind": "rfft",
+        "norm": "backward",
+        "note": "Unnormalised forward transform, the numpy.fft default. Normalisation is result-sensitive here because the additive log-magnitude offset stops a uniform scaling from cancelling between the two spectra."
+      },
+      "framing": {
+        "center": true,
+        "pad_mode": "constant",
+        "pad_value": 0.0,
+        "pad_left_samples": 512,
+        "pad_right_samples": 512,
+        "frame_starts": "multiples_of_hop_from_zero",
+        "partial_trailing_frame": false
+      },
+      "log_magnitude": {
+        "operation": "amplitude_db_additive_offset",
+        "offset": 1e-08,
+        "note": "Defined as 20*log10(|X| + offset), carried unchanged from v1. The factor is part of the named operation rather than a separate setting, because 20 against 10 distinguishes amplitude from power spectra and is not a magnitude anyone should be free to choose. Additive, not a clamp: max(|X|, offset) is a different metric and is not what v1 specified."
+      },
+      "reduction": {
+        "bins": "rms",
+        "frames": "arithmetic_mean"
+      }
+    }
+  },
+  "reporting": {
+    "note": "Three co-primary estimands, interpreted individually. The three-or-none rule is a presentation-integrity control against selective emphasis, not a multiple-comparison correction.",
+    "co_primary_reported_together": true,
+    "omnibus_winner": false,
+    "significance_language": false
+  },
+  "aggregation": {
+    "within_track": "arithmetic_mean_of_eligible_frames",
+    "across_tracks": [
+      "macro_mean",
+      "median"
+    ],
+    "bootstrap": {
+      "unit": "recording",
+      "iterations": 10000,
+      "method": "percentile",
+      "confidence": 0.95,
+      "seed": 20260726,
+      "paired": true
+    }
+  },
+  "publication_gates": {
+    "note": "The artifact builder refuses to emit a headline comparison unless every gate passes. Invalid runs publish reasons, never numbers.",
+    "required": [
+      "loaded_protocol_hash_matches_artifact",
+      "candidate_universe_hash_verified",
+      "training_performance_screen_complete",
+      "population_ids_equal_across_systems",
+      "frame_population_ids_equal_across_systems",
+      "coverage_opgan_complete",
+      "coverage_uvr_complete"
+    ]
+  }
+}

@@ -22,7 +22,7 @@ otherwise be blamed on the system.
 
 What a `ConditionedPair` promises is structural comparability, and nothing more. It does
 not promise the pair is scoreable, which is not even a single property: a constant
-reference is scored by reconstruction SNR and rejected by SI-SNR under protocol v3, and a
+reference is scored by reconstruction SNR and rejected by SI-SNR under protocol v3 onward, and a
 silent reference is rejected by both. Per-metric mathematical validity belongs to the
 metrics, which own those domains, and duplicating them here would put the same rule in two
 places. The consequence is an obligation further up: when a metric rejects a pair that

@@ -268,7 +268,7 @@ class TestTheHandoffToMetrics:
         guarantee of scoreability.
 
         Scoreability is not one property. A constant reference is scored by reconstruction
-        SNR and rejected by SI-SNR under protocol v3, so conditioning could not promise it
+        SNR and rejected by SI-SNR under protocol v3 onward, so conditioning could not promise it
         without knowing which metric is being computed. Those domains belong to the metrics
         and duplicating them here would put one rule in two places. The obligation this
         creates is upstream: when a metric rejects a pair that conditioned cleanly, the

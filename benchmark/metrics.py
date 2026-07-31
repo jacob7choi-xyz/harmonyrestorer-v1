@@ -1,4 +1,4 @@
-"""The three co-primary signal-fidelity metrics, exactly as protocol v3 defines them.
+"""The three co-primary signal-fidelity metrics, exactly as the frozen protocol defines them.
 
 Every configurable constant arrives as a frozen protocol section. Nothing is defaulted
 here, because a default in this module would be a second authority for a value the
@@ -184,7 +184,7 @@ def si_snr(reference: np.ndarray, estimate: np.ndarray, config: SiSnr) -> Metric
     if config.zero_mean and bool(np.all(clean == clean[0])):
         raise MetricInputError(
             "reference is constant, so centring leaves no direction for SI-SNR to "
-            "project onto; epsilon may not make this scoreable (protocol v3)"
+            "project onto; epsilon may not make this scoreable (protocol v3 onward)"
         )
 
     if config.zero_mean:
