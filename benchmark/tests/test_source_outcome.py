@@ -24,32 +24,34 @@ import textwrap
 import pytest
 
 from benchmark.protocol import Decode, load_protocol
-from benchmark.source_outcome import (
+from benchmark.source_evidence import (
     _PUBLISHABLE_DETAILS,
     _TOKEN,
+    DiagnosticCategory,
+    IdentityMethod,
+    IdentityStatus,
+    ObservedSourceMetadata,
+    SanitisedDiagnostic,
+    SourceIdentity,
+    SourceOutcomeError,
+    identity_for_size,
+    sanitise_decoder_diagnostic,
+)
+from benchmark.source_outcome import (
     ABORT_SOURCE_CONTEXT,
     EVALUATION_STAGE_ORDER,
     REASON_PRECEDENCE,
     REASON_STAGE,
     AbortReason,
-    DiagnosticCategory,
     EvaluationStage,
-    IdentityMethod,
-    IdentityStatus,
     IneligibleReason,
-    ObservedSourceMetadata,
     RunAbortOutcome,
-    SanitisedDiagnostic,
     SourceContextPolicy,
-    SourceIdentity,
     SourceIneligibleOutcome,
-    SourceOutcomeError,
-    identity_for_size,
-    sanitise_decoder_diagnostic,
     terminating_stage_for,
     unevaluated_stages_after,
-    verify_source_outcome_contract,
 )
+from benchmark.source_outcome_contract import verify_source_outcome_contract
 
 DIGEST = "a" * 64
 PROTOCOL_DIGEST = "b" * 64
@@ -171,11 +173,65 @@ class TestThereIsNoUnvalidatedConstructionPath:
             )
 
 
+class TestTheSplitPreservedWhatCallersSee:
+    """A layered refactor can change observable identity while every test still passes."""
+
+    def test_the_exception_keeps_its_name(self) -> None:
+        """Defining the class as `SourceValidationError` and aliasing the historical name
+        would preserve what a caller can catch while changing what a traceback, a log line,
+        and pytest all print, because `type(error).__name__` follows the class rather than
+        the alias."""
+        assert SourceOutcomeError.__name__ == "SourceOutcomeError"
+        with pytest.raises(SourceOutcomeError) as caught:
+            SourceIdentity(1024, "not-a-digest", load_protocol().canonicalisation.decode)
+        assert type(caught.value).__name__ == "SourceOutcomeError"
+
+    def test_every_module_exposes_the_same_class_object(self) -> None:
+        """Not merely a class of the same name. Two distinct classes would make an `except`
+        in one module silently miss what another raises."""
+        import benchmark._source_validation as validation
+        import benchmark.source_evidence as evidence
+        import benchmark.source_outcome as outcome
+
+        assert evidence.SourceOutcomeError is validation.SourceOutcomeError
+        assert outcome.SourceOutcomeError is validation.SourceOutcomeError
+
+
 class TestContractAgreesWithTheProtocol:
     """These vocabularies are code-owned, so something has to notice when they drift."""
 
     def test_the_loaded_protocol_agrees(self) -> None:
         verify_source_outcome_contract(load_protocol())
+
+    @pytest.mark.parametrize(
+        "module",
+        [
+            "benchmark._source_validation",
+            "benchmark.source_evidence",
+            "benchmark.source_outcome",
+        ],
+    )
+    def test_no_lower_module_loads_the_protocol_at_import(self, module: str) -> None:
+        """The acceptance property of the module split, committed rather than checked once
+        by hand. Every module below the contract layer must import with the production
+        config path pointing at nothing: importing protocol dataclasses is fine, loading the
+        protocol is not, because that would make type checking, test collection, and
+        mutation runs fail over a library version."""
+        script = textwrap.dedent(
+            f"""
+            import pathlib
+            import benchmark.protocol as protocol
+
+            protocol._PROTOCOL_PATH = pathlib.Path("/nonexistent/protocol.json")
+            import {module} as loaded
+
+            assert loaded is not None
+            """
+        )
+        result = subprocess.run(
+            [sys.executable, "-c", script], capture_output=True, text=True, check=False
+        )
+        assert result.returncode == 0, result.stderr
 
     def test_importing_does_not_load_the_protocol(self) -> None:
         """Run in a fresh interpreter with the config path pointed at a file that does not
@@ -204,9 +260,14 @@ class TestContractAgreesWithTheProtocol:
     def test_the_verifier_catches_a_drifting_vocabulary(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        """The verifier is all that stands between a code-owned vocabulary and a silent
-        divergence from the config, so it has to actually fail when they differ."""
-        import benchmark.source_outcome as module
+        """The verifier is all that stands between a code-declared mirror and a silent
+        divergence from the config, so it has to actually fail when they differ.
+
+        Patched on the contract module rather than on `source_outcome`: the verifier binds
+        these names in its own namespace, so patching the module they came from would not
+        reach it and the test would pass without exercising anything.
+        """
+        import benchmark.source_outcome_contract as module
 
         monkeypatch.setattr(module, "REASON_PRECEDENCE", REASON_PRECEDENCE[::-1])
         with pytest.raises(SourceOutcomeError, match="reason_precedence disagrees"):
@@ -217,7 +278,7 @@ class TestContractAgreesWithTheProtocol:
     ) -> None:
         """A constraint the protocol states and this module does not enforce would
         otherwise pass unnoticed, which is the documentation-theatre pattern again."""
-        import benchmark.source_outcome as module
+        import benchmark.source_outcome_contract as module
 
         monkeypatch.setattr(
             module, "_ENFORCED_CONSTRAINTS", frozenset({"supplemental_reason_codes_unique"})
@@ -228,7 +289,7 @@ class TestContractAgreesWithTheProtocol:
     def test_the_verifier_checks_the_bounds_at_every_boundary(
         self, monkeypatch: pytest.MonkeyPatch
     ) -> None:
-        import benchmark.source_outcome as module
+        import benchmark.source_outcome_contract as module
 
         monkeypatch.setattr(
             module, "identity_for_size", lambda *_: (IdentityStatus.COMPLETE_SHA256, None)
