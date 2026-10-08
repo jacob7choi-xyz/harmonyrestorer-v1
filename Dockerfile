@@ -1,28 +1,41 @@
+# uv is pinned to the version CI and local development use, and by digest so the binary
+# stays the one whose provenance attestation was checked.
+FROM ghcr.io/astral-sh/uv:0.12.23@sha256:61d393e44e249f2e4b526b6c7ddcecce245946826e608e11c93ad4f5bba55b21 AS uv
+
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# System dependencies for audio processing
+# System dependencies for audio processing. build-essential compiles diffq, which is
+# published without a wheel for this platform.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ffmpeg libsndfile1 curl build-essential && \
     rm -rf /var/lib/apt/lists/*
 
-# PyTorch CPU: separate layer for caching (largest download).
-# Pinned to the exact versions resolved by the first successful Docker build.
-# torch and torchaudio currently pin to different minor versions; revisit
-# both together in a future dependency upgrade to a matched PyTorch release.
-RUN pip install --no-cache-dir \
-    torch==2.12.1+cpu \
-    torchaudio==2.11.0+cpu \
-    --index-url https://download.pytorch.org/whl/cpu
+COPY --from=uv /uv /usr/local/bin/uv
 
-# Project dependencies: install before copying code for layer caching.
-# Create a stub package so `pip install .` resolves deps from pyproject.toml.
-COPY pyproject.toml ./
-RUN mkdir -p backend/app && \
-    touch backend/__init__.py backend/app/__init__.py && \
-    pip install --no-cache-dir . && \
-    rm -rf backend
+# Dependencies are installed from uv.lock, the population the gate audits and tests,
+# instead of being resolved at build time. uv installs each package from the URL the
+# lock records and checks it against the recorded hash. uv must use the base image's
+# Python, never download one. The cache stays out of the image, as with pip's
+# --no-cache-dir before, and bytecode is compiled at install time, as pip did by
+# default, because the non-root runtime user cannot write it later.
+ENV UV_PYTHON_DOWNLOADS=never \
+    UV_NO_CACHE=1 \
+    UV_COMPILE_BYTECODE=1
+
+COPY pyproject.toml uv.lock ./
+
+# Two passes. The first installs everything except diffq, with --no-build so that any
+# other package needing a source build stops the image build instead of compiling. The
+# second builds diffq without isolation, against the Cython and setuptools the first pass
+# installed from the lock, because diffq's source distribution declares its build
+# requirements without versions and an isolated build would fetch them unpinned and
+# unhashed.
+RUN uv sync --frozen --no-dev --no-install-project --no-install-package diffq --no-build && \
+    uv sync --frozen --no-dev --no-install-project --no-build-isolation-package diffq
+
+ENV PATH="/app/.venv/bin:${PATH}"
 
 # Application code
 COPY backend/app/ backend/app/
