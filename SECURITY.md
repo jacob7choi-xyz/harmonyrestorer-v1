@@ -38,17 +38,20 @@ Out of scope:
 
 ### Python dependencies
 
-Dependencies are managed with [uv](https://github.com/astral-sh/uv) and pinned via a committed `uv.lock`. CI runs `uv sync --frozen` to enforce the lockfile and prevent silent resolution drift.
+Dependencies are managed with [uv](https://github.com/astral-sh/uv) and pinned via a committed `uv.lock`. The Python gate, `scripts/gate_python.sh`, runs identically in CI and locally. It checks that the lock is current and that the environment matches it, then audits the locked population with pip-audit.
 
-**PyTorch index override**: `torch` and `torchaudio` are sourced exclusively from the official PyTorch CPU wheel index (`https://download.pytorch.org/whl/cpu`) via `[tool.uv.sources]` in `pyproject.toml`. This avoids pulling GPU wheels that are not needed in production and ensures the wheel source is explicit and auditable.
+The backend image installs from the same lock with `uv sync --frozen` rather than resolving versions at build time, so the application environment (`/app/.venv`) is built from the population the gate audits and tests. uv installs each package from the URL and hash the lock records. The base image's own system Python packages, such as its `pip`, sit outside that environment and outside the gate's audit. `diffq` has no wheel for the production platform, so it is compiled from its source distribution against the locked Cython and setuptools instead of build dependencies fetched during the build.
 
-**Ignored CVEs**:
+**PyTorch index**: `torch` is sourced from the official PyTorch CPU wheel index (`https://download.pytorch.org/whl/cpu`) via `[tool.uv.sources]` in `pyproject.toml`. The index is marked `explicit`, so only `torch` resolves from it. This avoids GPU wheels that production does not need.
 
-| CVE | Package | Reason |
-|-----|---------|--------|
-| CVE-2026-3219 | pip | Affects pip itself; no patched version available upstream. Monitored for fix. |
+**Waived advisories**:
 
-This ignore is documented in `.github/workflows/ci.yml` and reviewed on each dependency update cycle. It does not affect the production backend attack surface as currently deployed.
+| Advisory | Package | Basis |
+|----------|---------|-------|
+| PYSEC-2025-194 | torch 2.12.1 | Memory corruption in `torch.jit.script` with a local attack vector. No tracked Python file references `torch.jit`. Fixed in torch 2.13.0. |
+| PYSEC-2026-3447 | setuptools 81.0.0 | Affects source distribution creation, which no tracked build or deployment path performs. The fix requires setuptools 83 or later, which `torch 2.12.1+cpu` does not allow. |
+
+Each waiver is defined in `scripts/gate_python.sh` and is bound to the exact waived version, so the gate fails if that version changes. Each also has tripwires on its reachability basis, such as a check for a `torch.jit` import or a `MANIFEST.in` file. They are meant to catch those specific regressions and do not prove the advisory unreachable.
 
 ### JavaScript dependencies
 
@@ -56,6 +59,6 @@ Frontend dependencies are audited in CI via `npm audit --audit-level=high`. The 
 
 ## Dependency Update Policy
 
-- Python: `uv lock --upgrade` run periodically; `uv.lock` committed after review
+- Python: packages are upgraded by name with `uv lock --upgrade-package <name>`; `uv.lock` committed after review. A blanket `uv lock --upgrade` is avoided because the benchmark protocol pins exact versions of numpy, soundfile, librosa, and soxr, and `load_protocol` refuses to run when they differ. In a test on 2026-10-08, a blanket upgrade moved librosa from 0.11.0 to 1.0.0 for Python 3.12 and later
 - JavaScript: `npm audit fix` run when vulnerabilities are reported; `package-lock.json` committed after review
 - CVE ignores are re-evaluated on each update cycle and removed as soon as a patched version is available and tested
