@@ -1,7 +1,7 @@
 """1D Operational GAN for audio denoising.
 
 Based on "Blind Restoration of Real-World Audio by 1D Operational GANs"
-(Kiranyaz et al., 2022). Generator uses a 10-layer U-Net with Self-ONN
+(Ince et al., 2022). Generator uses a 10-layer U-Net with Self-ONN
 encoder/decoder and skip connections. Discriminator uses Self-ONN only in
 the first layer for feature extraction, with standard convolutions for speed.
 """

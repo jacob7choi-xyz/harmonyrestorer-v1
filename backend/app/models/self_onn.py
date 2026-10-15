@@ -1,7 +1,7 @@
 """Self-Organizing Neural Network (Self-ONN) 1D convolutional layer.
 
 Based on "Blind Restoration of Real-World Audio by 1D Operational GANs"
-(Kiranyaz et al., 2022). Implements learnable operator selection (sin, cos,
+(Ince et al., 2022). Implements learnable operator selection (sin, cos,
 tanh, exp, linear) via softmax-weighted combination.
 """
 
