@@ -1,6 +1,6 @@
 # References
 
-Research papers relevant to HarmonyRestorer's audio restoration approach, organized by topic. HarmonyRestorer is a blind, time-domain 1D Op-GAN model inspired by Kiranyaz et al. (2022) and grounded in Self-ONN theory (Ince et al. 2020).
+Research papers relevant to HarmonyRestorer's audio restoration approach, organized by topic. HarmonyRestorer is a blind, time-domain 1D Op-GAN model inspired by Ince et al. (2022) and grounded in Self-ONN theory (Ince et al. 2020).
 
 ## Core Music Restoration and Historical Recordings
 
@@ -15,7 +15,7 @@ Research papers relevant to HarmonyRestorer's audio restoration approach, organi
 3. **Diffusion-Based Denoising of Historical Recordings** (Colibri/MDIB report)
    First serious treatment of diffusion models for historical audio denoising. Generative counterpart to U-Net and SEANet for analog artifacts.
 
-4. **Kiranyaz et al.**: "Blind Restoration of Real-World Audio by 1D Operational GANs" (2022)
+4. **Ince et al.**: "Blind Restoration of Real-World Audio by 1D Operational GANs" (2022)
    Time-domain 1D Op-GAN handling multiple unknown artifacts (noise, clipping, bandwidth loss, reverberation) in a blind setting. **This is the architecture HarmonyRestorer implements.**
    [arXiv:2212.14618](https://arxiv.org/abs/2212.14618)
 
@@ -68,7 +68,7 @@ Research papers relevant to HarmonyRestorer's audio restoration approach, organi
 
 For HarmonyRestorer specifically:
 
-1. Kiranyaz 2022 (our architecture)
+1. Ince 2022 (our architecture)
 2. Ince 2020 (Self-ONN theory behind our model)
 3. Moliner & Valimaki 2022 (closest competitor to benchmark against)
 4. Fonseca 2020 (synthetic noise recipe similar to ours)

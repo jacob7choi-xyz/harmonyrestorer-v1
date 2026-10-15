@@ -2,10 +2,10 @@
 
 AI-powered audio denoising. Upload noisy audio, get clean audio back.
 
-- **Model**: Custom-trained OpGAN (1D Operational GAN), with UVR-DeNoise as fallback via [audio-separator](https://github.com/karaokenerds/python-audio-separator)
+- **Model**: Custom-trained OpGAN (1D Operational GAN). UVR-DeNoise via [audio-separator](https://github.com/karaokenerds/python-audio-separator) is also available, selected with `DENOISER_ENGINE=uvr`
 - **Formats**: WAV, MP3, FLAC, OGG, M4A, AAC (max 50 MB, 10 minutes)
 - **Stack**: FastAPI + React/TypeScript, Docker-ready
-- **Tests**: 462 passing (backend + dataset 359, frontend 103)
+- **Tests**: 1,015 (backend 205, dataset 155, benchmark 493, gate policy 21, frontend 141)
 
 Live at [harmonyrestorer.online](https://harmonyrestorer.online).
 
@@ -33,7 +33,7 @@ cd frontend && npm ci && npm run dev
 ## API
 
 ```bash
-# Local backend — replace localhost:8000 with the Cloud Run URL for the deployed backend
+# Local backend. For the deployed backend, replace localhost:8000 with the Cloud Run URL.
 curl -X POST http://localhost:8000/api/v1/denoise -F "file=@audio.wav"
 
 # Check status
@@ -55,7 +55,7 @@ backend/app/
 ├── config.py            # Settings (env vars, validated at startup)
 ├── schemas.py           # Pydantic models, JobStatusEnum
 ├── exceptions.py        # Error handlers (no stack traces to users)
-├── middleware.py         # Per-IP rate limiting
+├── middleware.py        # Per-IP rate limiting
 ├── routes/
 │   ├── health.py        # GET /, GET /health
 │   └── denoise.py       # Upload, status, download
@@ -90,7 +90,7 @@ frontend/src/
 - Rate limiting (10 req/min per IP on upload)
 - Inference admission control: one inference at a time, owned by the work's lifecycle so a cancelled request cannot free capacity early; busy uploads fail fast with 503 and Retry-After
 - Transcode admission control: one single-threaded ffmpeg conversion at a time with the same thread-owned lifetime; cached formats bypass conversion entirely
-- Artifact byte budget: persisted plus reserved bytes are bounded atomically (the Cloud Run filesystem is memory-backed, so this bounds instance memory); oversubscription by concurrent producers is impossible by construction
+- Artifact byte budget: persisted plus reserved bytes are bounded atomically (the Cloud Run filesystem is memory-backed, so this bounds instance memory); each reservation is checked and recorded under a single lock, so reservations cannot together exceed the limit; actual usage stays within it as long as each operation's worst-case estimate holds and every release matches its reservation
 - Download files protected by a reference-counted guard, so concurrent format downloads cannot lose cleanup protection mid-stream
 - CORS restricted to configured origins (GET and POST only)
 - Error sanitization (no stack traces in responses)
@@ -102,7 +102,7 @@ frontend/src/
 ## Docker
 
 ```bash
-# Required on first run — env files must exist before docker compose reads them
+# Required on first run: env files must exist before docker compose reads them
 cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env.local
 
@@ -117,12 +117,8 @@ Both images use non-root users. The backend includes a health check and has reso
 ## Quality Gate
 
 ```bash
-# Backend + dataset (run from repo root)
-uv run ruff format --check backend/ dataset/
-uv run ruff check backend/ dataset/
-uv run mypy backend/app/
-uv run pytest -v
-uv run pytest dataset/tests/ -v
+# Python (run from repo root). CI runs this same script.
+scripts/gate_python.sh
 
 # Frontend
 cd frontend && npm run type-check && npm run lint && npm run build && npm run test
@@ -144,7 +140,7 @@ uv run python -m dataset.preprocess data/raw/ --output data/clean_frames/
 # Generate noisy/clean training pairs (5 variants per frame, seeded for reproducibility)
 uv run python -m dataset.generate_pairs data/clean_frames/ --output data/pairs/ --seed 42
 
-# Train OpGAN (CUDA GPU recommended, ~5-10 min/epoch on T4)
+# Train OpGAN (CUDA GPU recommended; 100 epochs took about 51 hours on a T4)
 uv run python -m dataset.train --pairs data/pairs/ --epochs 100 --batch-size 16
 ```
 
@@ -152,7 +148,7 @@ Current dataset: 145 tracks from 14 composers, 29,240 clean frames, 146,200 trai
 
 ## OpGAN
 
-From-scratch implementation of **1D Operational GANs** based on [Kiranyaz et al. 2022](https://arxiv.org/abs/2212.14618), living in `backend/app/models/`. Training script at `dataset/train.py` supports CUDA mixed precision, checkpoint resume, and gradient health monitoring.
+From-scratch implementation of **1D Operational GANs** based on [Ince et al. 2022](https://arxiv.org/abs/2212.14618), living in `backend/app/models/`. Training script at `dataset/train.py` supports CUDA mixed precision, checkpoint resume, and gradient health monitoring.
 
 ### Benchmark Results
 
