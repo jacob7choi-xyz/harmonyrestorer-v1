@@ -12,6 +12,24 @@ from app.services.opgan_denoiser import OpGANDenoiserService
 
 logger = logging.getLogger(__name__)
 
+# Header allowance per WAV file, as in the fixed output cap this replaces
+_WAV_HEADER_BYTES = 1024
+
+# OpGAN: the intermediate and the final 16 kHz mono 16-bit WAV, the allowance
+# reserved before engines declared their own.
+_OPGAN_FILES = 2
+_OPGAN_FILE_BYTES_PER_S = 16_000 * 1 * 2
+
+# UVR-DeNoise through audio-separator 0.44.2. Each stem is 44.1 kHz stereo at the
+# input's bit depth, up to 32 bits (pcm_s32le is the widest WAV codec it asks ffmpeg
+# for). Per stem, pydub writes an int16 staging file and an ffmpeg output file to the
+# system temp directory and then copies the output to the stem path. Read from that
+# code, the peak is the first stem, the second stem, and both staging files present at
+# once. One 65.65 s PCM_32 input measured 81,056,990 bytes at that point.
+_UVR_STEM_BYTES_PER_S = 44_100 * 2 * 4
+_UVR_STAGING_BYTES_PER_S = 44_100 * 2 * 2
+_UVR_STEM_SIZED_FILES = 3
+
 
 class Denoiser(Protocol):
     """What the job pipeline needs from an engine.
@@ -24,6 +42,31 @@ class Denoiser(Protocol):
     def denoise(self, input_path: Path) -> Path:
         """Denoise *input_path* and return the path of the restored WAV."""
         ...
+
+
+def peak_output_bytes(engine: DenoiserEngine, duration_s: int) -> int:
+    """Return the bytes to reserve for one job of *engine* with *duration_s* of input.
+
+    The figure is the expected peak of files present at once, derived from each engine's
+    output formats. It counts files outside the directories the artifact budget scans,
+    such as UVR's staging files in the system temp directory, because on a memory-backed
+    filesystem they use the same memory.
+
+    Args:
+        engine: The configured engine.
+        duration_s: Input duration in seconds.
+
+    Returns:
+        Bytes to reserve, not counting the input file itself.
+    """
+    match engine:
+        case DenoiserEngine.OPGAN:
+            return _OPGAN_FILES * (duration_s * _OPGAN_FILE_BYTES_PER_S + _WAV_HEADER_BYTES)
+        case DenoiserEngine.UVR:
+            stems = _UVR_STEM_SIZED_FILES * (duration_s * _UVR_STEM_BYTES_PER_S + _WAV_HEADER_BYTES)
+            return stems + duration_s * _UVR_STAGING_BYTES_PER_S + _WAV_HEADER_BYTES
+        case _:
+            assert_never(engine)
 
 
 def build_denoiser(engine: DenoiserEngine) -> Denoiser:

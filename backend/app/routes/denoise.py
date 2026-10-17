@@ -21,6 +21,7 @@ from app.config import settings
 from app.schemas import DenoiseUploadResponse, JobStatus, JobStatusEnum
 from app.services.admission import InferenceAdmission
 from app.services.artifacts import artifact_budget
+from app.services.engines import peak_output_bytes
 from app.services.jobs import IPJobCapError, JobCapError, job_manager
 from app.services.transcode import (
     DOWNLOAD_FORMATS,
@@ -34,10 +35,6 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["denoise"])
 
 admission = InferenceAdmission(settings.inference_concurrency)
-
-# Worst-case restored WAV: 16kHz mono 16-bit (the model's native output
-# resolution) at the maximum accepted duration, plus header slack
-_OUTPUT_WAV_BYTES_MAX = settings.max_audio_duration_seconds * 16_000 * 2 + 1024
 
 # Strong references keep lifecycle tasks alive after a cancelled request;
 # the event loop itself holds only weak references to tasks.
@@ -256,9 +253,11 @@ async def denoise_audio(
     job_id = str(uuid.uuid4())
     input_path = settings.upload_dir / f"{job_id}{file_ext}"
 
-    # Worst case simultaneous bytes for this job's lifecycle: the persisted
-    # input plus the intermediate and final outputs' coexistence window
-    upload_reservation = len(content) + 2 * _OUTPUT_WAV_BYTES_MAX
+    # Bytes this job's lifecycle is expected to hold at once: the persisted input
+    # plus the configured engine's peak output at the maximum accepted duration
+    upload_reservation = len(content) + peak_output_bytes(
+        settings.denoiser_engine, settings.max_audio_duration_seconds
+    )
 
     # Slot and reservation ownership transfer to the lifecycle task once it
     # is created; any failure before that point must release both here.

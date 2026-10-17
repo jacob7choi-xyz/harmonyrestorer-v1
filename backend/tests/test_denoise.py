@@ -4,7 +4,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 import soundfile as sf
-from app.config import settings
+from app.config import DenoiserEngine, settings
+from app.services.engines import peak_output_bytes
 
 SMALL_WAV = b"RIFF" + b"\x00" * 4 + b"WAVE" + b"\x00" * 32
 
@@ -252,6 +253,34 @@ def test_upload_rejected_when_artifact_budget_exhausted(
     assert set(settings.upload_dir.iterdir()) == files_before
     assert denoise_module.admission.try_acquire() is True
     denoise_module.admission.release()
+
+
+@pytest.mark.parametrize("engine", list(DenoiserEngine))
+def test_upload_reserves_the_configured_engine_peak(
+    client, mock_denoiser, monkeypatch, engine: DenoiserEngine
+) -> None:
+    """The upload reserves its input bytes plus the configured engine's peak
+    output bytes at the maximum accepted duration."""
+    from app.routes import denoise as denoise_module
+    from app.services.artifacts import ArtifactBudget
+
+    budget = ArtifactBudget(limit_bytes=10**12, directories=[])
+    reserve = budget.try_reserve
+    requested: list[int] = []
+
+    def recording_reserve(amount: int) -> bool:
+        requested.append(amount)
+        return reserve(amount)
+
+    monkeypatch.setattr(budget, "try_reserve", recording_reserve)
+    monkeypatch.setattr(denoise_module, "artifact_budget", budget)
+    monkeypatch.setattr(settings, "denoiser_engine", engine)
+
+    r = client.post("/api/v1/denoise", files={"file": ("test.wav", SMALL_WAV, "audio/wav")})
+
+    assert r.status_code == 200
+    expected = peak_output_bytes(engine, settings.max_audio_duration_seconds)
+    assert requested == [len(SMALL_WAV) + expected]
 
 
 def test_lifecycle_start_failure_rolls_back_the_job_transaction(
