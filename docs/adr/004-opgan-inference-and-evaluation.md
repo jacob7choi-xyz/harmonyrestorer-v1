@@ -15,6 +15,8 @@ After training the OpGAN for 100 epochs on 146,200 noisy/clean pairs, we needed 
 3. Compare OpGAN against UVR (the production baseline) on the same dataset
 4. Test on out-of-distribution audio (real historical recordings vs. synthetic noise)
 
+> **Note:** Added 2026-10-16. This describes the project when the ADR was written. Since 2026-03-19 (`d0da515`), OpGAN is the backend's default denoiser, and UVR is selected with `DENOISER_ENGINE=uvr`.
+
 The model operates at 16 kHz mono, a constraint inherited from the training data pipeline (ADR-002). Any input at a different sample rate or channel count must be converted before inference and evaluation.
 
 ## Decision

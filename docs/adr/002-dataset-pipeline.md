@@ -10,6 +10,8 @@
 
 HarmonyRestorer's production denoiser uses UVR (via `audio-separator`), a pretrained model. The project's long-term goal is to train a custom OpGAN (1D Operational GAN) that specializes in reducing hiss from analog classical music recordings, a domain where general-purpose denoisers underperform because analog noise is not purely additive white noise.
 
+> **Note:** Added 2026-10-16. This describes the project when the ADR was written. Since 2026-03-19 (`d0da515`), OpGAN is the backend's default denoiser, and UVR is selected with `DENOISER_ENGINE=uvr`.
+
 Training the OpGAN requires paired data: clean audio and synthetically degraded versions of the same audio. No existing public dataset targets analog music noise specifically (DEMAND and VoiceBank-DEMAND focus on speech; DNS Challenge focuses on modern noise environments).
 
 ## Decision
