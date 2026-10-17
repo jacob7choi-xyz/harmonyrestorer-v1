@@ -16,6 +16,10 @@
 - [ ] If OpGAN loses: review the hyperparameters from Ince et al. 2022, consider longer training or loss function changes
 - [ ] Test on out-of-distribution audio (live recordings, different genres, real-world noise)
 
+## Benchmark Protocol
+
+- [ ] Reconcile the scipy version in `docs/benchmark-protocol.md`, which lists scipy 1.18.0 among the frozen metric libraries. The project runs on Python 3.11, where `uv.lock` resolves scipy 1.17.1, because scipy 1.18.0 requires Python 3.12 or later. `benchmark/protocols/v4.json` does not pin scipy and `load_protocol` does not check it. Settle this through the amendment process before the replacement benchmark runs, together with the next amendment if one comes first.
+
 ## Future Enhancements
 
 - [ ] Try two-stage approach (coarse OpGAN denoise -> fine refinement) inspired by Moliner
