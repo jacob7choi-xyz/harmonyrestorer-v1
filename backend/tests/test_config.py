@@ -142,3 +142,28 @@ def test_log_format_normalizes_uppercase(monkeypatch, tmp_path) -> None:
     _base_dirs(monkeypatch, tmp_path)
     monkeypatch.setenv("LOG_FORMAT", "JSON")
     assert Settings().log_format == "json"
+
+
+# --- UVR_MODEL_NAME ---
+
+
+@pytest.mark.parametrize(
+    "model_name",
+    [
+        "UVR-MDX-NET-Inst_full_292.onnx",  # MDX: its architecture module fails to import
+        "htdemucs_ft.yaml",  # Demucs: loads its weights with weights_only=False
+        "UVR-Denoise.pth",  # a case typo of the supported name
+    ],
+)
+def test_uvr_model_name_rejects_unsupported_value(monkeypatch, model_name) -> None:
+    """A UVR model outside the supported set raises ValueError."""
+    monkeypatch.setenv("UVR_MODEL_NAME", model_name)
+    with pytest.raises(ValueError, match="Invalid UVR_MODEL_NAME"):
+        Settings()
+
+
+def test_uvr_model_name_accepts_default(monkeypatch, tmp_path) -> None:
+    """The default UVR model is accepted."""
+    _base_dirs(monkeypatch, tmp_path)
+    monkeypatch.delenv("UVR_MODEL_NAME", raising=False)
+    assert Settings().uvr_model_name == "UVR-DeNoise.pth"

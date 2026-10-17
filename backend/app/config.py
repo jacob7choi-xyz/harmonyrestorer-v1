@@ -10,6 +10,16 @@ load_dotenv()
 
 _VALID_LOG_LEVELS: frozenset[str] = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
 _VALID_LOG_FORMATS: frozenset[str] = frozenset({"text", "json"})
+# UVR model names checked to run here. UVR-DeNoise ran end to end in images built from
+# this Dockerfile. Names of two other audio-separator types are kept out on evidence: the
+# MDX architecture module failed to import in those images (torchvision's compiled
+# extension did not load), and the Demucs loader calls torch.load with
+# weights_only=False on downloaded files. Other types, such as MDXC, are kept out because
+# they were not tested here. This limits the name only: audio-separator decides a model's
+# architecture from a list it fetches over the network, so the check is a local
+# allowlist rather than a lookup.
+_DEFAULT_UVR_MODEL = "UVR-DeNoise.pth"
+_SUPPORTED_UVR_MODELS: frozenset[str] = frozenset({_DEFAULT_UVR_MODEL})
 
 
 class Settings:
@@ -34,7 +44,14 @@ class Settings:
             raise ValueError(
                 f"Invalid DENOISER_ENGINE={self.denoiser_engine!r}, must be 'opgan' or 'uvr'"
             )
-        self.uvr_model_name = os.getenv("UVR_MODEL_NAME", "UVR-DeNoise.pth")
+        # Checked whatever the engine, so a bad value surfaces at startup rather than on
+        # the first UVR job, which would fail while /health still reports healthy.
+        self.uvr_model_name = os.getenv("UVR_MODEL_NAME", _DEFAULT_UVR_MODEL)
+        if self.uvr_model_name not in _SUPPORTED_UVR_MODELS:
+            raise ValueError(
+                f"Invalid UVR_MODEL_NAME={self.uvr_model_name!r}, "
+                f"must be one of {sorted(_SUPPORTED_UVR_MODELS)}"
+            )
         self.opgan_checkpoint = Path(
             os.getenv("OPGAN_CHECKPOINT", str(self.base_dir.parent / "checkpoints" / "final.pt"))
         )
