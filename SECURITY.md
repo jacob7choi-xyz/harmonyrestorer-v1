@@ -44,14 +44,7 @@ The backend image installs from the same lock with `uv sync --frozen` rather tha
 
 **PyTorch index**: `torch` is sourced from the official PyTorch CPU wheel index (`https://download.pytorch.org/whl/cpu`) via `[tool.uv.sources]` in `pyproject.toml`. The index is marked `explicit`, so only `torch` resolves from it. This avoids GPU wheels that production does not need.
 
-**Waived advisories**:
-
-| Advisory | Package | Basis |
-|----------|---------|-------|
-| PYSEC-2025-194 | torch 2.12.1 | Memory corruption in `torch.jit.script` with a local attack vector. No tracked Python file references `torch.jit`. Fixed in torch 2.13.0. |
-| PYSEC-2026-3447 | setuptools 81.0.0 | Affects source distribution creation, which no tracked build or deployment path performs. The fix requires setuptools 83 or later, which `torch 2.12.1+cpu` does not allow. |
-
-Each waiver is defined in `scripts/gate_python.sh` and is bound to the exact waived version, so the gate fails if that version changes. Each also has tripwires on its reachability basis, such as a check for a `torch.jit` import or a `MANIFEST.in` file. They are meant to catch those specific regressions and do not prove the advisory unreachable.
+**Waived advisories**: none. The gate fails on any advisory pip-audit reports for the locked population.
 
 ### JavaScript dependencies
 
