@@ -5,8 +5,15 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import numpy as np
 import pytest
+import soundfile as sf
 from app.services.denoiser import DENOISED_OUTPUT_MARKER, DenoiserService
+
+
+def _write_stem(path: Path, level: float = 0.5) -> None:
+    """Write a short stem in the format UVR-DeNoise wrote in the image run: 44.1 kHz stereo."""
+    sf.write(str(path), np.full((4410, 2), level, dtype=np.float32), 44_100, subtype="PCM_16")
 
 
 class TestDenoiserInit:
@@ -84,16 +91,15 @@ class TestDenoise:
     """Tests for the denoise method."""
 
     @patch("app.services.denoiser.Separator")
-    def test_returns_denoised_output_path(self, mock_sep_cls: MagicMock, tmp_path: Path) -> None:
-        """Returns path to the denoised output file."""
+    def test_returns_converted_output_path(self, mock_sep_cls: MagicMock, tmp_path: Path) -> None:
+        """Returns the converted file named after the input, inside output_dir."""
         output_dir = tmp_path / "output"
         output_dir.mkdir()
         service = DenoiserService(output_dir=output_dir)
 
         # Simulate separator creating a denoised file
-        denoised_name = "track_(No Noise).wav"
-        denoised_path = output_dir / denoised_name
-        denoised_path.write_bytes(b"RIFF" + b"\x00" * 40)
+        denoised_path = output_dir / "track_(No Noise).wav"
+        _write_stem(denoised_path)
 
         mock_separator = mock_sep_cls.return_value
         mock_separator.separate.return_value = [str(denoised_path)]
@@ -102,7 +108,26 @@ class TestDenoise:
         input_path.write_bytes(b"RIFF" + b"\x00" * 40)
 
         result = service.denoise(input_path)
-        assert result == denoised_path.resolve()
+        assert result == (output_dir / "track_uvr.wav").resolve()
+
+    @patch("app.services.denoiser.Separator")
+    def test_output_is_16k_mono_16_bit(self, mock_sep_cls: MagicMock, tmp_path: Path) -> None:
+        """A 44.1 kHz stereo stem is returned as a 16 kHz mono 16-bit WAV."""
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+        service = DenoiserService(output_dir=output_dir)
+
+        denoised_path = output_dir / "track_(No Noise).wav"
+        _write_stem(denoised_path)
+
+        mock_separator = mock_sep_cls.return_value
+        mock_separator.separate.return_value = [str(denoised_path)]
+
+        input_path = tmp_path / "track.wav"
+        input_path.write_bytes(b"RIFF" + b"\x00" * 40)
+
+        info = sf.info(str(service.denoise(input_path)))
+        assert (info.samplerate, info.channels, info.subtype) == (16_000, 1, "PCM_16")
 
     @patch("app.services.denoiser.Separator")
     def test_raises_when_no_denoised_output(self, mock_sep_cls: MagicMock, tmp_path: Path) -> None:
@@ -132,7 +157,7 @@ class TestDenoise:
         # The service uses Path(output).name, stripping the traversal
         safe_name = Path(malicious_name).name
         safe_path = output_dir / safe_name
-        safe_path.write_bytes(b"RIFF" + b"\x00" * 40)
+        _write_stem(safe_path)
 
         mock_separator = mock_sep_cls.return_value
         mock_separator.separate.return_value = [malicious_name]
@@ -151,9 +176,8 @@ class TestDenoise:
         output_dir.mkdir()
         service = DenoiserService(output_dir=output_dir)
 
-        denoised_name = "track_(No Noise).wav"
-        denoised_path = output_dir / denoised_name
-        denoised_path.write_bytes(b"RIFF" + b"\x00" * 40)
+        denoised_path = output_dir / "track_(No Noise).wav"
+        _write_stem(denoised_path)
 
         mock_separator = mock_sep_cls.return_value
         mock_separator.separate.return_value = [str(denoised_path)]
@@ -168,15 +192,16 @@ class TestDenoise:
     def test_selects_correct_output_among_multiple(
         self, mock_sep_cls: MagicMock, tmp_path: Path
     ) -> None:
-        """Picks the file with the denoised marker when multiple outputs exist."""
+        """Converts the file with the denoised marker when multiple outputs exist."""
         output_dir = tmp_path / "output"
         output_dir.mkdir()
         service = DenoiserService(output_dir=output_dir)
 
+        # Distinct levels show which stem the output came from
         noise_path = output_dir / "track_(Noise).wav"
-        noise_path.write_bytes(b"RIFF" + b"\x00" * 40)
+        _write_stem(noise_path, level=0.0)
         denoised_path = output_dir / "track_(No Noise).wav"
-        denoised_path.write_bytes(b"RIFF" + b"\x00" * 40)
+        _write_stem(denoised_path, level=0.5)
 
         mock_separator = mock_sep_cls.return_value
         mock_separator.separate.return_value = [
@@ -187,22 +212,23 @@ class TestDenoise:
         input_path = tmp_path / "track.wav"
         input_path.write_bytes(b"RIFF" + b"\x00" * 40)
 
-        result = service.denoise(input_path)
-        assert result == denoised_path.resolve()
+        audio, _ = sf.read(str(service.denoise(input_path)), dtype="float32")
+        # Away from the resampler's edge effects
+        assert audio[len(audio) // 2] == pytest.approx(0.5, abs=1e-2)
 
     @patch("app.services.denoiser.Separator")
     def test_removes_noise_stem_after_success(
         self, mock_sep_cls: MagicMock, tmp_path: Path
     ) -> None:
-        """Only the returned denoised stem remains in output_dir after denoise."""
+        """Only the returned file remains in output_dir after denoise; both stems are gone."""
         output_dir = tmp_path / "output"
         output_dir.mkdir()
         service = DenoiserService(output_dir=output_dir)
 
         noise_path = output_dir / "track_(Noise).wav"
-        noise_path.write_bytes(b"RIFF" + b"\x00" * 40)
+        _write_stem(noise_path)
         denoised_path = output_dir / "track_(No Noise).wav"
-        denoised_path.write_bytes(b"RIFF" + b"\x00" * 40)
+        _write_stem(denoised_path)
 
         mock_separator = mock_sep_cls.return_value
         mock_separator.separate.return_value = [str(noise_path), str(denoised_path)]
@@ -232,6 +258,34 @@ class TestDenoise:
         input_path.write_bytes(b"RIFF" + b"\x00" * 40)
 
         with pytest.raises(RuntimeError, match="Could not find denoised output"):
+            service.denoise(input_path)
+        assert list(output_dir.iterdir()) == []
+
+    @patch("app.services.denoiser.Separator")
+    def test_failed_write_raises_and_leaves_no_output(
+        self, mock_sep_cls: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A failed WAV write raises and leaves output_dir empty, raw stem included."""
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+        service = DenoiserService(output_dir=output_dir)
+
+        denoised_path = output_dir / "track_(No Noise).wav"
+        _write_stem(denoised_path)
+
+        mock_separator = mock_sep_cls.return_value
+        mock_separator.separate.return_value = [str(denoised_path)]
+
+        def failing_write(*args: object, **kwargs: object) -> None:
+            # A memory-backed filesystem at its limit fails the write this way
+            raise OSError("No space left on device")
+
+        monkeypatch.setattr("app.services.denoiser.write_wav_atomic", failing_write)
+
+        input_path = tmp_path / "track.wav"
+        input_path.write_bytes(b"RIFF" + b"\x00" * 40)
+
+        with pytest.raises(OSError, match="No space left"):
             service.denoise(input_path)
         assert list(output_dir.iterdir()) == []
 

@@ -5,10 +5,15 @@ from pathlib import Path
 
 from audio_separator.separator import Separator
 
+from app.services.wav_io import load_mono, write_wav_atomic
+
 logger = logging.getLogger(__name__)
 
 # UVR marks the denoised track with this substring in the filename
 DENOISED_OUTPUT_MARKER = "No Noise"
+# UVR-DeNoise wrote 44.1 kHz stereo in the image run. The output size cap in
+# routes/denoise.py and the download path assume 16 kHz mono, as OpGAN writes.
+_OUTPUT_SR = 16_000
 
 
 class DenoiserService:
@@ -40,7 +45,24 @@ class DenoiserService:
         return candidate
 
     def denoise(self, input_path: Path) -> Path:
-        """Run UVR denoising on *input_path* and return the cleaned output path."""
+        """Run UVR denoising on *input_path* and return the cleaned output path.
+
+        The denoised stem is converted to a 16 kHz mono 16-bit WAV. Every file that
+        separate() returned is removed once all of them pass the containment check,
+        whether or not the conversion succeeds. Files from a separate() call that
+        raises are not known here and are not removed.
+
+        Args:
+            input_path: Path to the input audio file.
+
+        Returns:
+            Path to the 16 kHz mono WAV in output_dir.
+
+        Raises:
+            RuntimeError: If an output escapes output_dir or no denoised stem is found.
+            Exception: Errors from separate(), from reading the stem, and from writing
+                the WAV propagate.
+        """
         separator = self._get_separator()
 
         logger.info("Denoising: %s", input_path)
@@ -48,8 +70,9 @@ class DenoiserService:
         written = [self._contained_output(output) for output in outputs]
 
         clean_file = next((path for path in written if DENOISED_OUTPUT_MARKER in path.name), None)
-        # UVR writes one file per stem. Job cleanup removes only {job_id}_denoised.*, so a
-        # stem left here would stay in output_dir and count against the artifact budget.
+        # With output_single_stem unset, the VR separator writes and returns both stems.
+        # Job cleanup removes only {job_id}_denoised.*, so a stem left here would count
+        # against the artifact budget.
         for path in written:
             if path != clean_file:
                 path.unlink(missing_ok=True)
@@ -57,5 +80,11 @@ class DenoiserService:
         if clean_file is None:
             raise RuntimeError(f"Could not find denoised output in {outputs}")
 
-        logger.info("Denoised output: %s", clean_file)
-        return clean_file
+        output_path = self._contained_output(f"{input_path.stem}_uvr.wav")
+        try:
+            write_wav_atomic(output_path, load_mono(clean_file, _OUTPUT_SR), _OUTPUT_SR)
+        finally:
+            clean_file.unlink(missing_ok=True)
+
+        logger.info("Denoised output: %s", output_path)
+        return output_path
