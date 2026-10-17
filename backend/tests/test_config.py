@@ -1,7 +1,7 @@
 """Tests for Settings validation: every env var that has a validation guard."""
 
 import pytest
-from app.config import Settings
+from app.config import DenoiserEngine, Settings
 
 
 def _base_dirs(monkeypatch, tmp_path) -> None:
@@ -163,17 +163,17 @@ def test_denoiser_engine_rejects_unknown_value(monkeypatch, engine) -> None:
 
 @pytest.mark.parametrize("engine", ["opgan", "uvr"])
 def test_denoiser_engine_accepts_valid_values(monkeypatch, tmp_path, engine) -> None:
-    """Each supported engine is accepted and stored as given."""
+    """Each supported engine is accepted and stored as its enum member."""
     _base_dirs(monkeypatch, tmp_path)
     monkeypatch.setenv("DENOISER_ENGINE", engine)
-    assert Settings().denoiser_engine == engine
+    assert Settings().denoiser_engine is DenoiserEngine(engine)
 
 
 def test_denoiser_engine_defaults_to_opgan(monkeypatch, tmp_path) -> None:
     """With DENOISER_ENGINE unset, the engine is opgan."""
     _base_dirs(monkeypatch, tmp_path)
     monkeypatch.delenv("DENOISER_ENGINE", raising=False)
-    assert Settings().denoiser_engine == "opgan"
+    assert Settings().denoiser_engine is DenoiserEngine.OPGAN
 
 
 # --- UVR_MODEL_NAME ---

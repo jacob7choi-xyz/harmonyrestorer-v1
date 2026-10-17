@@ -1,6 +1,7 @@
 """Application settings loaded from environment variables."""
 
 import os
+from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
 
@@ -10,6 +11,15 @@ load_dotenv()
 
 _VALID_LOG_LEVELS: frozenset[str] = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
 _VALID_LOG_FORMATS: frozenset[str] = frozenset({"text", "json"})
+
+
+class DenoiserEngine(StrEnum):
+    """Denoising engines the backend can run, selected with DENOISER_ENGINE."""
+
+    OPGAN = "opgan"
+    UVR = "uvr"
+
+
 # UVR model names checked to run here. UVR-DeNoise ran end to end in images built from
 # this Dockerfile. Names of two other audio-separator types are kept out on evidence: the
 # MDX architecture module failed to import in those images (torchvision's compiled
@@ -39,11 +49,15 @@ class Settings:
         )
         if self.max_audio_duration_seconds < 1:
             raise ValueError("MAX_AUDIO_DURATION_SECONDS must be at least 1")
-        self.denoiser_engine = os.getenv("DENOISER_ENGINE", "opgan")
-        if self.denoiser_engine not in ("opgan", "uvr"):
+        engine = os.getenv("DENOISER_ENGINE", DenoiserEngine.OPGAN)
+        try:
+            # Exact match on the value; case is not normalized
+            self.denoiser_engine = DenoiserEngine(engine)
+        except ValueError as e:
             raise ValueError(
-                f"Invalid DENOISER_ENGINE={self.denoiser_engine!r}, must be 'opgan' or 'uvr'"
-            )
+                f"Invalid DENOISER_ENGINE={engine!r}, "
+                f"must be one of {sorted(member.value for member in DenoiserEngine)}"
+            ) from e
         # Checked whatever the engine, so a bad value surfaces at startup rather than on
         # the first UVR job, which would fail while /health still reports healthy.
         self.uvr_model_name = os.getenv("UVR_MODEL_NAME", _DEFAULT_UVR_MODEL)

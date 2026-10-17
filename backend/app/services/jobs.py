@@ -8,8 +8,7 @@ from pathlib import Path
 
 from app.config import settings
 from app.schemas import JobStatus, JobStatusEnum
-from app.services.denoiser import DenoiserService
-from app.services.opgan_denoiser import OpGANDenoiserService
+from app.services.engines import Denoiser, build_denoiser
 
 logger = logging.getLogger(__name__)
 
@@ -45,26 +44,15 @@ class JobManager:
 
     def __init__(self) -> None:
         self._jobs: dict[str, JobStatus] = {}
-        self._denoiser: DenoiserService | OpGANDenoiserService | None = None
+        self._denoiser: Denoiser | None = None
         self._lock = threading.Lock()
         self._downloading: dict[str, _DownloadGuard] = {}
 
-    def _get_denoiser(self) -> DenoiserService | OpGANDenoiserService:
+    def _get_denoiser(self) -> Denoiser:
         """Lazy-load the denoiser singleton based on configured engine."""
         with self._lock:
             if self._denoiser is None:
-                if settings.denoiser_engine == "opgan":
-                    self._denoiser = OpGANDenoiserService(
-                        output_dir=settings.processed_dir,
-                        checkpoint_path=settings.opgan_checkpoint,
-                    )
-                    logger.info("OpGAN Denoiser initialized")
-                else:
-                    self._denoiser = DenoiserService(
-                        output_dir=settings.processed_dir,
-                        model_name=settings.uvr_model_name,
-                    )
-                    logger.info("UVR Denoiser initialized")
+                self._denoiser = build_denoiser(settings.denoiser_engine)
         return self._denoiser
 
     @property

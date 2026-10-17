@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 import pytest
-from app.config import settings
+from app.config import DenoiserEngine, settings
 from app.schemas import JobStatus, JobStatusEnum
 from app.services.jobs import IPJobCapError, JobCapError, JobManager
 
@@ -47,7 +47,7 @@ def test_get_denoiser_builds_opgan_service_for_opgan_engine(tmp_path, monkeypatc
     from app.services.opgan_denoiser import OpGANDenoiserService
 
     checkpoint = tmp_path / "final.pt"
-    monkeypatch.setattr(settings, "denoiser_engine", "opgan")
+    monkeypatch.setattr(settings, "denoiser_engine", DenoiserEngine.OPGAN)
     monkeypatch.setattr(settings, "processed_dir", tmp_path / "processed")
     monkeypatch.setattr(settings, "opgan_checkpoint", checkpoint)
 
@@ -62,7 +62,7 @@ def test_get_denoiser_builds_uvr_service_for_uvr_engine(tmp_path, monkeypatch) -
     """DENOISER_ENGINE=uvr builds the UVR service with the configured model name."""
     from app.services.denoiser import DenoiserService
 
-    monkeypatch.setattr(settings, "denoiser_engine", "uvr")
+    monkeypatch.setattr(settings, "denoiser_engine", DenoiserEngine.UVR)
     monkeypatch.setattr(settings, "processed_dir", tmp_path / "processed")
     monkeypatch.setattr(settings, "uvr_model_name", "UVR-DeNoise.pth")
 
@@ -75,7 +75,7 @@ def test_get_denoiser_builds_uvr_service_for_uvr_engine(tmp_path, monkeypatch) -
 
 def test_get_denoiser_returns_the_same_instance_on_later_calls(tmp_path, monkeypatch) -> None:
     """A later call returns the same denoiser instance."""
-    monkeypatch.setattr(settings, "denoiser_engine", "opgan")
+    monkeypatch.setattr(settings, "denoiser_engine", DenoiserEngine.OPGAN)
     monkeypatch.setattr(settings, "processed_dir", tmp_path / "processed")
 
     mgr = JobManager()
