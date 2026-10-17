@@ -42,7 +42,7 @@ Dependencies are managed with [uv](https://github.com/astral-sh/uv) and pinned v
 
 The backend image installs from the same lock with `uv sync --frozen` rather than resolving versions at build time, so the application environment (`/app/.venv`) is built from the population the gate audits and tests. uv installs each package from the URL and hash the lock records. The base image's own system Python packages, such as its `pip`, sit outside that environment and outside the gate's audit. `diffq` has no wheel for the production platform, so it is compiled from its source distribution against the locked Cython and setuptools instead of build dependencies fetched during the build.
 
-**PyTorch index**: `torch` is sourced from the official PyTorch CPU wheel index (`https://download.pytorch.org/whl/cpu`) via `[tool.uv.sources]` in `pyproject.toml`. The index is marked `explicit`, so only `torch` resolves from it. This avoids GPU wheels that production does not need.
+**PyTorch index**: `torch` is sourced from the official PyTorch CPU wheel index (`https://download.pytorch.org/whl/cpu`) via `[tool.uv.sources]` in `pyproject.toml`. The index is marked `explicit`, so only `torch` resolves from it, which keeps torch itself on its CPU build. `torchvision`, which `audio-separator` pulls in through `onnx2torch`, still resolves from PyPI as a CUDA-linked build. In images built from this Dockerfile on 2026-10-16, its compiled extension did not load (`libcudart.so.13` is absent), so `import torchvision` failed there. No tracked code imports torchvision, and the OpGAN path and the UVR-DeNoise path ran without it.
 
 **Waived advisories**: none. The gate fails on any advisory pip-audit reports for the locked population.
 
