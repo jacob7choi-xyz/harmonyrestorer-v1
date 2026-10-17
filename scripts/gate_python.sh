@@ -126,9 +126,9 @@ audit_dependencies() {
 
   # Coverage is asserted by identity, not by absence of complaint. Checking only for
   # skip_reason would miss a package pip-audit drops from its report entirely, since a
-  # dropped package leaves no entry to inspect. Extracted to Python because the check now
-  # canonicalises names and queries a fallback oracle, which is more than shell should
-  # carry, and because it is unit-testable there.
+  # dropped package leaves no entry to inspect. Extracted to Python because the check
+  # canonicalises names, which is more than shell should carry, and because it is
+  # unit-testable there.
   "${UV_RUN[@]}" python scripts/audit_dependencies.py \
     --requirements "$req" \
     --report "$AUDIT_JSON" || return 1
