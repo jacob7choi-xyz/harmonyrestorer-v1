@@ -144,6 +144,38 @@ def test_log_format_normalizes_uppercase(monkeypatch, tmp_path) -> None:
     assert Settings().log_format == "json"
 
 
+# --- DENOISER_ENGINE ---
+
+
+@pytest.mark.parametrize(
+    "engine",
+    [
+        "UVR",  # matching is exact; unlike LOG_LEVEL, case is not normalized
+        "demucs",  # not an engine this backend provides
+    ],
+)
+def test_denoiser_engine_rejects_unknown_value(monkeypatch, engine) -> None:
+    """A DENOISER_ENGINE other than opgan or uvr raises ValueError."""
+    monkeypatch.setenv("DENOISER_ENGINE", engine)
+    with pytest.raises(ValueError, match="Invalid DENOISER_ENGINE"):
+        Settings()
+
+
+@pytest.mark.parametrize("engine", ["opgan", "uvr"])
+def test_denoiser_engine_accepts_valid_values(monkeypatch, tmp_path, engine) -> None:
+    """Each supported engine is accepted and stored as given."""
+    _base_dirs(monkeypatch, tmp_path)
+    monkeypatch.setenv("DENOISER_ENGINE", engine)
+    assert Settings().denoiser_engine == engine
+
+
+def test_denoiser_engine_defaults_to_opgan(monkeypatch, tmp_path) -> None:
+    """With DENOISER_ENGINE unset, the engine is opgan."""
+    _base_dirs(monkeypatch, tmp_path)
+    monkeypatch.delenv("DENOISER_ENGINE", raising=False)
+    assert Settings().denoiser_engine == "opgan"
+
+
 # --- UVR_MODEL_NAME ---
 
 

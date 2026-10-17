@@ -39,6 +39,50 @@ def _make_manager_with_jobs() -> JobManager:
     return mgr
 
 
+# --- engine selection ---
+
+
+def test_get_denoiser_builds_opgan_service_for_opgan_engine(tmp_path, monkeypatch) -> None:
+    """DENOISER_ENGINE=opgan builds the OpGAN service with the configured paths."""
+    from app.services.opgan_denoiser import OpGANDenoiserService
+
+    checkpoint = tmp_path / "final.pt"
+    monkeypatch.setattr(settings, "denoiser_engine", "opgan")
+    monkeypatch.setattr(settings, "processed_dir", tmp_path / "processed")
+    monkeypatch.setattr(settings, "opgan_checkpoint", checkpoint)
+
+    denoiser = JobManager()._get_denoiser()
+
+    assert isinstance(denoiser, OpGANDenoiserService)
+    assert denoiser.checkpoint_path == checkpoint.resolve()
+    assert denoiser.output_dir == (tmp_path / "processed").resolve()
+
+
+def test_get_denoiser_builds_uvr_service_for_uvr_engine(tmp_path, monkeypatch) -> None:
+    """DENOISER_ENGINE=uvr builds the UVR service with the configured model name."""
+    from app.services.denoiser import DenoiserService
+
+    monkeypatch.setattr(settings, "denoiser_engine", "uvr")
+    monkeypatch.setattr(settings, "processed_dir", tmp_path / "processed")
+    monkeypatch.setattr(settings, "uvr_model_name", "UVR-DeNoise.pth")
+
+    denoiser = JobManager()._get_denoiser()
+
+    assert isinstance(denoiser, DenoiserService)
+    assert denoiser.model_name == "UVR-DeNoise.pth"
+    assert denoiser.output_dir == (tmp_path / "processed").resolve()
+
+
+def test_get_denoiser_returns_the_same_instance_on_later_calls(tmp_path, monkeypatch) -> None:
+    """A later call returns the same denoiser instance."""
+    monkeypatch.setattr(settings, "denoiser_engine", "opgan")
+    monkeypatch.setattr(settings, "processed_dir", tmp_path / "processed")
+
+    mgr = JobManager()
+
+    assert mgr._get_denoiser() is mgr._get_denoiser()
+
+
 # --- create / get ---
 
 
