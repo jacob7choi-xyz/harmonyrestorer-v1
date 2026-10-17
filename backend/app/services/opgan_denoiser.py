@@ -8,19 +8,16 @@ output is always written at 16kHz.
 from __future__ import annotations
 
 import logging
-import os
-import tempfile
 import threading
 import time
 from pathlib import Path
 
-import librosa
 import numpy as np
-import soundfile as sf
 import torch
 
 from app.models.chunking import chunk_audio, overlap_add
 from app.models.op_gan import OpGANGenerator
+from app.services.wav_io import load_mono, write_wav_atomic
 
 logger = logging.getLogger(__name__)
 
@@ -163,16 +160,7 @@ class OpGANDenoiserService:
         """
         logger.info("Denoising: %s", input_path)
 
-        audio, sr = sf.read(input_path, dtype="float32")
-
-        # Convert stereo to mono
-        if audio.ndim == 2:
-            audio = audio.mean(axis=1)
-
-        # Resample to 16kHz if needed
-        if sr != _TARGET_SR:
-            logger.debug("Resampling from %dHz to %dHz", sr, _TARGET_SR)
-            audio = librosa.resample(audio, orig_sr=sr, target_sr=_TARGET_SR)
+        audio = load_mono(input_path, _TARGET_SR)
 
         start_time = time.perf_counter()
         restored = self._restore_audio(audio)
@@ -182,24 +170,12 @@ class OpGANDenoiserService:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-        # Write to temp file then atomic rename
         output_name = f"{input_path.stem}_opgan.wav"
         output_path = (self.output_dir / output_name).resolve()
         if not output_path.is_relative_to(self.output_dir):
             raise RuntimeError("Output path escapes output directory")
 
-        tmp_fd, tmp_path = tempfile.mkstemp(
-            prefix=f".{input_path.stem}_opgan.", suffix=".wav.tmp", dir=self.output_dir
-        )
-        os.close(tmp_fd)
-        try:
-            sf.write(tmp_path, restored, _TARGET_SR, format="WAV")
-            with open(tmp_path, "rb") as _f:
-                os.fsync(_f.fileno())
-            Path(tmp_path).replace(output_path)
-        except Exception:
-            Path(tmp_path).unlink(missing_ok=True)
-            raise
+        write_wav_atomic(output_path, restored, _TARGET_SR)
 
         duration = len(audio) / _TARGET_SR
         logger.info(
