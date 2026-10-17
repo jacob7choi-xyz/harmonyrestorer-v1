@@ -59,9 +59,10 @@ run "security (bandit)" "${UV_RUN[@]}" bandit -r backend/app/ -q
 
 # Dependency audit, with coverage asserted rather than assumed.
 #
-# GitHub Actions installs torch as 2.12.1+cpu. A local version identifier does not
-# exist on PyPI, so auditing the live environment made pip-audit report "could not be
-# audited" for torch and exit zero anyway. CI had therefore never audited the largest
+# GitHub Actions installs torch from the PyTorch CPU index, under a +cpu local version
+# identifier (2.12.1+cpu when this check was written). A local version identifier does
+# not exist on PyPI, so auditing the live environment made pip-audit report "could not
+# be audited" for torch and exit zero anyway. CI had therefore never audited the largest
 # runtime dependency while reporting a clean audit. That is the dependency-audit form
 # of a silently shrinking denominator: coverage has to be explicit and fail closed.
 #
@@ -73,12 +74,12 @@ run "security (bandit)" "${UV_RUN[@]}" bandit -r backend/app/ -q
 #
 # Advisory-version mapping, which is deliberately not called normalisation. PyTorch
 # publishes its CPU build on a separate index under a local version identifier, so the
-# deployed artifact is torch 2.12.1+cpu while vulnerability databases key PyTorch
-# advisories to upstream releases. No scanner indexes 2.12.1+cpu, so the mapping has to
+# deployed artifact is torch X.Y.Z+cpu while vulnerability databases key PyTorch
+# advisories to upstream releases. No scanner indexes X.Y.Z+cpu, so the mapping has to
 # happen somewhere; what matters is being clear about which identity each claim is about.
 #
-#   runtime artifact identity   torch==2.12.1+cpu
-#   advisory lookup identity    torch==2.12.1
+#   runtime artifact identity   torch==X.Y.Z+cpu
+#   advisory lookup identity    torch==X.Y.Z
 #
 # The two are not interchangeable, and treating them as one caused a real defect: an
 # earlier version rewrote the requirement and let pip-audit resolve it, which on Linux
@@ -92,57 +93,12 @@ run "security (bandit)" "${UV_RUN[@]}" bandit -r backend/app/ -q
 # to that artifact.
 ADVISORY_VERSION_MAPPED_PACKAGES="torch"
 #
-# Waived advisories. Each is bound to the assumptions it rests on, so it reopens by
-# itself when those stop holding. A waiver that outlives its cause suppresses a future
-# recurrence of the same identifier, which is why CVE-2026-3219 is not carried forward:
-# pip is now 26.1.2 and that advisory no longer applies at all.
-#
-# PYSEC-2025-194 / CVE-2025-3000 / GHSA-rrmf-rvhw-rf47, torch, fixed in 2.13.0.
-# Applicability established first: the GitHub-reviewed advisory records fixed 2.13.0
-# with last known affected <= 2.12.1, and PyPI reports it for 2.12.1 unwithdrawn, so
-# this version is affected. The PYSEC record's "last_affected: 2.6.0-NA" is malformed,
-# which is why the sources appear to disagree. Waived on reachability: the flaw is
-# memory corruption in torch.jit.script and the vector is local with privileges
-# (CVSS AV:L/AC:L/PR:L). Supporting evidence beyond the tripwire below is that no
-# TorchScript path exists in the inference service and checkpoints load through
-# torch.load(..., weights_only=True).
-WAIVED_TORCH_ADVISORY="PYSEC-2025-194"
-WAIVED_TORCH_PACKAGE="torch"
-WAIVED_TORCH_VERSION="2.12.1"
-#
-# PYSEC-2026-3447 / CVE-2026-59890, setuptools, fixed in 83.0.0. The flaw is in source
-# distribution creation: MANIFEST.in exclusion rules can be bypassed through Unicode
-# normalisation on macOS filesystems, so files meant to be excluded get packed into an
-# sdist. The reachability condition is therefore whether sdists are built here, not
-# whether anything imports setuptools; an earlier version of this waiver asserted the
-# latter, which is close to unrelated to the advisory.
-#
-# The waiver rests primarily on an architectural fact rather than on a text search: no
-# repository-controlled path publishes this project as a Python distribution, so nothing
-# in its tracked build or deployment model performs sdist creation. That is a claim about
-# automation, not about every possible human action. There is one workflow, ci.yml, with
-# no release or publish pipeline; deployment is a container that copies backend/app and
-# pyproject.toml rather than installing a built artifact; no MANIFEST.in exists; and no
-# alternative build backend is configured. The checks below guard that state. They are
-# tripwires, not proof that no sdist can ever be produced, since a person can always run
-# a builder by hand and enumerating every spelling of every build command is not
-# achievable.
-#
-# Remediation is blocked rather than merely inconvenient, and the evidence is recorded
-# here because this claim is the reason a known advisory is carried at all. Constraining
-# setuptools>=83.0.0 alongside the torch build this project requires yields:
-#
-#   Because torch==2.12.1+cpu depends on setuptools<82 and setuptools>=83.0.0,
-#   we can conclude that torch==2.12.1+cpu cannot be used.
-#
-# So the +cpu build caps setuptools below 82, and the fix arrives with the torch 2.13
-# upgrade, which also clears PYSEC-2025-194 outright. That cap is not visible in the
-# installed darwin variant's metadata, where the requirement carries a different marker.
-# Reading only that is how the constraint gets mistaken for folklore, which is the error
-# made here before the resolver was asked directly.
-WAIVED_SETUPTOOLS_ADVISORY="PYSEC-2026-3447"
-WAIVED_SETUPTOOLS_PACKAGE="setuptools"
-WAIVED_SETUPTOOLS_VERSION="81.0.0"
+# No advisory is waived. The last two waivers were removed with the upgrade to torch
+# 2.14.1, a release later than the 2.13.0 fix for PYSEC-2025-194. That torch resolves
+# with setuptools 84.0.0, later than the 83.0.0 fix for PYSEC-2026-3447, which the
+# setuptools<82 requirement of torch 2.12.1+cpu did not allow. Git history holds the
+# waivers' reasoning and the version-binding and tripwire checks that guarded them. The
+# audit step now fails on any advisory pip-audit reports.
 
 
 
@@ -152,49 +108,6 @@ AUDIT_JSON="$(mktemp)"
 # when later functions return, where its temp-file variable is out of scope.
 trap 'rm -f "$AUDIT_REQ" "$AUDIT_JSON"' EXIT
 
-# A waiver reasoned about one version says nothing about another, so any change to the
-# waived package's version reopens the finding rather than inheriting the exception.
-assert_waived_version() {
-  local advisory="$1" package="$2" expected="$3" req="$4" actual
-  actual="$(sed -nE "s/^${package}==([^ ]+)\$/\\1/p" "$req")"
-  if [ "$actual" != "$expected" ]; then
-    printf '%s is %s, but %s is waived only for %s. Re-establish applicability.\n' \
-      "$package" "${actual:-absent}" "$advisory" "$expected"
-    return 1
-  fi
-}
-
-# A tripwire on tracked source, not a proof of unreachability. It establishes that no
-# tracked Python names the API in any of its obvious import forms. It cannot see a
-# dependency reaching TorchScript internally, so it supports the waiver rather than
-# demonstrating it alone.
-assert_torch_jit_unreferenced() {
-  if git grep -qE 'torch\.jit|from torch import jit|from torch\.jit import' -- '*.py'; then
-    printf 'TorchScript is now referenced in tracked source, so the reachability basis for %s no longer holds.\n' \
-      "$WAIVED_TORCH_ADVISORY"
-    return 1
-  fi
-}
-
-# Regression tripwires for the packaging state described above, not proofs of
-# impossibility. Either a MANIFEST.in appearing or tracked configuration gaining a build
-# invocation means the packaging model changed and the waiver has to be re-argued.
-assert_no_sdist_path() {
-  if [ -e MANIFEST.in ]; then
-    printf 'MANIFEST.in now exists, so the unexercised-sdist basis for %s no longer holds.\n' \
-      "$WAIVED_SETUPTOOLS_ADVISORY"
-    return 1
-  fi
-  # Matches build invocations rather than the word itself, and excludes this file, which
-  # documents the rule and would otherwise trip it.
-  if git grep -qE '(setup\.py[^;&|]*sdist|python[0-9.]* +-m +build|(uv|hatch|poetry|pdm|flit) +build)' \
-    -- '*.yml' '*.yaml' '*.sh' '*.toml' 'Dockerfile*' ':!scripts/gate_python.sh'; then
-    printf 'tracked configuration now builds a source distribution, so the basis for %s no longer holds.\n' \
-      "$WAIVED_SETUPTOOLS_ADVISORY"
-    return 1
-  fi
-}
-
 audit_dependencies() {
   local req="$AUDIT_REQ" skipped normalise
   # Only torch is mapped from its runtime identity to its advisory identity.
@@ -203,22 +116,13 @@ audit_dependencies() {
   # Drop the local project, which exists on no index and can never be audited.
   uv pip freeze | grep -vE '^(-e |harmonyrestorer([=<>@ ]|$))' | sed -E "$normalise" >"$req"
 
-  assert_waived_version \
-    "$WAIVED_TORCH_ADVISORY" "$WAIVED_TORCH_PACKAGE" "$WAIVED_TORCH_VERSION" "$req" || return 1
-  assert_torch_jit_unreferenced || return 1
-  assert_waived_version \
-    "$WAIVED_SETUPTOOLS_ADVISORY" "$WAIVED_SETUPTOOLS_PACKAGE" "$WAIVED_SETUPTOOLS_VERSION" \
-    "$req" || return 1
-  assert_no_sdist_path || return 1
-
   # --disable-pip alongside --no-deps is what actually prevents resolution. --no-deps
   # by itself still let the pip-backed collector expand the dependency closure, which is
   # how a fabricated base-version torch requirement dragged 19 CUDA packages into the
   # report on Linux while passing on macOS, where that closure happened to be a subset
   # of what was already installed.
   "${UV_RUN[@]}" pip-audit --requirement "$req" --no-deps --disable-pip --format json \
-    --ignore-vuln "$WAIVED_SETUPTOOLS_ADVISORY" \
-    --ignore-vuln "$WAIVED_TORCH_ADVISORY" >"$AUDIT_JSON" || return 1
+    >"$AUDIT_JSON" || return 1
 
   # Coverage is asserted by identity, not by absence of complaint. Checking only for
   # skip_reason would miss a package pip-audit drops from its report entirely, since a
