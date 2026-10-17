@@ -31,22 +31,28 @@ class DenoiserService:
             logger.info("UVR model loaded")
         return self._separator
 
+    def _contained_output(self, output: str) -> Path:
+        """Resolve a separator output name inside output_dir, or raise."""
+        candidate = (self.output_dir / Path(output).name).resolve()
+        # Prevent path traversal via unexpected UVR output names
+        if not candidate.is_relative_to(self.output_dir):
+            raise RuntimeError(f"UVR output escapes output_dir: {candidate}")
+        return candidate
+
     def denoise(self, input_path: Path) -> Path:
         """Run UVR denoising on *input_path* and return the cleaned output path."""
         separator = self._get_separator()
 
         logger.info("Denoising: %s", input_path)
         outputs = separator.separate(str(input_path))
+        written = [self._contained_output(output) for output in outputs]
 
-        clean_file: Path | None = None
-        for output in outputs:
-            if DENOISED_OUTPUT_MARKER in output:
-                candidate = (self.output_dir / Path(output).name).resolve()
-                # Prevent path traversal via unexpected UVR output names
-                if not candidate.is_relative_to(self.output_dir):
-                    raise RuntimeError(f"UVR output escapes output_dir: {candidate}")
-                clean_file = candidate
-                break
+        clean_file = next((path for path in written if DENOISED_OUTPUT_MARKER in path.name), None)
+        # UVR writes one file per stem. Job cleanup removes only {job_id}_denoised.*, so a
+        # stem left here would stay in output_dir and count against the artifact budget.
+        for path in written:
+            if path != clean_file:
+                path.unlink(missing_ok=True)
 
         if clean_file is None:
             raise RuntimeError(f"Could not find denoised output in {outputs}")

@@ -191,6 +191,51 @@ class TestDenoise:
         assert result == denoised_path.resolve()
 
     @patch("app.services.denoiser.Separator")
+    def test_removes_noise_stem_after_success(
+        self, mock_sep_cls: MagicMock, tmp_path: Path
+    ) -> None:
+        """Only the returned denoised stem remains in output_dir after denoise."""
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+        service = DenoiserService(output_dir=output_dir)
+
+        noise_path = output_dir / "track_(Noise).wav"
+        noise_path.write_bytes(b"RIFF" + b"\x00" * 40)
+        denoised_path = output_dir / "track_(No Noise).wav"
+        denoised_path.write_bytes(b"RIFF" + b"\x00" * 40)
+
+        mock_separator = mock_sep_cls.return_value
+        mock_separator.separate.return_value = [str(noise_path), str(denoised_path)]
+
+        input_path = tmp_path / "track.wav"
+        input_path.write_bytes(b"RIFF" + b"\x00" * 40)
+
+        result = service.denoise(input_path)
+        assert sorted(output_dir.iterdir()) == [result]
+
+    @patch("app.services.denoiser.Separator")
+    def test_removes_outputs_when_no_denoised_stem(
+        self, mock_sep_cls: MagicMock, tmp_path: Path
+    ) -> None:
+        """A run with no denoised stem raises and leaves no output behind."""
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+        service = DenoiserService(output_dir=output_dir)
+
+        noise_path = output_dir / "track_(Noise).wav"
+        noise_path.write_bytes(b"RIFF" + b"\x00" * 40)
+
+        mock_separator = mock_sep_cls.return_value
+        mock_separator.separate.return_value = [str(noise_path)]
+
+        input_path = tmp_path / "track.wav"
+        input_path.write_bytes(b"RIFF" + b"\x00" * 40)
+
+        with pytest.raises(RuntimeError, match="Could not find denoised output"):
+            service.denoise(input_path)
+        assert list(output_dir.iterdir()) == []
+
+    @patch("app.services.denoiser.Separator")
     def test_raises_when_separate_fails(self, mock_sep_cls: MagicMock, tmp_path: Path) -> None:
         """Exception from separator.separate propagates to caller."""
         output_dir = tmp_path / "output"
