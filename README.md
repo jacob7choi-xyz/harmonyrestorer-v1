@@ -95,7 +95,7 @@ frontend/src/
 - CORS restricted to configured origins (GET and POST only)
 - Error sanitization (no stack traces in responses)
 - API schema (OpenAPI JSON, Swagger UI, ReDoc) disabled by default; enable with `ENABLE_DOCS=true`
-- All config settings validated at startup; bad values fail fast instead of degrading silently
+- Startup validation for numeric limits, the denoiser engine, the UVR model, and log level and format; a bad value stops the app from starting instead of degrading silently. Upload and output directories, CORS origins, `ENABLE_DOCS`, and the OpGAN checkpoint path are read without validation
 - Nginx: CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, HSTS (active when TLS is terminated upstream; no-op in local HTTP-only Docker runs), health endpoint restricted to private IPs, `client_max_body_size 50M` as a proxy-layer defense before the request reaches FastAPI
 - Proxy trust scoped to the pinned internal Docker subnet
 
