@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import numpy as np
 import pytest
 import soundfile as sf
 from app.services import wav_io
-from app.services.wav_io import load_mono, write_wav_atomic
+from app.services.wav_io import load_mono, read_duration_seconds, write_wav_atomic
 
 _SR = 16_000
 
@@ -80,3 +81,45 @@ class TestWriteWavAtomic:
 
         assert path.read_bytes() == b"previous"
         assert sorted(tmp_path.iterdir()) == [path]
+
+
+class TestReadDurationSeconds:
+    """Tests for read_duration_seconds."""
+
+    def test_reads_soundfile_formats_from_the_file(self, tmp_path: Path) -> None:
+        """A file soundfile can open is measured by its frames."""
+        path = tmp_path / "one_second.wav"
+        sf.write(str(path), np.zeros(_SR, dtype=np.float32), _SR)
+
+        assert read_duration_seconds(path) == pytest.approx(1.0)
+
+    def test_counts_decoded_samples_when_audioread_is_used(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """For a file soundfile cannot open, the duration is the decoded length, not
+        the duration audioread reports from the container, which for ADTS AAC was an
+        estimate (66.5 s reported for 65.69 s decoded, in the linux/amd64 image)."""
+        import audioread
+
+        path = tmp_path / "clip.aac"
+        path.write_bytes(b"not a format soundfile reads")
+
+        class FakeSource:
+            samplerate = 1000
+            channels = 2
+            duration = 66.5  # the container's estimate, deliberately wrong
+
+            def __enter__(self) -> FakeSource:
+                return self
+
+            def __exit__(self, *exc: object) -> None:
+                return None
+
+            def __iter__(self) -> Iterator[bytes]:
+                # 2 s of 16-bit stereo at 1 kHz, in two buffers
+                yield b"\x00" * 4000
+                yield b"\x00" * 4000
+
+        monkeypatch.setattr(audioread, "audio_open", lambda _path, *a, **k: FakeSource())
+
+        assert read_duration_seconds(path) == pytest.approx(2.0)

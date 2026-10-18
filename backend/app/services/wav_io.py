@@ -7,6 +7,7 @@ import os
 import tempfile
 from pathlib import Path
 
+import audioread
 import librosa
 import numpy as np
 import soundfile as sf
@@ -39,11 +40,17 @@ def load_mono(path: Path, target_sr: int) -> np.ndarray:
     return np.asarray(audio, dtype=np.float32)
 
 
-def read_duration_seconds(path: Path) -> float:
-    """Return the duration of an audio file in seconds, as librosa reads it.
+# audioread yields 16-bit PCM buffers, which librosa.load converts with buf_to_float
+_AUDIOREAD_SAMPLE_BYTES = 2
 
-    librosa.get_duration asks soundfile first and falls back to audioread for formats
-    soundfile cannot open, such as m4a and aac.
+
+def read_duration_seconds(path: Path) -> float:
+    """Return the decoded duration of an audio file in seconds.
+
+    Reads the way librosa.load does: soundfile first, then audioread for formats
+    soundfile cannot open, such as m4a and aac. For audioread the decoded samples are
+    counted, because the duration it reports from the container can be an estimate: in
+    the linux/amd64 image, an ADTS AAC file reported 66.5 s and decoded to 65.69 s.
 
     Args:
         path: Audio file to measure.
@@ -51,7 +58,14 @@ def read_duration_seconds(path: Path) -> float:
     Returns:
         Duration in seconds.
     """
-    return float(librosa.get_duration(path=str(path)))
+    try:
+        return float(sf.info(str(path)).duration)
+    except sf.SoundFileRuntimeError:
+        pass
+    with audioread.audio_open(str(path)) as source:
+        decoded_bytes = sum(len(buffer) for buffer in source)
+        frames = decoded_bytes // (_AUDIOREAD_SAMPLE_BYTES * source.channels)
+        return float(frames / source.samplerate)
 
 
 def write_wav_atomic(output_path: Path, audio: np.ndarray, sample_rate: int) -> None:
