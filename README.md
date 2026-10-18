@@ -5,7 +5,7 @@ AI-powered audio denoising. Upload noisy audio, get clean audio back.
 - **Model**: Custom-trained OpGAN (1D Operational GAN). UVR-DeNoise via [audio-separator](https://github.com/karaokenerds/python-audio-separator) is also available, selected with `DENOISER_ENGINE=uvr`
 - **Formats**: WAV, MP3, FLAC, OGG, M4A, AAC (max 50 MB, 10 minutes)
 - **Stack**: FastAPI + React/TypeScript, Docker-ready
-- **Tests**: 1,041 (backend 231, dataset 155, benchmark 493, gate policy 21, frontend 141)
+- **Tests**: 1,054 (backend 244, dataset 155, benchmark 493, gate policy 21, frontend 141)
 
 Live at [harmonyrestorer.online](https://harmonyrestorer.online).
 
