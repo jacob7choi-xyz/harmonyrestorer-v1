@@ -90,7 +90,9 @@ class TestGetSeparator:
         sep = service._get_separator()
 
         mock_sep_cls.assert_called_once_with(
-            output_dir=str(tmp_path.resolve() / STAGING_DIR_NAME), output_format="WAV"
+            output_dir=str(tmp_path.resolve() / STAGING_DIR_NAME),
+            output_format="WAV",
+            use_soundfile=True,
         )
         sep.load_model.assert_called_once_with("UVR-DeNoise.pth")
 

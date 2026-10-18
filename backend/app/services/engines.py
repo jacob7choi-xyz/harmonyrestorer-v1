@@ -20,12 +20,14 @@ _WAV_HEADER_BYTES = 1024
 _OPGAN_FILES = 2
 _OPGAN_FILE_BYTES_PER_S = 16_000 * 1 * 2
 
-# UVR-DeNoise through audio-separator 0.44.2. Each stem is 44.1 kHz stereo at the
-# input's bit depth, up to 32 bits (pcm_s32le is the widest WAV codec it asks ffmpeg
-# for). Per stem, pydub writes an int16 staging file and an ffmpeg output file to the
-# system temp directory and then copies the output to the stem path. Read from that
-# code, the peak is the first stem, the second stem, and both staging files present at
-# once. One 65.65 s PCM_32 input measured 81,056,990 bytes at that point.
+# UVR-DeNoise through audio-separator 0.44.2. Each stem is 44.1 kHz stereo at up to
+# 32 bits (PCM_32 is the widest subtype either of its writers chooses on the VR path
+# this model uses). This figure was derived for its pydub writer, which per stem also
+# writes an int16 staging file and an ffmpeg output file to the system temp directory:
+# the first stem, the second stem, and both staging files present at once, 81,056,990
+# bytes measured on one 65.65 s PCM_32 input. The service now uses the soundfile
+# writer, which writes no staging files and peaked at 46,318,168 bytes on the same
+# input, so this figure is kept as a conservative bound.
 _UVR_STEM_BYTES_PER_S = 44_100 * 2 * 4
 _UVR_STAGING_BYTES_PER_S = 44_100 * 2 * 2
 _UVR_STEM_SIZED_FILES = 3

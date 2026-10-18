@@ -17,9 +17,9 @@ DENOISED_OUTPUT_MARKER = "No Noise"
 # UVR-DeNoise wrote 44.1 kHz stereo in the image run. The output size cap in
 # routes/denoise.py and the download path assume 16 kHz mono, as OpGAN writes.
 _OUTPUT_SR = 16_000
-# audio-separator catches an OSError from a stem export, logs it, and still returns the stem
-# path (common_separator.py:388-390, vr_separator.py:228-229 and 246-247), and a WAV cut
-# short reads as valid audio with fewer frames. In every real run measured here (2 s to
+# audio-separator's soundfile writer catches any error from sf.write, logs it, and the stem
+# path is still returned (common_separator.py:448-451, vr_separator.py:228-229 and
+# 246-247), and a WAV cut short reads as valid audio with fewer frames. In every real run measured here (2 s to
 # 600 s; WAV, FLAC, MP3, M4A, AAC and OGG inputs), stems were 0 to 9.43 ms shorter than the
 # input and never longer, so a larger difference is treated as a failed write.
 _STEM_LENGTH_TOLERANCE_S = 0.1
@@ -48,7 +48,12 @@ class DenoiserService:
         """Lazy-load the UVR separator model."""
         if self._separator is None:
             logger.info("Loading UVR denoising model...")
-            sep = Separator(output_dir=str(self._staging_dir), output_format="WAV")
+            # The soundfile writer writes each stem with sf.write. The default pydub writer
+            # stages two temp files per stem in the system temp directory for ffmpeg and
+            # leaves them there when ffmpeg fails (pydub audio_segment.py:969-981).
+            sep = Separator(
+                output_dir=str(self._staging_dir), output_format="WAV", use_soundfile=True
+            )
             sep.load_model(self.model_name)
             # Only assign after load_model succeeds so a failed load is retried
             self._separator = sep
