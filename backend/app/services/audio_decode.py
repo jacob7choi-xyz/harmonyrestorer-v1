@@ -49,6 +49,36 @@ class DecoderUnavailableError(Exception):
     """ffmpeg could not be run or did not finish in time."""
 
 
+def ffmpeg_version(timeout_s: float) -> str | None:
+    """Return the first line of ``ffmpeg -version``, or None if ffmpeg cannot run.
+
+    The image installs ffmpeg without a version pin, and decoded lengths differed
+    slightly between the two installs measured (Debian's 7.1.5 in the linux/amd64
+    image, Homebrew's 9.0.2 on macOS), so the build in use is worth recording.
+
+    Args:
+        timeout_s: Wall-clock limit for the version query.
+
+    Returns:
+        The version line, or None if ffmpeg is missing, fails, or times out.
+    """
+    try:
+        # Fixed argv, no shell
+        result = subprocess.run(  # nosec B603 B607
+            ["ffmpeg", "-hide_banner", "-version"],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            timeout=timeout_s,
+            check=False,
+        )
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    if result.returncode != 0:
+        return None
+    first_line = result.stdout.decode(errors="replace").splitlines()[:1]
+    return first_line[0] if first_line else None
+
+
 def demuxer_for(extension: str, content: bytes) -> str:
     """Return the ffmpeg demuxer for an upload whose magic bytes the route has checked.
 

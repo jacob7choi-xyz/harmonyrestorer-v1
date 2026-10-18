@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 
 from fastapi import FastAPI
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
@@ -15,6 +16,7 @@ from app.config import settings
 from app.exceptions import unhandled_exception_handler
 from app.middleware import RateLimitMiddleware
 from app.routes import router
+from app.services.audio_decode import ffmpeg_version
 from app.services.jobs import job_manager
 
 
@@ -73,6 +75,12 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         settings.job_ttl_seconds,
         settings.cleanup_interval_seconds,
     )
+    version = await run_in_threadpool(ffmpeg_version, timeout_s=settings.decode_timeout_seconds)
+    if version is None:
+        # Every upload is decoded with ffmpeg first, so without it uploads fail with 500
+        logger.error("ffmpeg is not available; uploads cannot be decoded")
+    else:
+        logger.info("Upload decoder: %s", version)
 
     cleanup_task = asyncio.create_task(_cleanup_loop())
     yield

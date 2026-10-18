@@ -21,6 +21,7 @@ from app.services.audio_decode import (
     decode_to_wav,
     decoded_size_cap,
     demuxer_for,
+    ffmpeg_version,
 )
 
 _TIMEOUT_S = 30.0
@@ -264,3 +265,22 @@ class TestDecodeToWav:
 def test_decoded_size_cap_covers_two_channels_and_one_extra_second() -> None:
     """The size cap allows the length cap plus one second, at two 16-bit channels."""
     assert decoded_size_cap(16_000, 600) >= 601 * 16_000 * 2 * 2
+
+
+class TestFfmpegVersion:
+    """Tests for reporting the ffmpeg build in use."""
+
+    def test_reports_the_first_line_of_ffmpeg_version(self) -> None:
+        """The installed ffmpeg's version line is returned."""
+        version = ffmpeg_version(timeout_s=_TIMEOUT_S)
+        assert version is not None
+        assert version.startswith("ffmpeg version")
+
+    def test_is_none_when_ffmpeg_is_missing(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A missing binary is reported as None rather than raising."""
+
+        def not_installed(*args: object, **kwargs: object) -> None:
+            raise FileNotFoundError("ffmpeg")
+
+        monkeypatch.setattr(audio_decode.subprocess, "run", not_installed)
+        assert ffmpeg_version(timeout_s=_TIMEOUT_S) is None
