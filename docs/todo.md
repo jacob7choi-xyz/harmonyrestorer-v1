@@ -8,12 +8,12 @@
 - [ ] Skim HiFi-GAN loss design: multi-scale discriminator + feature matching loss if our audio quality needs sharpening
 - [ ] Skim Noise2Noise: technique for training on real historical recordings without clean references
 
-## After Benchmark (see docs/benchmarks.md for results)
+## After Benchmark (see docs/benchmarks.md, whose earlier figures are withdrawn)
 
-- [ ] Benchmark UVR on same dataset for head-to-head comparison
-- [ ] Listen to restored samples side-by-side (OpGAN vs UVR vs noisy original)
-- [ ] If OpGAN wins: swap it into the production backend
-- [ ] If OpGAN loses: review the hyperparameters from Ince et al. 2022, consider longer training or loss function changes
+- [ ] Compare OpGAN and UVR on unseen recordings under the replacement protocol (docs/benchmark-protocol.md). An earlier head-to-head over the generated pair corpus (dc28a8b, 2026-03-19) was withdrawn on 2026-07-24; see the withdrawal notice in docs/benchmarks.md.
+- [ ] Listen to restored samples side-by-side (OpGAN vs UVR vs noisy original). ADR 004 records listening notes on one real recording ("Out-of-Distribution Test").
+- [x] OpGAN made the default denoiser (d0da515, 2026-03-19), after the head-to-head figures in dc28a8b. Those figures were withdrawn on 2026-07-24, and the replacement benchmark is in progress.
+- [ ] If the replacement benchmark shows OpGAN does not beat UVR on unseen recordings: review the hyperparameters from Ince et al. 2022, consider longer training or loss function changes
 - [ ] Test on out-of-distribution audio (live recordings, different genres, real-world noise)
 
 ## Benchmark Protocol
@@ -25,5 +25,5 @@
 - [ ] Try two-stage approach (coarse OpGAN denoise -> fine refinement) inspired by Moliner
 - [ ] Borrow HiFi-GAN discriminator architecture if adversarial loss isn't producing sharp audio
 - [ ] Explore Noise2Noise training on real historical recordings (no clean references needed)
-- [x] Frontend tests (45 tests across 5 suites: client API, Waveform, ProgressCard, UploadArea, ErrorBoundary)
-- [ ] Duration validation for MP3/M4A/AAC on backend (currently frontend-only)
+- [x] Frontend tests
+- [x] Duration validation for MP3/M4A/AAC on the backend (c6a2d3b, 2026-06-26)
