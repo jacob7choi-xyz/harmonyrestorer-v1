@@ -7,6 +7,8 @@ def test_root_returns_platform_info(client):
 
     data = r.json()
     assert data["platform"] == "HarmonyRestorer v1"
+    # Engine-neutral: DENOISER_ENGINE can select UVR, so naming one model would be wrong
+    assert data["description"] == "AI-powered audio denoising"
     assert data["status"] == "ready"
     assert ".wav" in data["supported_formats"]
 

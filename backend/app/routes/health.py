@@ -18,7 +18,7 @@ async def root() -> dict:
     return {
         "platform": "HarmonyRestorer v1",
         "version": "1.0.0",
-        "description": "AI-powered audio denoising using OpGAN",
+        "description": "AI-powered audio denoising",
         "status": "ready",
         "docs": "/api/docs",
         "supported_formats": sorted(settings.supported_formats),
