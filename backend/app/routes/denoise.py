@@ -1,7 +1,6 @@
 """Audio denoising endpoints."""
 
 import asyncio
-import io
 import logging
 import os
 import re
@@ -9,9 +8,6 @@ import tempfile
 import uuid
 from pathlib import Path
 
-import audioread
-import librosa
-import soundfile as sf
 from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
@@ -21,7 +17,15 @@ from app.config import settings
 from app.schemas import DenoiseUploadResponse, JobStatus, JobStatusEnum
 from app.services.admission import InferenceAdmission
 from app.services.artifacts import artifact_budget
-from app.services.engines import peak_output_bytes
+from app.services.audio_decode import (
+    AudioDecodeError,
+    AudioTooLongError,
+    DecoderUnavailableError,
+    decode_to_wav,
+    decoded_size_cap,
+    demuxer_for,
+)
+from app.services.engines import input_sample_rate, peak_output_bytes
 from app.services.jobs import IPJobCapError, JobCapError, job_manager
 from app.services.transcode import (
     DOWNLOAD_FORMATS,
@@ -73,12 +77,6 @@ async def _run_inference(job_id: str, input_path: Path, reservation_bytes: int) 
 _MAX_MB = settings.max_upload_bytes / (1024 * 1024)
 _MAX_DURATION_MIN = settings.max_audio_duration_seconds / 60
 
-# Formats where soundfile can read duration from raw bytes
-_SOUNDFILE_FORMATS = {".wav", ".flac", ".ogg"}
-
-# Formats that need a file path for librosa to read duration
-_LIBROSA_FORMATS = {".mp3", ".m4a", ".aac"}
-
 # Magic byte signatures for supported audio formats
 _MAGIC_BYTES: dict[str, list[tuple[int, bytes]]] = {
     ".wav": [(0, b"RIFF")],
@@ -110,53 +108,41 @@ def _validate_audio_magic(content: bytes, extension: str) -> bool:
     return False
 
 
-def _check_audio_duration(tmp_path: str, file_ext: str, content: bytes) -> None:
-    """Validate audio duration before processing.
+async def _decode_upload(raw: Path, destination: Path, demuxer: str, sample_rate: int) -> float:
+    """Decode the upload in a worker thread and return its decoded duration.
 
-    Security invariant: duration validation must fail closed. If duration cannot
-    be validated, the upload must not proceed to inference because malformed or
-    highly compressed audio can otherwise bypass the max-duration limit and
-    amplify CPU use.
+    ffmpeg cannot be interrupted from here. If the request is cancelled while it runs,
+    this waits for it to stop and removes its output before letting the cancellation
+    through, because the caller's finally then releases the admission slot and the
+    byte reservation, which must not happen while the decode still uses them.
 
     Args:
-        tmp_path: Path to the temporary file on disk (used for librosa formats).
-        file_ext: Lowercase file extension including dot (e.g. ".mp3").
-        content: Raw file bytes (used for soundfile formats).
+        raw: The upload as received.
+        destination: Path for the decoded WAV.
+        demuxer: ffmpeg demuxer from demuxer_for.
+        sample_rate: Rate the configured engine reads input at.
 
-    Raises:
-        HTTPException: 400 if audio duration exceeds the configured limit or
-            cannot be determined due to a known decode or parser error.
-        HTTPException: 500 if an unexpected error occurs during duration reading.
+    Returns:
+        Duration in seconds, from the decoded frame count.
     """
-    duration: float | None = None
-    try:
-        if file_ext in _SOUNDFILE_FORMATS:
-            duration = sf.info(io.BytesIO(content)).duration
-        elif file_ext in _LIBROSA_FORMATS:
-            duration = librosa.get_duration(path=tmp_path)
-    except (
-        sf.SoundFileError,
-        librosa.util.exceptions.ParameterError,
-        audioread.exceptions.DecodeError,
-        audioread.exceptions.NoBackendError,
-    ) as exc:
-        logger.info("Rejected upload: duration unreadable: %s", exc)
-        raise HTTPException(
-            status_code=400,
-            detail="Could not validate audio duration. Re-export the file and try again.",
-        ) from exc
-    except Exception as exc:
-        logger.exception("Unexpected error reading audio duration")
-        raise HTTPException(
-            status_code=500,
-            detail="Upload processing failed",
-        ) from exc
-
-    if duration is not None and duration > settings.max_audio_duration_seconds:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Audio too long ({duration:.0f}s). Max {_MAX_DURATION_MIN:.0f} minutes.",
+    decode = asyncio.ensure_future(
+        run_in_threadpool(
+            decode_to_wav,
+            raw,
+            destination,
+            demuxer=demuxer,
+            sample_rate=sample_rate,
+            max_seconds=settings.max_audio_duration_seconds,
+            timeout_s=settings.decode_timeout_seconds,
         )
+    )
+    try:
+        return await asyncio.shield(decode)
+    except asyncio.CancelledError:
+        await asyncio.wait({decode})
+        if not decode.cancelled() and decode.exception() is None:
+            destination.unlink(missing_ok=True)
+        raise
 
 
 def _validate_job_id(job_id: str) -> None:
@@ -251,12 +237,18 @@ async def denoise_audio(
         )
 
     job_id = str(uuid.uuid4())
-    input_path = settings.upload_dir / f"{job_id}{file_ext}"
+    # Engines read only the decoded WAV, never the upload as received
+    input_path = settings.upload_dir / f"{job_id}.wav"
+    engine = settings.denoiser_engine
+    sample_rate = input_sample_rate(engine)
+    max_seconds = settings.max_audio_duration_seconds
 
-    # Bytes this job's lifecycle is expected to hold at once: the persisted input
-    # plus the configured engine's peak output at the maximum accepted duration
-    upload_reservation = len(content) + peak_output_bytes(
-        settings.denoiser_engine, settings.max_audio_duration_seconds
+    # Bytes this job's lifecycle is expected to hold at once: the upload as received,
+    # its decoded WAV at the size cap, and the configured engine's peak output
+    upload_reservation = (
+        len(content)
+        + decoded_size_cap(sample_rate, max_seconds)
+        + peak_output_bytes(engine, max_seconds)
     )
 
     # Slot and reservation ownership transfer to the lifecycle task once it
@@ -275,20 +267,38 @@ async def denoise_audio(
             prefix=f".{job_id}.", suffix=f"{file_ext}.tmp", dir=settings.upload_dir
         )
         os.close(tmp_fd)
+        raw_path = Path(tmp_path_str)
         try:
-            with open(tmp_path_str, "wb") as f:
+            with open(raw_path, "wb") as f:
                 f.write(content)
                 os.fsync(f.fileno())
-            _check_audio_duration(tmp_path_str, file_ext, content)
-            Path(tmp_path_str).replace(input_path)
-            logger.info("Saved upload %s (%d bytes)", job_id, len(content))
-        except HTTPException:
-            Path(tmp_path_str).unlink(missing_ok=True)
-            raise
+            # Fail closed: the only duration accepted is the decoded one, so no upload
+            # reaches inference without its decoded length checked against the cap
+            duration = await _decode_upload(
+                raw_path, input_path, demuxer_for(file_ext, content), sample_rate
+            )
+            logger.info("Saved upload %s (%d bytes, %.1fs decoded)", job_id, len(content), duration)
+        except AudioTooLongError as exc:
+            logger.info("Rejected upload %s: %s", job_id, exc)
+            raise HTTPException(
+                status_code=400,
+                detail=f"Audio too long. Max {_MAX_DURATION_MIN:.0f} minutes.",
+            ) from exc
+        except AudioDecodeError as exc:
+            logger.info("Rejected upload %s: %s", job_id, exc)
+            raise HTTPException(
+                status_code=400,
+                detail="Could not decode the audio. Re-export the file and try again.",
+            ) from exc
+        except DecoderUnavailableError as exc:
+            # The server could not decode, which is not the uploader's fault
+            logger.error("Decoder unavailable for upload %s: %s", job_id, exc, exc_info=True)
+            raise HTTPException(status_code=500, detail="Upload processing failed") from exc
         except Exception as err:
-            Path(tmp_path_str).unlink(missing_ok=True)
             logger.exception("Failed to save upload %s", job_id)
             raise HTTPException(status_code=500, detail="Failed to save file") from err
+        finally:
+            raw_path.unlink(missing_ok=True)
 
         try:
             job_manager.create_job(

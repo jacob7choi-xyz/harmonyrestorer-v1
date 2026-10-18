@@ -1,7 +1,7 @@
 """Tests for security features: rate limiting, error sanitization, input validation."""
 
 import time
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 from app.config import Settings, settings
 from app.main import app
@@ -195,15 +195,12 @@ def test_enable_docs_setting_defaults_false(monkeypatch) -> None:
 
 def test_unhandled_exception_returns_generic_error():
     """Unhandled exceptions must return 'Internal server error', never a stack trace."""
-    from tests.conftest import _clear_rate_limiter
-
-    mock_info = MagicMock()
-    mock_info.duration = 1.0
+    from tests.conftest import _clear_rate_limiter, _fake_decode
 
     with TestClient(app, raise_server_exceptions=False) as c:
         _clear_rate_limiter(app)
         with (
-            patch("app.routes.denoise.sf.info", return_value=mock_info),
+            patch("app.routes.denoise.decode_to_wav", side_effect=_fake_decode),
             patch(
                 "app.routes.denoise.job_manager.create_job",
                 side_effect=RuntimeError("secret database password exposed"),

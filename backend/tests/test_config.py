@@ -27,6 +27,7 @@ def _base_dirs(monkeypatch, tmp_path) -> None:
         ("DOWNLOAD_TTL_SECONDS", "DOWNLOAD_TTL_SECONDS must be at least 1"),
         ("INFERENCE_CONCURRENCY", "INFERENCE_CONCURRENCY must be at least 1"),
         ("MAX_ARTIFACT_BYTES", "MAX_ARTIFACT_BYTES must be at least 1"),
+        ("DECODE_TIMEOUT_SECONDS", "DECODE_TIMEOUT_SECONDS must be at least 1"),
     ],
 )
 def test_numeric_settings_reject_zero(monkeypatch, env_name, message) -> None:
@@ -48,6 +49,7 @@ def test_numeric_settings_reject_zero(monkeypatch, env_name, message) -> None:
         "RATE_LIMIT_WINDOW_SECONDS",
         "JOB_TTL_SECONDS",
         "CLEANUP_INTERVAL_SECONDS",
+        "DECODE_TIMEOUT_SECONDS",
     ],
 )
 def test_numeric_settings_accept_one(monkeypatch, tmp_path, env_name) -> None:

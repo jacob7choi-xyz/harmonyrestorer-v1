@@ -30,38 +30,34 @@ def client():
     job_manager._jobs.clear()
 
 
-@pytest.fixture()
-def mock_audio_duration():
-    """Mock audio duration reads to return 1.0 second for all formats.
+def _fake_decode(source, destination, **kwargs):  # type: ignore[no-untyped-def]
+    """Stand in for decode_to_wav: write a 1 s 16 kHz WAV and report its duration."""
+    import numpy as np
+    import soundfile as sf
 
-    Required in tests that use minimal byte fixtures (SMALL_WAV, SAMPLE_BYTES)
-    which are not valid audio files. Without this fixture, soundfile and librosa
-    raise parse errors that now fail closed with 400 under the M1 security fix.
-    Apply this fixture whenever an upload is expected to succeed and duration
-    validation is not the behavior under test.
+    sf.write(str(destination), np.zeros(16_000, dtype=np.float32), 16_000, subtype="PCM_16")
+    return 1.0
+
+
+@pytest.fixture()
+def mock_decode():
+    """Replace the upload decode with a stand-in that writes a 1 s WAV.
+
+    Required in tests that upload the minimal byte fixtures (SMALL_WAV, SAMPLE_BYTES),
+    which carry the right magic bytes but are not audio, so the real ffmpeg decode
+    would reject them. Apply it whenever an upload is expected to succeed and decoding
+    is not the behavior under test; tests of decoding upload real files instead.
     """
-    mock_info = MagicMock()
-    mock_info.duration = 1.0
-    with (
-        patch("app.routes.denoise.sf.info", return_value=mock_info),
-        patch("librosa.get_duration", return_value=1.0),
-    ):
-        yield
+    with patch("app.routes.denoise.decode_to_wav", side_effect=_fake_decode) as fake:
+        yield fake
 
 
 @pytest.fixture()
-def mock_denoiser(mock_audio_duration):
+def mock_denoiser(mock_decode):
     """Mock DenoiserService for upload-success tests.
 
-    Depends on mock_audio_duration, which patches sf.info and librosa.get_duration
-    to return 1.0 second. This is required because the SMALL_WAV and SAMPLE_BYTES
-    fixtures are minimal magic-byte sequences, not real audio, and the fail-closed
-    duration check in _check_audio_duration would otherwise reject them with 400.
-
-    Tests that exercise duration-validation behavior should explicitly override
-    the duration mock with their own controlled values. Test-level monkeypatches
-    or patches take precedence over this fixture because they are applied after
-    fixture setup.
+    Depends on mock_decode, because the SMALL_WAV and SAMPLE_BYTES fixtures are
+    magic-byte sequences, not real audio, and the real decode would reject them.
     """
     denoiser = MagicMock()
 

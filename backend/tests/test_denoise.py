@@ -2,10 +2,12 @@
 
 from unittest.mock import Mock, patch
 
+import numpy as np
 import pytest
 import soundfile as sf
 from app.config import DenoiserEngine, settings
-from app.services.engines import peak_output_bytes
+from app.services.audio_decode import decoded_size_cap
+from app.services.engines import input_sample_rate, peak_output_bytes
 
 SMALL_WAV = b"RIFF" + b"\x00" * 4 + b"WAVE" + b"\x00" * 32
 
@@ -53,20 +55,14 @@ def test_upload_leaves_no_temp_files(client, mock_denoiser):
     assert not new_tmp, f"Orphaned temp files after upload: {[f.name for f in new_tmp]}"
 
 
-def test_upload_write_failure_cleans_up_temp_file(client, monkeypatch, mock_audio_duration):
-    """If the atomic rename fails, no traces remain in the upload dir and 500 is returned."""
-    from pathlib import Path
-
+def test_upload_write_failure_cleans_up_temp_file(client, monkeypatch, mock_decode):
+    """If writing the upload fails, no traces remain in the upload dir and 500 is returned."""
     before = set(settings.upload_dir.iterdir())
 
-    original_replace = Path.replace
+    def fail_fsync(fd: int) -> None:
+        raise OSError("simulated write failure")
 
-    def fail_replace(self, target):  # type: ignore[no-untyped-def]
-        if self.parent == settings.upload_dir and str(self).endswith(".tmp"):
-            raise OSError("simulated atomic rename failure")
-        return original_replace(self, target)
-
-    monkeypatch.setattr(Path, "replace", fail_replace)
+    monkeypatch.setattr("app.routes.denoise.os.fsync", fail_fsync)
 
     r = client.post(
         "/api/v1/denoise",
@@ -149,7 +145,7 @@ def test_upload_accepts_all_supported_formats(client, mock_denoiser, ext) -> Non
 
 
 def test_upload_returns_failed_status_when_processing_fails(
-    client, mock_audio_duration, monkeypatch
+    client, mock_decode, monkeypatch
 ) -> None:
     """A processing failure is a 200 with status failed, and the input is cleaned up.
 
@@ -228,9 +224,7 @@ def test_download_filename_falls_back_when_nothing_safe_remains(client, mock_den
     assert "audio_restored.wav" in d.headers["content-disposition"]
 
 
-def test_upload_rejected_when_artifact_budget_exhausted(
-    client, mock_audio_duration, monkeypatch
-) -> None:
+def test_upload_rejected_when_artifact_budget_exhausted(client, mock_decode, monkeypatch) -> None:
     """A full byte budget rejects the upload with 503 and leaves nothing:
     no job, no files, and the inference slot is restored."""
     from app.routes import denoise as denoise_module
@@ -279,12 +273,13 @@ def test_upload_reserves_the_configured_engine_peak(
     r = client.post("/api/v1/denoise", files={"file": ("test.wav", SMALL_WAV, "audio/wav")})
 
     assert r.status_code == 200
-    expected = peak_output_bytes(engine, settings.max_audio_duration_seconds)
+    max_s = settings.max_audio_duration_seconds
+    expected = decoded_size_cap(input_sample_rate(engine), max_s) + peak_output_bytes(engine, max_s)
     assert requested == [len(SMALL_WAV) + expected]
 
 
 def test_lifecycle_start_failure_rolls_back_the_job_transaction(
-    client, mock_audio_duration, monkeypatch
+    client, mock_decode, monkeypatch
 ) -> None:
     """A create_task failure at the ownership-transfer boundary leaves nothing.
 
@@ -539,97 +534,7 @@ def test_download_invalid_uuid(client):
 # --- Duration validation ---
 
 
-class TestDurationValidation:
-    """Tests for audio duration gate in the upload endpoint."""
-
-    def test_wav_exceeding_max_duration_returns_400(
-        self, client, mock_denoiser, monkeypatch
-    ) -> None:
-        """WAV longer than the configured limit is rejected with 400."""
-        mock_info = Mock()
-        mock_info.duration = settings.max_audio_duration_seconds + 1
-        monkeypatch.setattr("app.routes.denoise.sf.info", lambda _: mock_info)
-
-        r = client.post(
-            "/api/v1/denoise",
-            files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
-        )
-        assert r.status_code == 400
-        assert "too long" in r.json()["detail"].lower()
-
-    def test_wav_within_max_duration_succeeds(self, client, mock_denoiser, monkeypatch) -> None:
-        """WAV within the duration limit is accepted."""
-        mock_info = Mock()
-        mock_info.duration = settings.max_audio_duration_seconds - 1
-        monkeypatch.setattr("app.routes.denoise.sf.info", lambda _: mock_info)
-
-        r = client.post(
-            "/api/v1/denoise",
-            files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
-        )
-        assert r.status_code == 200
-
-    def test_soundfile_error_returns_400_and_creates_no_job(self, client, monkeypatch) -> None:
-        """A known soundfile parse error during duration reading returns 400 and creates no job.
-
-        Covers the fail-closed invariant: duration validation failure must not allow
-        the upload to proceed to inference.
-        """
-        from app.services.jobs import job_manager
-
-        original_job_count = len(job_manager._jobs)
-        monkeypatch.setattr(
-            "app.routes.denoise.sf.info",
-            Mock(side_effect=sf.SoundFileError("corrupt header")),
-        )
-
-        r = client.post(
-            "/api/v1/denoise",
-            files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
-        )
-        assert r.status_code == 400
-        assert "duration" in r.json()["detail"].lower()
-        assert len(job_manager._jobs) == original_job_count
-
-    def test_unexpected_duration_error_returns_500_and_creates_no_job(
-        self, client, monkeypatch
-    ) -> None:
-        """An unexpected exception during duration reading returns 500 and creates no job."""
-        from app.services.jobs import job_manager
-
-        original_job_count = len(job_manager._jobs)
-        monkeypatch.setattr(
-            "app.routes.denoise.sf.info",
-            Mock(side_effect=RuntimeError("unexpected internal error")),
-        )
-
-        r = client.post(
-            "/api/v1/denoise",
-            files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
-        )
-        assert r.status_code == 500
-        assert len(job_manager._jobs) == original_job_count
-
-    @pytest.mark.parametrize("ext", [".mp3", ".m4a", ".aac"])
-    def test_librosa_format_exceeding_max_duration_returns_400(
-        self, client, mock_denoiser, monkeypatch, ext: str
-    ) -> None:
-        """MP3/M4A/AAC files longer than the configured limit are rejected with 400."""
-        monkeypatch.setattr(
-            "librosa.get_duration",
-            Mock(return_value=float(settings.max_audio_duration_seconds + 1)),
-        )
-        r = client.post(
-            "/api/v1/denoise",
-            files={"file": (f"test{ext}", SAMPLE_BYTES[ext], "audio/octet-stream")},
-        )
-        assert r.status_code == 400
-        assert "too long" in r.json()["detail"].lower()
-
-
-def test_per_ip_cap_returns_429_and_removes_input_file(
-    client, mock_audio_duration, monkeypatch
-) -> None:
+def test_per_ip_cap_returns_429_and_removes_input_file(client, mock_decode, monkeypatch) -> None:
     """Per-IP cap rejection returns 429, creates no new job, and leaves no input file behind.
 
     Uses max_jobs_per_ip=1 (a valid production config) with one existing COMPLETED job
@@ -667,9 +572,7 @@ def test_per_ip_cap_returns_429_and_removes_input_file(
     assert set(settings.upload_dir.iterdir()) == upload_files_before
 
 
-def test_global_cap_returns_503_and_removes_input_file(
-    client, mock_audio_duration, monkeypatch
-) -> None:
+def test_global_cap_returns_503_and_removes_input_file(client, mock_decode, monkeypatch) -> None:
     """Global job cap rejection returns 503, creates no new job, and leaves no input file behind.
 
     Uses max_total_jobs=1 with an existing job from a different IP so the global cap
@@ -721,3 +624,224 @@ def test_download_after_job_cleanup(client, mock_denoiser):
 
     r = client.get(f"/api/v1/download/{job_id}")
     assert r.status_code == 404
+
+
+def _ffmpeg(*args: str) -> None:
+    """Build a real test input with ffmpeg, which CI installs."""
+    import subprocess
+
+    subprocess.run(["ffmpeg", "-nostdin", "-loglevel", "error", "-y", *args], check=True)
+
+
+def _tone_wav(path, seconds: float) -> None:
+    import numpy as np
+
+    t = np.arange(round(seconds * 16_000)) / 16_000
+    sf.write(str(path), (0.3 * np.sin(2 * np.pi * 440 * t)).astype("float32"), 16_000)
+
+
+@pytest.fixture()
+def stub_denoiser():
+    """A denoiser stand-in that records its input and writes a small WAV, so the upload
+    path runs with real decoding but without a model."""
+    from unittest.mock import MagicMock
+
+    from app.services.jobs import job_manager
+
+    denoiser = MagicMock()
+    denoiser.inputs = []
+
+    def fake_denoise(input_path):
+        info = sf.info(str(input_path))
+        denoiser.inputs.append((input_path.suffix, info.samplerate, info.channels, info.duration))
+        output = settings.processed_dir / f"{input_path.stem}_out.wav"
+        _tone_wav(output, 0.1)
+        return output
+
+    denoiser.denoise.side_effect = fake_denoise
+    job_manager._denoiser = denoiser
+    yield denoiser
+    job_manager._denoiser = None
+
+
+class TestUploadDecoding:
+    """Uploads are decoded once and measured by their decoded length."""
+
+    def test_vbr_mp3_longer_than_the_cap_is_rejected_by_its_decoded_length(
+        self, client, stub_denoiser, monkeypatch, tmp_path
+    ) -> None:
+        """A VBR MP3 without a Xing header reads as shorter than it is through
+        soundfile. Measured by its decoded length, a 30 s file does not pass a 25 s
+        cap, and the rejected upload leaves no job and no file."""
+        from app.services.jobs import job_manager
+
+        wav = tmp_path / "tone.wav"
+        _tone_wav(wav, 30.0)
+        mp3 = tmp_path / "vbr.mp3"
+        _ffmpeg("-i", str(wav), "-c:a", "libmp3lame", "-q:a", "2", "-write_xing", "0", str(mp3))
+        assert sf.info(str(mp3)).duration < 25.0  # what the metadata-based check read
+        monkeypatch.setattr(settings, "max_audio_duration_seconds", 25)
+        uploads_before = set(settings.upload_dir.iterdir())
+
+        r = client.post(
+            "/api/v1/denoise", files={"file": ("vbr.mp3", mp3.read_bytes(), "audio/mpeg")}
+        )
+
+        assert r.status_code == 400
+        assert "too long" in r.json()["detail"].lower()
+        assert job_manager._jobs == {}
+        assert set(settings.upload_dir.iterdir()) == uploads_before
+        stub_denoiser.denoise.assert_not_called()
+
+    @pytest.mark.parametrize(
+        ("extension", "codec_args"),
+        [
+            (".wav", ["-c:a", "pcm_s16le"]),
+            (".flac", ["-c:a", "flac"]),
+            (".ogg", None),  # written with soundfile; not every ffmpeg build has libvorbis
+            (".mp3", ["-c:a", "libmp3lame"]),
+            (".m4a", ["-c:a", "aac", "-f", "mp4"]),
+            (".aac", ["-c:a", "aac", "-f", "adts"]),
+        ],
+    )
+    def test_each_format_reaches_the_engine_as_a_wav_at_its_rate(
+        self, client, stub_denoiser, tmp_path, extension: str, codec_args: list[str] | None
+    ) -> None:
+        """Every accepted format is decoded, and the engine reads a WAV at its own rate.
+        M4A and AAC failed with the default engine before, because OpGAN read the
+        upload with soundfile."""
+        wav = tmp_path / "tone.wav"
+        _tone_wav(wav, 1.0)
+        src = tmp_path / f"in{extension}"
+        if codec_args is None:
+            audio, _ = sf.read(str(wav), dtype="float32")
+            sf.write(
+                str(src), np.stack([audio, audio], axis=1), 16_000, format="OGG", subtype="VORBIS"
+            )
+        else:
+            _ffmpeg("-i", str(wav), "-ar", "44100", "-ac", "2", *codec_args, str(src))
+
+        r = client.post("/api/v1/denoise", files={"file": (src.name, src.read_bytes(), "audio/x")})
+
+        assert r.status_code == 200, r.text
+        assert r.json()["status"] == "completed"
+        suffix, rate, channels, duration = stub_denoiser.inputs[0]
+        assert suffix == ".wav"
+        assert rate == input_sample_rate(settings.denoiser_engine)
+        assert channels == 2
+        assert duration == pytest.approx(1.0, abs=0.15)
+
+    def _assert_nothing_left(self, uploads_before: set) -> None:
+        """No job, no upload file, and the admission slot and reservation released."""
+        from app.routes import denoise as denoise_module
+        from app.services.jobs import job_manager
+
+        assert job_manager._jobs == {}
+        assert set(settings.upload_dir.iterdir()) == uploads_before
+        assert denoise_module.artifact_budget._reserved == 0
+        assert denoise_module.admission.try_acquire() is True
+        denoise_module.admission.release()
+
+    def test_wav_over_the_cap_is_rejected_and_leaves_nothing(
+        self, client, stub_denoiser, monkeypatch, tmp_path
+    ) -> None:
+        """A real WAV longer than the cap is rejected with 400."""
+        wav = tmp_path / "long.wav"
+        _tone_wav(wav, 3.0)
+        monkeypatch.setattr(settings, "max_audio_duration_seconds", 2)
+        before = set(settings.upload_dir.iterdir())
+
+        r = client.post(
+            "/api/v1/denoise", files={"file": ("long.wav", wav.read_bytes(), "audio/wav")}
+        )
+
+        assert r.status_code == 400
+        assert "too long" in r.json()["detail"].lower()
+        self._assert_nothing_left(before)
+        stub_denoiser.denoise.assert_not_called()
+
+    def test_undecodable_upload_is_rejected_and_leaves_nothing(self, client, stub_denoiser) -> None:
+        """Bytes with the right magic but no audio are rejected with 400."""
+        before = set(settings.upload_dir.iterdir())
+
+        r = client.post("/api/v1/denoise", files={"file": ("test.wav", SMALL_WAV, "audio/wav")})
+
+        assert r.status_code == 400
+        assert "decode" in r.json()["detail"].lower()
+        self._assert_nothing_left(before)
+        stub_denoiser.denoise.assert_not_called()
+
+    def test_unavailable_decoder_is_a_server_error_and_leaves_nothing(
+        self, client, stub_denoiser, monkeypatch, caplog
+    ) -> None:
+        """A missing ffmpeg or a timeout is the server's failure: 500, logged at ERROR,
+        not a 400 telling the user to re-export the file."""
+        import logging
+
+        from app.services.audio_decode import DecoderUnavailableError
+
+        def unavailable(*args, **kwargs):
+            raise DecoderUnavailableError("ffmpeg is not installed")
+
+        monkeypatch.setattr("app.routes.denoise.decode_to_wav", unavailable)
+        before = set(settings.upload_dir.iterdir())
+
+        with caplog.at_level(logging.ERROR, logger="app.routes.denoise"):
+            r = client.post("/api/v1/denoise", files={"file": ("test.wav", SMALL_WAV, "audio/wav")})
+
+        assert r.status_code == 500
+        assert any(rec.levelno == logging.ERROR for rec in caplog.records)
+        self._assert_nothing_left(before)
+
+    def test_unexpected_decode_error_is_a_server_error_and_leaves_nothing(
+        self, client, stub_denoiser, monkeypatch
+    ) -> None:
+        """An unexpected exception while decoding returns 500 and creates no job."""
+
+        def broken(*args, **kwargs):
+            raise RuntimeError("unexpected")
+
+        monkeypatch.setattr("app.routes.denoise.decode_to_wav", broken)
+        before = set(settings.upload_dir.iterdir())
+
+        r = client.post("/api/v1/denoise", files={"file": ("test.wav", SMALL_WAV, "audio/wav")})
+
+        assert r.status_code == 500
+        self._assert_nothing_left(before)
+
+
+async def test_cancelled_request_waits_for_the_decode_and_removes_its_output(
+    monkeypatch, tmp_path
+) -> None:
+    """If the request is cancelled while ffmpeg runs, _decode_upload does not return
+    until the decode stops, and removes what it wrote, so the caller does not release
+    the admission slot or the reservation while the decode still uses them."""
+    import asyncio
+    import threading
+
+    from app.routes import denoise as denoise_module
+
+    release = threading.Event()
+    started = threading.Event()
+
+    def slow_decode(source, destination, **kwargs):
+        started.set()
+        release.wait(timeout=10)
+        _tone_wav(destination, 0.1)
+        return 0.1
+
+    monkeypatch.setattr(denoise_module, "decode_to_wav", slow_decode)
+    destination = tmp_path / "out.wav"
+    task = asyncio.ensure_future(
+        denoise_module._decode_upload(tmp_path / "in.wav", destination, "wav", 16_000)
+    )
+    while not started.is_set():
+        await asyncio.sleep(0.01)
+    task.cancel()
+    await asyncio.sleep(0.05)
+    assert not task.done()  # still waiting for ffmpeg
+
+    release.set()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert not destination.exists()

@@ -66,6 +66,11 @@ class Settings:
                 f"Invalid UVR_MODEL_NAME={self.uvr_model_name!r}, "
                 f"must be one of {sorted(_SUPPORTED_UVR_MODELS)}"
             )
+        # Wall-clock limit for decoding one upload with ffmpeg. A full decode of 600 s of
+        # MP3 or M4A took 0.4 to 0.9 s on macOS and in the emulated linux/amd64 image.
+        self.decode_timeout_seconds = int(os.getenv("DECODE_TIMEOUT_SECONDS", "60"))
+        if self.decode_timeout_seconds < 1:
+            raise ValueError("DECODE_TIMEOUT_SECONDS must be at least 1")
         self.opgan_checkpoint = Path(
             os.getenv("OPGAN_CHECKPOINT", str(self.base_dir.parent / "checkpoints" / "final.pt"))
         )
