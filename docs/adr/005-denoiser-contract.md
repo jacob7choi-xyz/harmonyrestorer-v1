@@ -28,6 +28,8 @@ UVR did not meet those assumptions. The evidence, gathered on 2026-10-16 and 202
    | OpGAN | 2 x (d x 16,000 x 2 + 1,024): the intermediate and final 16 kHz mono 16-bit WAVs | 38,402,048 (unchanged) |
    | UVR | 3 x (d x 352,800 + 1,024) + d x 176,400 + 1,024: two stems and the ffmpeg output at up to 44.1 kHz stereo 32-bit, plus the int16 staging file | 740,884,096 |
 
+   > **Note:** Updated 2026-10-18. The UVR row was derived for audio-separator's pydub writer. The service now uses its soundfile writer (see Update below), which peaked at a sampled 46,318,168 bytes on the same 65.65 s PCM_32 input; the figure is kept as a conservative bound.
+
    The UVR figure counts temp-directory files that the artifact budget scan does not see, because if the temp directory is on the same memory-backed filesystem, they use the same memory (see Negative below). The reservation uses the maximum accepted duration, as before, rather than the validated duration of the upload.
 4. **One served format.** The UVR service reads the denoised stem as mono at 16 kHz, writes it atomically, and removes the raw stems, so both engines serve the same format. The read and the atomic write live in `services/wav_io.py`, shared with OpGAN.
 
@@ -55,14 +57,24 @@ UVR did not meet those assumptions. The evidence, gathered on 2026-10-16 and 202
 - `16_000` appears in three places: `engines.py` (OpGAN's bytes per second), OpGAN's `_TARGET_SR`, and UVR's `_OUTPUT_SR`. The first two describe OpGAN's native rate, and the third the served rate; they are kept apart on purpose.
 - The invalid-engine error and the denoiser initialization log line changed wording.
 
+## Update 2026-10-18
+
+Follow-up changes closed two of the gaps first listed here (leftover stems and pydub's temp files), narrowed a third (platforms), and corrected how the leftover-stem gap was described.
+
+- **Leftover stems.** The first version of this ADR said stems were left "from a `separate()` call that raises". In fact, when an exception from a stem write reaches `Separator.separate()`, it is logged and `separate()` returns without the stems already written (`separator.py:978-987`), and an `OSError` from a stem export is caught earlier and that stem's path is still returned (`common_separator.py:388-390`). The Separator now writes into `processed_dir/.uvr-staging`, which the service empties before and after each job under a lock. The artifact budget scan now counts files in subdirectories, without following symlinks, and skips a file removed while it is scanning.
+- **Truncated stems.** A stem cut short by a failed write reads as valid audio with fewer frames. The service now compares the denoised stem's length with the input's decoded length and fails the job when they differ by more than 0.1 s or the stem is missing. In the runs measured on macOS arm64 (2 s to 600 s; WAV, FLAC, MP3, M4A, AAC and OGG inputs), stems were 0 to 9.43 ms shorter than the input, and in the linux/amd64 image (2 s and 65 s inputs) about 1 to 9 ms shorter than the decoded input. The input is measured as `librosa.load` reads it, because the duration audioread reports can be an estimate: an ADTS AAC file reported 66.5 s and decoded to 65.69 s in the image.
+- **pydub staging files.** The Separator is built with `use_soundfile=True`, so stems are written with `sf.write`; in the soundfile-writer runs measured, the temp directory stayed empty. In an earlier comparison over 12 inputs, the converted 16 kHz output was within 2 LSB of the pydub writer's, with the same length.
+- **Platforms.** The UVR path was rerun in the linux/amd64 image on Apple silicon, which is emulated, not native and not Cloud Run: direct runs on WAV, MP3, M4A and AAC inputs, and HTTP uploads of a WAV and an AAC file with `DENOISER_ENGINE=uvr`. Each produced 16 kHz mono PCM_16 output, and afterwards no stem or temp file remained.
+
 ## Open Gaps
 
 > **Note:** `DENOISER_ENGINE=uvr` has not been validated against the deployment memory budget in `scripts/deploy_backend.sh` (runtime peak plus `MAX_ARTIFACT_BYTES` plus a 1 GiB reserve within 4 GiB). UVR's peak RSS was 2,043.9 MiB in one image run that processed a 2 s and a 65.65 s input, and its model file, about 127 MB, is downloaded to `/tmp/audio-separator-models/`. Neither has been checked against that budget.
 
-- The UVR changes ran on macOS arm64 only, not in the linux/amd64 image and not through the HTTP path.
-- Stems from a `separate()` call that raises are not known to the service and are not removed.
-- If ffmpeg fails, pydub raises (`audio_segment.py:969-970`) before deleting its staging files (`audio_segment.py:980-981`), so, read from that code, they stay in the temp directory.
+- The UVR path has not run natively on linux/amd64 or on Cloud Run; the image runs above were emulated.
+- The soundfile writer catches any error from `sf.write` and logs it instead of raising (`common_separator.py:448-451`). For the denoised stem, the length and existence checks are what turn such a failure into a failed job.
+- The UVR reservation still uses the pydub-writer figure. Lowering it toward the soundfile writer's peak would need its own measurement.
 - `output_single_stem` could avoid writing the unused stem. It is not adopted, pending a real run that shows the denoised output is unchanged.
+- Input decoding, outside this ADR's contract: a VBR MP3 without a Xing header read as 19.16 s of a 30.09 s file through soundfile and librosa.load, so, from how both engines load audio, each would process only part of it (not run through either engine); with the default engine, an M4A upload failed in a `JobManager.process` run and AAC files failed to load, because OpGAN reads input with soundfile, which cannot open either format; and the upload route's 600 s cap uses the duration audioread reports for M4A and AAC.
 
 ## Alternatives Considered
 
