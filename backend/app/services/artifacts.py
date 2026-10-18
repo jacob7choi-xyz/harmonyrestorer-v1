@@ -66,7 +66,13 @@ class ArtifactBudget:
         for directory in self._directories:
             for root, _dirs, files in os.walk(directory, onerror=_raise_walk_error):
                 for name in files:
-                    info = os.lstat(os.path.join(root, name))
+                    try:
+                        info = os.lstat(os.path.join(root, name))
+                    except FileNotFoundError:
+                        # Removed after listing by a writer that does not hold this
+                        # lock, such as job cleanup or a transcode replacing its temp
+                        # file; its bytes are gone, so skipping it is accurate
+                        continue
                     if stat.S_ISREG(info.st_mode):
                         total += info.st_size
         return total

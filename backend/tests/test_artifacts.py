@@ -1,5 +1,6 @@
 """Tests for the atomic artifact byte budget."""
 
+import os
 from pathlib import Path
 
 import pytest
@@ -84,3 +85,24 @@ class TestArtifactBudget:
         budget = ArtifactBudget(limit_bytes=100, directories=[tmp_path / "gone"])
         with pytest.raises(FileNotFoundError):
             budget.try_reserve(1)
+
+    def test_file_removed_during_scan_is_skipped(self, managed_dir, monkeypatch) -> None:
+        """A file listed by the scan but removed before its size is read, as
+        cleanup and transcode do outside the budget lock, is skipped instead of
+        failing the reservation."""
+        from app.services import artifacts
+
+        (managed_dir / "kept.wav").write_bytes(b"x" * 70)
+        vanished = managed_dir / "vanished.wav"
+        vanished.write_bytes(b"x" * 10)
+        real_lstat = artifacts.os.lstat
+
+        def lstat_after_removal(path):
+            if os.fspath(path) == os.fspath(vanished):
+                raise FileNotFoundError(path)
+            return real_lstat(path)
+
+        monkeypatch.setattr(artifacts.os, "lstat", lstat_after_removal)
+        budget = ArtifactBudget(limit_bytes=100, directories=[managed_dir])
+        assert budget.try_reserve(30) is True
+        assert budget.try_reserve(1) is False
