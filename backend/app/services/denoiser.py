@@ -3,9 +3,10 @@
 import logging
 from pathlib import Path
 
+import soundfile as sf
 from audio_separator.separator import Separator
 
-from app.services.wav_io import load_mono, write_wav_atomic
+from app.services.wav_io import load_mono, read_duration_seconds, write_wav_atomic
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +15,12 @@ DENOISED_OUTPUT_MARKER = "No Noise"
 # UVR-DeNoise wrote 44.1 kHz stereo in the image run. The output size cap in
 # routes/denoise.py and the download path assume 16 kHz mono, as OpGAN writes.
 _OUTPUT_SR = 16_000
+# audio-separator catches an OSError from a stem export, logs it, and still returns the stem
+# path (common_separator.py:388-390, vr_separator.py:228-229 and 246-247), and a WAV cut
+# short reads as valid audio with fewer frames. In every real run measured here (2 s to
+# 600 s; WAV, FLAC, MP3, M4A, AAC and OGG inputs), stems were 0 to 9.43 ms shorter than the
+# input and never longer, so a larger difference is treated as a failed write.
+_STEM_LENGTH_TOLERANCE_S = 0.1
 
 
 class DenoiserService:
@@ -43,6 +50,17 @@ class DenoiserService:
         if not candidate.is_relative_to(self.output_dir):
             raise RuntimeError(f"UVR output escapes output_dir: {candidate}")
         return candidate
+
+    def _check_stem_length(self, stem: Path, input_path: Path) -> None:
+        """Raise if *stem* is missing or its length differs from the input's beyond tolerance."""
+        if not stem.is_file():
+            raise RuntimeError(f"UVR stem {stem.name} was not written")
+        stem_s = sf.info(str(stem)).duration
+        input_s = read_duration_seconds(input_path)
+        if abs(stem_s - input_s) > _STEM_LENGTH_TOLERANCE_S:
+            raise RuntimeError(
+                f"UVR stem length {stem_s:.3f}s does not match input length {input_s:.3f}s"
+            )
 
     def denoise(self, input_path: Path) -> Path:
         """Run UVR denoising on *input_path* and return the cleaned output path.
@@ -82,6 +100,7 @@ class DenoiserService:
 
         output_path = self._contained_output(f"{input_path.stem}_uvr.wav")
         try:
+            self._check_stem_length(clean_file, input_path)
             write_wav_atomic(output_path, load_mono(clean_file, _OUTPUT_SR), _OUTPUT_SR)
         finally:
             clean_file.unlink(missing_ok=True)

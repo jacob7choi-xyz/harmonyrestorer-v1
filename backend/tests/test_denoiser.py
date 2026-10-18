@@ -11,9 +11,15 @@ import soundfile as sf
 from app.services.denoiser import DENOISED_OUTPUT_MARKER, DenoiserService
 
 
-def _write_stem(path: Path, level: float = 0.5) -> None:
-    """Write a short stem in the format UVR-DeNoise wrote in the image run: 44.1 kHz stereo."""
-    sf.write(str(path), np.full((4410, 2), level, dtype=np.float32), 44_100, subtype="PCM_16")
+def _write_stem(path: Path, level: float = 0.5, seconds: float = 0.1) -> None:
+    """Write a stem in the format UVR-DeNoise wrote in real runs: 44.1 kHz stereo."""
+    frames = round(seconds * 44_100)
+    sf.write(str(path), np.full((frames, 2), level, dtype=np.float32), 44_100, subtype="PCM_16")
+
+
+def _write_input(path: Path, seconds: float = 0.1) -> None:
+    """Write a 16 kHz mono input whose length the service compares the stem against."""
+    sf.write(str(path), np.zeros(round(seconds * 16_000), dtype=np.float32), 16_000)
 
 
 class TestDenoiserInit:
@@ -105,7 +111,7 @@ class TestDenoise:
         mock_separator.separate.return_value = [str(denoised_path)]
 
         input_path = tmp_path / "track.wav"
-        input_path.write_bytes(b"RIFF" + b"\x00" * 40)
+        _write_input(input_path)
 
         result = service.denoise(input_path)
         assert result == (output_dir / "track_uvr.wav").resolve()
@@ -124,7 +130,7 @@ class TestDenoise:
         mock_separator.separate.return_value = [str(denoised_path)]
 
         input_path = tmp_path / "track.wav"
-        input_path.write_bytes(b"RIFF" + b"\x00" * 40)
+        _write_input(input_path)
 
         info = sf.info(str(service.denoise(input_path)))
         assert (info.samplerate, info.channels, info.subtype) == (16_000, 1, "PCM_16")
@@ -140,7 +146,7 @@ class TestDenoise:
         mock_separator.separate.return_value = [str(tmp_path / "track_(Noise).wav")]
 
         input_path = tmp_path / "track.wav"
-        input_path.write_bytes(b"RIFF" + b"\x00" * 40)
+        _write_input(input_path)
 
         with pytest.raises(RuntimeError, match="Could not find denoised output"):
             service.denoise(input_path)
@@ -163,7 +169,7 @@ class TestDenoise:
         mock_separator.separate.return_value = [malicious_name]
 
         input_path = tmp_path / "track.wav"
-        input_path.write_bytes(b"RIFF" + b"\x00" * 40)
+        _write_input(input_path)
 
         result = service.denoise(input_path)
         # Should resolve safely inside output_dir, not escape
@@ -183,7 +189,7 @@ class TestDenoise:
         mock_separator.separate.return_value = [str(denoised_path)]
 
         input_path = tmp_path / "track.wav"
-        input_path.write_bytes(b"RIFF" + b"\x00" * 40)
+        _write_input(input_path)
 
         service.denoise(input_path)
         mock_separator.separate.assert_called_once_with(str(input_path))
@@ -210,7 +216,7 @@ class TestDenoise:
         ]
 
         input_path = tmp_path / "track.wav"
-        input_path.write_bytes(b"RIFF" + b"\x00" * 40)
+        _write_input(input_path)
 
         audio, _ = sf.read(str(service.denoise(input_path)), dtype="float32")
         # Away from the resampler's edge effects
@@ -234,7 +240,7 @@ class TestDenoise:
         mock_separator.separate.return_value = [str(noise_path), str(denoised_path)]
 
         input_path = tmp_path / "track.wav"
-        input_path.write_bytes(b"RIFF" + b"\x00" * 40)
+        _write_input(input_path)
 
         result = service.denoise(input_path)
         assert sorted(output_dir.iterdir()) == [result]
@@ -255,7 +261,7 @@ class TestDenoise:
         mock_separator.separate.return_value = [str(noise_path)]
 
         input_path = tmp_path / "track.wav"
-        input_path.write_bytes(b"RIFF" + b"\x00" * 40)
+        _write_input(input_path)
 
         with pytest.raises(RuntimeError, match="Could not find denoised output"):
             service.denoise(input_path)
@@ -283,9 +289,74 @@ class TestDenoise:
         monkeypatch.setattr("app.services.denoiser.write_wav_atomic", failing_write)
 
         input_path = tmp_path / "track.wav"
-        input_path.write_bytes(b"RIFF" + b"\x00" * 40)
+        _write_input(input_path)
 
         with pytest.raises(OSError, match="No space left"):
+            service.denoise(input_path)
+        assert list(output_dir.iterdir()) == []
+
+    @pytest.mark.parametrize(
+        "stem_seconds",
+        [
+            0.5,  # half the input, as a copy cut short by a full filesystem leaves it
+            1.25,  # longer than the input
+        ],
+    )
+    @patch("app.services.denoiser.Separator")
+    def test_stem_length_mismatch_raises_and_leaves_no_output(
+        self, mock_sep_cls: MagicMock, tmp_path: Path, stem_seconds: float
+    ) -> None:
+        """A denoised stem whose length differs from the input by more than the
+        tolerance raises, and no output is left behind."""
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+        service = DenoiserService(output_dir=output_dir)
+
+        denoised_path = output_dir / "track_(No Noise).wav"
+        _write_stem(denoised_path, seconds=stem_seconds)
+        mock_sep_cls.return_value.separate.return_value = [str(denoised_path)]
+
+        input_path = tmp_path / "track.wav"
+        _write_input(input_path, seconds=1.0)
+
+        with pytest.raises(RuntimeError, match="length"):
+            service.denoise(input_path)
+        assert list(output_dir.iterdir()) == []
+
+    @patch("app.services.denoiser.Separator")
+    def test_stem_within_tolerance_is_accepted(
+        self, mock_sep_cls: MagicMock, tmp_path: Path
+    ) -> None:
+        """A stem a few milliseconds short, as UVR wrote in real runs, is accepted."""
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+        service = DenoiserService(output_dir=output_dir)
+
+        denoised_path = output_dir / "track_(No Noise).wav"
+        _write_stem(denoised_path, seconds=0.99)  # 10 ms short
+        mock_sep_cls.return_value.separate.return_value = [str(denoised_path)]
+
+        input_path = tmp_path / "track.wav"
+        _write_input(input_path, seconds=1.0)
+
+        assert service.denoise(input_path).is_file()
+
+    @patch("app.services.denoiser.Separator")
+    def test_missing_denoised_stem_raises_and_leaves_no_output(
+        self, mock_sep_cls: MagicMock, tmp_path: Path
+    ) -> None:
+        """A returned stem path with no file behind it raises a clear error."""
+        output_dir = tmp_path / "output"
+        output_dir.mkdir()
+        service = DenoiserService(output_dir=output_dir)
+
+        # audio-separator skips writing a near-silent stem but may still return its path
+        mock_sep_cls.return_value.separate.return_value = [str(output_dir / "track_(No Noise).wav")]
+
+        input_path = tmp_path / "track.wav"
+        _write_input(input_path)
+
+        with pytest.raises(RuntimeError, match="was not written"):
             service.denoise(input_path)
         assert list(output_dir.iterdir()) == []
 
@@ -300,7 +371,7 @@ class TestDenoise:
         mock_separator.separate.side_effect = RuntimeError("corrupted audio")
 
         input_path = tmp_path / "track.wav"
-        input_path.write_bytes(b"RIFF" + b"\x00" * 40)
+        _write_input(input_path)
 
         with pytest.raises(RuntimeError, match="corrupted audio"):
             service.denoise(input_path)
@@ -318,7 +389,7 @@ class TestDenoise:
         mock_separator.separate.return_value = []
 
         input_path = tmp_path / "track.wav"
-        input_path.write_bytes(b"RIFF" + b"\x00" * 40)
+        _write_input(input_path)
 
         with pytest.raises(RuntimeError, match="Could not find denoised output"):
             service.denoise(input_path)

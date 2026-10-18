@@ -39,6 +39,21 @@ def load_mono(path: Path, target_sr: int) -> np.ndarray:
     return np.asarray(audio, dtype=np.float32)
 
 
+def read_duration_seconds(path: Path) -> float:
+    """Return the duration of an audio file in seconds, as librosa reads it.
+
+    librosa.get_duration asks soundfile first and falls back to audioread for formats
+    soundfile cannot open, such as m4a and aac.
+
+    Args:
+        path: Audio file to measure.
+
+    Returns:
+        Duration in seconds.
+    """
+    return float(librosa.get_duration(path=str(path)))
+
+
 def write_wav_atomic(output_path: Path, audio: np.ndarray, sample_rate: int) -> None:
     """Write *audio* as a 16-bit WAV at *output_path*, or leave it untouched.
 
