@@ -76,6 +76,8 @@ Follow-up changes closed two of the gaps first listed here (leftover stems and p
 - `output_single_stem` could avoid writing the unused stem. It is not adopted, pending a real run that shows the denoised output is unchanged.
 - Input decoding, outside this ADR's contract: a VBR MP3 without a Xing header read as 19.16 s of a 30.09 s file through soundfile and librosa.load, so, from how both engines load audio, each would process only part of it (not run through either engine); with the default engine, an M4A upload failed in a `JobManager.process` run and AAC files failed to load, because OpGAN reads input with soundfile, which cannot open either format; and the upload route's 600 s cap uses the duration audioread reports for M4A and AAC.
 
+> **Note:** Updated 2026-10-18. The input-decoding issues in the last item are addressed by ADR 006, which decodes every upload once before validation and inference.
+
 ## Alternatives Considered
 
 | Alternative | Why Rejected |

@@ -5,7 +5,7 @@ AI-powered audio denoising. Upload noisy audio, get clean audio back.
 - **Model**: Custom-trained OpGAN (1D Operational GAN). UVR-DeNoise via [audio-separator](https://github.com/karaokenerds/python-audio-separator) is also available, selected with `DENOISER_ENGINE=uvr`
 - **Formats**: WAV, MP3, FLAC, OGG, M4A, AAC (max 50 MB, 10 minutes)
 - **Stack**: FastAPI + React/TypeScript, Docker-ready
-- **Tests**: 1,054 (backend 244, dataset 155, benchmark 493, gate policy 21, frontend 141)
+- **Tests**: 1,091 (backend 281, dataset 155, benchmark 493, gate policy 21, frontend 141)
 
 Live at [harmonyrestorer.online](https://harmonyrestorer.online).
 
@@ -84,8 +84,9 @@ frontend/src/
 
 ## Security
 
-- File size limit (50 MB) and audio duration limit (10 min), all 6 formats validated
+- File size limit (50 MB) and audio duration limit (10 min), checked against the decoded length for all 6 formats
 - Magic byte validation (content must match declared format)
+- Upload decoding: each upload is decoded once with ffmpeg into a WAV that the engines read, with the demuxer pinned from the validated format, only the file protocol allowed, and the output capped by length and size; the ffmpeg build is logged at startup
 - UUID-based file storage (client filenames never trusted); incoming job IDs validated as UUIDs before any storage access
 - Atomic file writes (temp file + fsync + atomic rename; no partial files on crash)
 - Per-IP and global job caps (MAX_JOBS_PER_IP, MAX_TOTAL_JOBS) with automatic stale cleanup
@@ -97,7 +98,7 @@ frontend/src/
 - CORS restricted to configured origins (GET and POST only)
 - Error sanitization (no stack traces in responses)
 - API schema (OpenAPI JSON, Swagger UI, ReDoc) disabled by default; enable with `ENABLE_DOCS=true`
-- Startup validation for numeric limits, the denoiser engine, the UVR model, and log level and format; a bad value stops the app from starting instead of degrading silently. Upload and output directories, CORS origins, `ENABLE_DOCS`, and the OpGAN checkpoint path are read without validation
+- Startup validation for numeric limits (including the decode timeout), the denoiser engine, the UVR model, and log level and format; a bad value stops the app from starting instead of degrading silently. Upload and output directories, CORS origins, `ENABLE_DOCS`, and the OpGAN checkpoint path are read without validation
 - Nginx: CSP, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, HSTS (active when TLS is terminated upstream; no-op in local HTTP-only Docker runs), health endpoint restricted to private IPs, `client_max_body_size 50M` as a proxy-layer defense before the request reaches FastAPI
 - Proxy trust scoped to the pinned internal Docker subnet
 
