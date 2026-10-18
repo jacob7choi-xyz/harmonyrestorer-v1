@@ -57,3 +57,30 @@ class TestArtifactBudget:
         # Reserved floor is zero, not negative: full capacity, no more
         assert budget.try_reserve(100) is True
         assert budget.try_reserve(1) is False
+
+    def test_files_in_subdirectories_count_against_the_budget(self, managed_dir) -> None:
+        """A file below a managed directory counts, as a top-level file does."""
+        nested = managed_dir / ".staging"
+        nested.mkdir()
+        (nested / "stem.wav").write_bytes(b"x" * 70)
+        budget = ArtifactBudget(limit_bytes=100, directories=[managed_dir])
+        assert budget.try_reserve(40) is False
+        assert budget.try_reserve(30) is True
+
+    def test_symlinks_are_not_followed(self, managed_dir, tmp_path) -> None:
+        """A symlink inside a managed directory does not count its target's
+        bytes, and a symlinked directory is not descended into."""
+        outside = tmp_path / "outside"
+        outside.mkdir()
+        (outside / "big.bin").write_bytes(b"x" * 1000)
+        (managed_dir / "file_link").symlink_to(outside / "big.bin")
+        (managed_dir / "dir_link").symlink_to(outside, target_is_directory=True)
+        budget = ArtifactBudget(limit_bytes=100, directories=[managed_dir])
+        assert budget.try_reserve(100) is True
+
+    def test_missing_managed_directory_raises(self, tmp_path) -> None:
+        """A managed directory that no longer exists fails the reservation instead
+        of counting as empty, which would undercount the budget."""
+        budget = ArtifactBudget(limit_bytes=100, directories=[tmp_path / "gone"])
+        with pytest.raises(FileNotFoundError):
+            budget.try_reserve(1)

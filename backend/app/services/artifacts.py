@@ -19,12 +19,23 @@ never oversubscribe.
 from __future__ import annotations
 
 import logging
+import os
+import stat
 import threading
 from pathlib import Path
 
 from app.config import settings
 
 logger = logging.getLogger(__name__)
+
+
+def _raise_walk_error(error: OSError) -> None:
+    """Re-raise os.walk errors, which it would otherwise skip silently.
+
+    A managed directory that cannot be listed must fail the reservation, as
+    iterdir() did, rather than count as empty and undercount the budget.
+    """
+    raise error
 
 
 class ArtifactBudget:
@@ -44,12 +55,20 @@ class ArtifactBudget:
         self._reserved = 0
 
     def _scan_persisted(self) -> int:
-        """Sum managed artifact sizes. Callers must hold the lock."""
+        """Sum managed artifact sizes. Callers must hold the lock.
+
+        Counts regular files at any depth below each managed directory, so a
+        working subdirectory is covered. Symlinks are neither counted nor
+        followed: os.walk does not descend into linked directories, and lstat
+        reports a link as a link rather than as its target.
+        """
         total = 0
         for directory in self._directories:
-            for entry in directory.iterdir():
-                if entry.is_file():
-                    total += entry.stat().st_size
+            for root, _dirs, files in os.walk(directory, onerror=_raise_walk_error):
+                for name in files:
+                    info = os.lstat(os.path.join(root, name))
+                    if stat.S_ISREG(info.st_mode):
+                        total += info.st_size
         return total
 
     def try_reserve(self, requested: int) -> bool:
