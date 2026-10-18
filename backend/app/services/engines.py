@@ -71,6 +71,29 @@ def peak_output_bytes(engine: DenoiserEngine, duration_s: int) -> int:
             assert_never(engine)
 
 
+def input_sample_rate(engine: DenoiserEngine) -> int:
+    """Return the sample rate uploads are decoded to for *engine*.
+
+    OpGAN resamples its input to 16 kHz, so an input already at 16 kHz is not resampled
+    again (wav_io.load_mono). For UVR this is audio-separator's default sample_rate,
+    44.1 kHz, which DenoiserService does not override; its VR model still loads each
+    band at that band's rate (vr_separator.py:273).
+
+    Args:
+        engine: The configured engine.
+
+    Returns:
+        Sample rate in Hz.
+    """
+    match engine:
+        case DenoiserEngine.OPGAN:
+            return 16_000
+        case DenoiserEngine.UVR:
+            return 44_100
+        case _:
+            assert_never(engine)
+
+
 def build_denoiser(engine: DenoiserEngine) -> Denoiser:
     """Build the denoiser for *engine* from the current settings.
 

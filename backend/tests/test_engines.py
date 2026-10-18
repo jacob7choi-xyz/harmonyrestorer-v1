@@ -2,7 +2,7 @@
 
 import pytest
 from app.config import DenoiserEngine
-from app.services.engines import peak_output_bytes
+from app.services.engines import input_sample_rate, peak_output_bytes
 
 
 @pytest.mark.parametrize("duration_s", [1, 600])
@@ -21,3 +21,21 @@ def test_uvr_peak_covers_the_measured_run() -> None:
     """
     measured_peak_bytes = 81_056_990
     assert peak_output_bytes(DenoiserEngine.UVR, 66) >= measured_peak_bytes
+
+
+def test_opgan_input_rate_is_the_rate_opgan_reads() -> None:
+    """Uploads for OpGAN are decoded to the rate its service resamples to."""
+    from app.services import opgan_denoiser
+
+    assert input_sample_rate(DenoiserEngine.OPGAN) == opgan_denoiser._TARGET_SR
+
+
+def test_uvr_input_rate_is_audio_separators_default() -> None:
+    """Uploads for UVR are decoded to the rate audio-separator loads audio at, since
+    DenoiserService does not pass a sample_rate."""
+    import inspect
+
+    from audio_separator.separator import Separator
+
+    default = inspect.signature(Separator.__init__).parameters["sample_rate"].default
+    assert input_sample_rate(DenoiserEngine.UVR) == default
