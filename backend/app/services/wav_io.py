@@ -45,12 +45,19 @@ _AUDIOREAD_SAMPLE_BYTES = 2
 
 
 def read_duration_seconds(path: Path) -> float:
-    """Return the decoded duration of an audio file in seconds.
+    """Return the duration of an audio file in seconds, as librosa.load would read it.
 
-    Reads the way librosa.load does: soundfile first, then audioread for formats
-    soundfile cannot open, such as m4a and aac. For audioread the decoded samples are
-    counted, because the duration it reports from the container can be an estimate: in
-    the linux/amd64 image, an ADTS AAC file reported 66.5 s and decoded to 65.69 s.
+    Reads soundfile first, then audioread for formats soundfile cannot open, such as m4a
+    and aac. For audioread the decoded samples are counted, because the duration it
+    reports from the container can be an estimate: in the linux/amd64 image, an ADTS AAC
+    file reported 66.5 s and decoded to 65.69 s.
+
+    For formats soundfile opens, this is sf.info's figure, which is not always the
+    decoded length: a 1200 s VBR MP3 without a Xing header read as about 279 s. Its
+    caller in backend/app, the UVR stem check, passes the WAV decoded at upload, where
+    sf.info counts the frames written. decode_to_wav has already opened that WAV with
+    sf.info before it is used, so the audioread branch is not expected to be reached
+    from the upload route.
 
     Args:
         path: Audio file to measure.
