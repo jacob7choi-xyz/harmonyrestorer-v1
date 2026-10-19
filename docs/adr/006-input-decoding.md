@@ -48,11 +48,11 @@ Experiments on 2026-10-18, on macOS arm64 and in the linux/amd64 image (emulated
 
 ### Neutral
 - `wav_io.read_duration_seconds` is no longer expected to reach its audioread branch from the upload route, because `decode_to_wav` has already opened the decoded WAV with `sf.info`. The branch is kept.
-- Tests that need ffmpeg run the real binary, which CI installs. CI installs ffmpeg with apt on `ubuntu-latest` (`.github/workflows/ci.yml:20`, `:45`), so CI tests a different build from the image's.
+- Tests that need ffmpeg run the real binary. The `backend` CI job installs ffmpeg with apt on `ubuntu-latest` (`.github/workflows/ci.yml:25`, `:50`), a build from Ubuntu's archive rather than Debian's. The `image` job is set up to run the backend tests inside the Dockerfile's test stage, which installs ffmpeg with the same instruction as the runtime image. Because the package is not pinned, an image built at another time can still get a different version.
 
 ## Open Gaps
 
-- ffmpeg is not version-pinned (`Dockerfile:12`), and the base image `python:3.11-slim` is referenced by tag rather than digest. Pinning is left for the deployment reproducibility work.
+- ffmpeg is not version-pinned (`Dockerfile:15`), and the base image `python:3.11-slim` is referenced by tag rather than digest. Pinning is left for the deployment reproducibility work.
 - An MP4 external data reference was crafted and did not open its target with ffmpeg 9.0.2. In the image's 7.1.5 both reference options default to off; their defaults in other builds, and the crafted file against other builds, have not been checked.
 - The HLS playlist named `.m4a` was not followed with or without `-f` in ffmpeg 9.0.2; its test guards against a build that probes it differently, rather than showing the pin is needed.
 - `services/transcode.py`, which converts the server's own WAV for downloads, hardcodes a 120 s timeout and does not pass `-nostdin`. Its input is not an upload, so these controls were not applied there.
