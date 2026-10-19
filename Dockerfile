@@ -2,7 +2,10 @@
 # stays the one whose provenance attestation was checked.
 FROM ghcr.io/astral-sh/uv:0.12.23@sha256:61d393e44e249f2e4b526b6c7ddcecce245946826e608e11c93ad4f5bba55b21 AS uv
 
-FROM python:3.11-slim
+# Stages: deps installs the system packages and the locked dependencies; test adds the
+# test group and the backend tests to run them against the image's own ffmpeg and
+# libsndfile; runtime is last, so a build without --target produces the deployable image.
+FROM python:3.11-slim AS deps
 
 WORKDIR /app
 
@@ -36,6 +39,17 @@ RUN uv sync --frozen --no-dev --no-install-project --no-install-package diffq --
     uv sync --frozen --no-dev --no-install-project --no-build-isolation-package diffq
 
 ENV PATH="/app/.venv/bin:${PATH}"
+
+# CI builds this stage rather than runtime because the checkpoint is not in the
+# repository; the backend tests passed with only the dependencies and backend/ present.
+# .dockerignore keeps backend/.env out.
+FROM deps AS test
+
+RUN uv sync --frozen --no-dev --no-install-project --group test
+COPY backend/ backend/
+CMD ["python", "-m", "pytest", "backend/tests", "-q"]
+
+FROM deps AS runtime
 
 # Application code
 COPY backend/app/ backend/app/

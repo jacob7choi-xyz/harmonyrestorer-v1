@@ -5,9 +5,14 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main]
+  # Weekly, so CI also runs when nothing is committed: the image installs ffmpeg and
+  # libsndfile from Debian without version pins, and the audits query advisory databases
+  # that change over time.
+  schedule:
+    - cron: "0 6 * * 1"
 
 # Least privilege, declared here rather than inherited from the repository default,
-# which this file cannot see. Nothing in either job writes to the repository.
+# which this file cannot see. No job here writes to the repository.
 permissions:
   contents: read
 
@@ -52,6 +57,24 @@ jobs:
       # not two places. See scripts/gate_python.sh for what runs and why.
       - name: Gate (lint, types, security, audit, tests, secrets)
         run: scripts/gate_python.sh
+
+  # The backend job tests against Ubuntu's ffmpeg; the image ships Debian's. This job
+  # builds the Dockerfile's test stage and runs the backend tests inside it, against the
+  # system packages and locked dependencies the image installs plus the test group.
+  # Networking is off; the backend tests passed without it.
+  image:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build the test stage
+        run: docker build --pull --target test -t harmonyrestorer:test .
+
+      - name: Backend tests in the image
+        run: docker run --rm --network none harmonyrestorer:test
 
   frontend:
     runs-on: ubuntu-latest
