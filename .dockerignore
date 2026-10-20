@@ -2,9 +2,10 @@
 .git
 .gitmodules
 
-# Python
-__pycache__
-*.pyc
+# Python. A pattern without **/ matches only at the root of the build context, so the
+# caches that tools write inside backend/ need the **/ form.
+**/__pycache__
+**/*.pyc
 *.pyo
 .venv
 .conda
@@ -51,11 +52,12 @@ external_tools/
 # Misc
 wandb/
 mlruns/
-.pytest_cache
-.coverage
+**/.pytest_cache
+**/.mypy_cache
+**/.coverage
 docs/
 data/
 samples/
 CLAUDE.md
 AGENTS.md
-.claude/
+**/.claude
