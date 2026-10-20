@@ -49,7 +49,7 @@ UVR did not meet those assumptions. The evidence, gathered on 2026-10-16 and 202
 - A new engine needs an enum member, a `build_denoiser` branch, and a `peak_output_bytes` branch. In a scratch copy with an extra enum member, mypy flagged both functions.
 
 ### Negative
-- A UVR upload reserves about 741 MB at the 600 s cap. With the default 1.5 GiB budget, it is refused with 503 when persisted and reserved bytes exceed 869,728,640 minus the upload's size.
+- A UVR upload reserves its own size plus 846,966,032 bytes at the 600 s cap: the 740,884,096-byte peak above and, since ADR 006, the decoded WAV at its 106,081,936-byte size cap. With the default 1.5 GiB budget, it is refused with 503 when persisted and reserved bytes exceed 763,646,704 minus the upload's size.
 - The UVR figure is extrapolated from the output formats and one 65.65 s measurement, not measured at 600 s. It assumes stems are no longer than the input, as they were in every run here.
 - Counting temp-directory files assumes `/tmp` shares the memory-backed filesystem. `scripts/deploy_backend.sh` states that the Cloud Run filesystem is memory-backed; `/tmp` specifically has not been verified.
 
