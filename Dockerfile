@@ -55,10 +55,11 @@ FROM deps AS runtime
 COPY backend/app/ backend/app/
 COPY checkpoints/final.pt checkpoints/final.pt
 
-# Non-root user + writable directories
+# Non-root user. Under /app it owns only the upload and processed directories, so the
+# process cannot rewrite the application code, the venv or the checkpoint.
 RUN useradd --create-home --shell /sbin/nologin appuser && \
     mkdir -p backend/uploads backend/processed && \
-    chown -R appuser:appuser backend
+    chown appuser:appuser backend/uploads backend/processed
 USER appuser
 
 WORKDIR /app/backend
