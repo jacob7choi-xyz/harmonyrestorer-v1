@@ -3,7 +3,7 @@
 import shutil
 from datetime import UTC, datetime
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from app.config import settings
@@ -26,7 +26,7 @@ async def root() -> dict:
 
 
 @router.get("/health", response_model=None)
-async def health_check() -> JSONResponse:
+async def health_check(request: Request) -> JSONResponse:
     """Health check with real system verification."""
     disk = shutil.disk_usage(settings.processed_dir)
     disk_free_mb = disk.free // (1024 * 1024)
@@ -34,7 +34,10 @@ async def health_check() -> JSONResponse:
 
     dirs_ok = settings.upload_dir.is_dir() and settings.processed_dir.is_dir()
 
-    all_ok = disk_ok and dirs_ok
+    # Set by the lifespan; if it is missing, no startup result was recorded, so it is not ok
+    ffmpeg_ok = getattr(request.app.state, "ffmpeg_at_startup_ok", False)
+
+    all_ok = disk_ok and dirs_ok and ffmpeg_ok
     status = "healthy" if all_ok else "degraded"
 
     payload = {
@@ -43,6 +46,7 @@ async def health_check() -> JSONResponse:
         "checks": {
             "disk_space": {"ok": disk_ok, "free_mb": disk_free_mb},
             "directories": {"ok": dirs_ok},
+            "ffmpeg_at_startup": {"ok": ffmpeg_ok},
         },
         "jobs": job_manager.job_counts,
     }

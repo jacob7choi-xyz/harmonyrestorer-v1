@@ -76,6 +76,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         settings.cleanup_interval_seconds,
     )
     version = await run_in_threadpool(ffmpeg_version, timeout_s=settings.decode_timeout_seconds)
+    # Checked once; /health reports this result rather than running ffmpeg on every probe
+    app.state.ffmpeg_at_startup_ok = version is not None
     if version is None:
         # Every upload is decoded with ffmpeg first, so without it uploads fail with 500
         logger.error("ffmpeg is not available; uploads cannot be decoded")

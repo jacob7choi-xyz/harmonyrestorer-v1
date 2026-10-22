@@ -32,6 +32,8 @@ Experiments on 2026-10-18, on macOS arm64 and in the linux/amd64 image (emulated
 5. **Keep the decode inside the request's resource accounting.** The decode runs in the threadpool while the upload holds its admission slot, and the byte reservation adds the decoded WAV at its size cap: 76,931,584 bytes for OpGAN and 846,966,032 for UVR at 600 s, excluding the upload. If the request is cancelled during the decode, the route waits for ffmpeg to stop and removes its output before releasing the slot and the reservation; a test covers this with a stand-in decode.
 6. **Record the ffmpeg build; do not pin it yet.** The app logs the first line of `ffmpeg -version` at startup, and logs an error if ffmpeg cannot run. The security-relevant options are passed explicitly rather than relied on as defaults.
 
+   > **Note:** Updated 2026-10-20. The error is logged when ffmpeg is missing, times out, or exits non-zero, and `/health` then reports 503 until the process restarts. In runs on macOS where the only `ffmpeg` on `PATH` was not executable, `ffmpeg_version` raised `PermissionError` and startup failed instead; this is not handled here.
+
 ## Consequences
 
 ### Positive
