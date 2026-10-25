@@ -94,9 +94,9 @@ run "security (bandit)" "${UV_RUN[@]}" bandit -r backend/app/ -q
 ADVISORY_VERSION_MAPPED_PACKAGES="torch"
 #
 # No advisory is waived. The last two waivers were removed with the upgrade to torch
-# 2.14.1, a release later than the 2.13.0 fix for PYSEC-2025-194. That torch resolves
-# with setuptools 84.0.0, later than the 83.0.0 fix for PYSEC-2026-3447, which the
-# setuptools<82 requirement of torch 2.12.1+cpu did not allow. Git history holds the
+# 2.14.1, a release later than the 2.13.0 fix for PYSEC-2025-194. That torch requires
+# setuptools>=77.0.3, which allows releases later than the 83.0.0 fix for PYSEC-2026-3447;
+# the setuptools<82 requirement of torch 2.12.1+cpu did not. Git history holds the
 # waivers' reasoning and the version-binding and tripwire checks that guarded them. The
 # audit step now fails on any advisory pip-audit reports.
 
