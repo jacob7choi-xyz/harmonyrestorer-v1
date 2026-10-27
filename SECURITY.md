@@ -52,7 +52,7 @@ The backend image installs from the same lock with `uv sync --frozen` rather tha
 
 ### JavaScript dependencies
 
-Frontend dependencies are audited in CI via `npm audit --audit-level=high`. The `package-lock.json` is committed and updated as part of any dependency change.
+Frontend dependencies are audited with `npm audit --audit-level=high` in `scripts/gate_frontend.sh`, which CI runs and which can be run locally. The `package-lock.json` is committed and updated as part of any dependency change.
 
 ## Dependency Update Policy
 

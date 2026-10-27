@@ -52,11 +52,10 @@ Auto-fix formatting:
 black . && isort . && ruff check --fix .
 ```
 
-Frontend checks:
+Frontend checks, the same script CI runs (from the repo root, after `npm ci` in `frontend/`):
 
 ```bash
-cd frontend
-npm run lint && npm run type-check && npm run build && npm run test
+scripts/gate_frontend.sh
 ```
 
 ## Dataset Pipeline (for OpGAN training)

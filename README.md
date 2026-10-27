@@ -123,8 +123,8 @@ Both images use non-root users. The backend includes a health check and has reso
 # Python (run from repo root). CI runs this same script.
 scripts/gate_python.sh
 
-# Frontend
-cd frontend && npm run type-check && npm run lint && npm run build && npm run test
+# Frontend (run from repo root after npm ci in frontend/). CI runs this same script.
+scripts/gate_frontend.sh
 ```
 
 ## Dataset Pipeline

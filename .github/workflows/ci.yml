@@ -95,17 +95,8 @@ jobs:
 
       - run: npm ci
 
-      - name: Lint
-        run: npm run lint
-
-      - name: Type check
-        run: npm run type-check
-
-      - name: Dependency audit (npm)
-        run: npm audit --audit-level=high
-
-      - name: Build
-        run: npm run build
-
-      - name: Tests
-        run: npm run test
+      # One tracked definition of the gate, invoked identically here and locally. See
+      # scripts/gate_frontend.sh for what runs and why.
+      - name: Gate (lint, types, audit, build, tests)
+        working-directory: .
+        run: scripts/gate_frontend.sh
