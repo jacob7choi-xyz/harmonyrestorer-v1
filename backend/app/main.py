@@ -12,12 +12,13 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
-from app.config import settings
+from app.config import OPGAN_CHECKPOINT_SHA256, DenoiserEngine, settings
 from app.exceptions import unhandled_exception_handler
 from app.middleware import RateLimitMiddleware
 from app.routes import router
 from app.services.audio_decode import ffmpeg_version
 from app.services.jobs import job_manager
+from app.services.opgan_denoiser import CheckpointMismatchError, read_verified_checkpoint
 
 
 class JSONFormatter(logging.Formatter):
@@ -64,6 +65,20 @@ async def _cleanup_loop() -> None:
             logger.exception("Error during job cleanup")
 
 
+def _opgan_checkpoint_ok() -> bool:
+    """Check once at startup that the OpGAN checkpoint can be read and has the expected digest.
+
+    This only reports; the service checks the digest again when it loads the model.
+    """
+    try:
+        read_verified_checkpoint(settings.opgan_checkpoint, OPGAN_CHECKPOINT_SHA256)
+    except (OSError, CheckpointMismatchError) as e:
+        logger.error("OpGAN checkpoint failed its startup check; OpGAN jobs will fail: %s", e)
+        return False
+    logger.info("OpGAN checkpoint matches the expected digest")
+    return True
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Application lifespan management."""
@@ -83,6 +98,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.error("ffmpeg is not available; uploads cannot be decoded")
     else:
         logger.info("Upload decoder: %s", version)
+    if settings.denoiser_engine is DenoiserEngine.OPGAN:
+        # Reported by /health; the bytes read here are not kept
+        app.state.opgan_checkpoint_at_startup_ok = await run_in_threadpool(_opgan_checkpoint_ok)
 
     cleanup_task = asyncio.create_task(_cleanup_loop())
     yield

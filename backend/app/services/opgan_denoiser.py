@@ -31,6 +31,36 @@ class CheckpointMismatchError(Exception):
     """Raised when the checkpoint's SHA-256 differs from the expected digest."""
 
 
+def read_verified_checkpoint(path: Path, expected_sha256: str) -> bytes:
+    """Read a checkpoint once and check its SHA-256 against the expected digest.
+
+    In one scratch run, a checkpoint with the same keys and different weights loaded
+    without a warning, so this compares the file's digest rather than its keys.
+
+    Args:
+        path: Path to the checkpoint.
+        expected_sha256: Lowercase hex SHA-256 the checkpoint must have.
+
+    Returns:
+        The checkpoint bytes, for loading without reading the file again.
+
+    Raises:
+        OSError: If the file cannot be read.
+        CheckpointMismatchError: If the digest differs from the expected one.
+    """
+    data = path.read_bytes()
+    actual = hashlib.sha256(data).hexdigest()
+    if actual != expected_sha256:
+        logger.error(
+            "OpGAN checkpoint %s has SHA-256 %s, expected %s",
+            path,
+            actual,
+            expected_sha256,
+        )
+        raise CheckpointMismatchError(f"OpGAN checkpoint digest mismatch: {path.name}")
+    return data
+
+
 class OpGANDenoiserService:
     """Audio denoising using trained OpGAN model.
 
@@ -68,32 +98,6 @@ class OpGANDenoiserService:
             logger.info("Using CPU")
         return device
 
-    def _read_verified_checkpoint(self) -> bytes:
-        """Read the checkpoint once and check its SHA-256 against the expected digest.
-
-        In one scratch run, a checkpoint with the same keys and different weights loaded
-        without a warning, so this compares the file's digest rather than its keys.
-
-        Returns:
-            The checkpoint bytes.
-
-        Raises:
-            CheckpointMismatchError: If the digest differs from the expected one.
-        """
-        data = self.checkpoint_path.read_bytes()
-        actual = hashlib.sha256(data).hexdigest()
-        if actual != self.expected_sha256:
-            logger.error(
-                "OpGAN checkpoint %s has SHA-256 %s, expected %s; not loading it",
-                self.checkpoint_path,
-                actual,
-                self.expected_sha256,
-            )
-            raise CheckpointMismatchError(
-                f"OpGAN checkpoint digest mismatch: {self.checkpoint_path.name}"
-            )
-        return data
-
     def _get_generator(self) -> tuple[OpGANGenerator, torch.device]:
         """Lazy-load the OpGAN generator model.
 
@@ -117,7 +121,7 @@ class OpGANDenoiserService:
                 raise FileNotFoundError(f"OpGAN checkpoint not found: {self.checkpoint_path.name}")
 
             logger.info("Loading OpGAN model from %s...", self.checkpoint_path)
-            data = self._read_verified_checkpoint()
+            data = read_verified_checkpoint(self.checkpoint_path, self.expected_sha256)
             device = self._select_device()
             # Loaded from the bytes that were hashed, so the file cannot change in between
             checkpoint = torch.load(io.BytesIO(data), map_location=device, weights_only=True)

@@ -35,6 +35,8 @@ After the change, in the linux/amd64 runtime image (emulated on Apple silicon), 
 - CI cannot run the check against the real checkpoint, because the file is not in the repository. Only local runs show that `final.pt` matches.
 - The check runs on the first OpGAN job, not at startup, so `/health` does not report a mismatched or missing checkpoint.
 
+  > **Note:** Updated 2026-10-26. With the OpGAN engine, the app now also reads and hashes the checkpoint once at startup, and `/health` reports `opgan_checkpoint_at_startup` and returns 503 until the process restarts if the file was missing or mismatched (both run), or could not be read (from the code, which catches `OSError`; not run). `/health` reflects the startup result only: a file replaced after startup leaves it at 200 while the load-time check above refuses the file, and a file fixed after startup leaves it at 503 until a restart. The file is read twice per process. With the UVR engine the check is not run and not reported.
+
 ### Neutral
 - `dataset/infer.py` and `dataset/train.py` load checkpoints with their own `torch.load` calls and are not covered.
 - UVR model files are downloaded by audio-separator without a hash check (`SECURITY.md`); this decision does not change that.
@@ -48,4 +50,4 @@ After the change, in the linux/amd64 runtime image (emulated on Apple silicon), 
 | A digest file next to the checkpoint | Someone able to replace the checkpoint would likely be able to replace a file beside it. |
 | Checking the digest in the Dockerfile at build time | Covers only the image and adds a third copy of the digest. |
 | Hashing the path, then loading the path | The file could change between the two reads. |
-| A startup check reported in `/health` | Left as a separate change. In the image run with the substitute, `/health` returned 200 before and after the upload whose job failed. |
+| A startup check reported in `/health` | Left as a separate change. In the image run with the substitute, `/health` returned 200 before and after the upload whose job failed. Added on 2026-10-26; see the note under Negative. |
