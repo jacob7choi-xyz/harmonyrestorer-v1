@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock
 
 import pytest
-from app.config import DenoiserEngine, settings
+from app.config import OPGAN_CHECKPOINT_SHA256, DenoiserEngine, settings
 from app.schemas import JobStatus, JobStatusEnum
 from app.services.jobs import IPJobCapError, JobCapError, JobManager
 
@@ -55,6 +55,7 @@ def test_get_denoiser_builds_opgan_service_for_opgan_engine(tmp_path, monkeypatc
 
     assert isinstance(denoiser, OpGANDenoiserService)
     assert denoiser.checkpoint_path == checkpoint.resolve()
+    assert denoiser.expected_sha256 == OPGAN_CHECKPOINT_SHA256
     assert denoiser.output_dir == (tmp_path / "processed").resolve()
 
 

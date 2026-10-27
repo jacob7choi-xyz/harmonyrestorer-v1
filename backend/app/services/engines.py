@@ -6,7 +6,7 @@ import logging
 from pathlib import Path
 from typing import Protocol, assert_never
 
-from app.config import DenoiserEngine, settings
+from app.config import OPGAN_CHECKPOINT_SHA256, DenoiserEngine, settings
 from app.services.denoiser import DenoiserService
 from app.services.opgan_denoiser import OpGANDenoiserService
 
@@ -109,6 +109,7 @@ def build_denoiser(engine: DenoiserEngine) -> Denoiser:
             denoiser: Denoiser = OpGANDenoiserService(
                 output_dir=settings.processed_dir,
                 checkpoint_path=settings.opgan_checkpoint,
+                expected_sha256=OPGAN_CHECKPOINT_SHA256,
             )
         case DenoiserEngine.UVR:
             denoiser = DenoiserService(

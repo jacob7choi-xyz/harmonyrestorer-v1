@@ -11,6 +11,8 @@ import hashlib
 import json
 from pathlib import Path
 
+from app.config import OPGAN_CHECKPOINT_SHA256
+
 MANIFEST_PATH = Path(__file__).resolve().parents[1] / "manifests" / "training_corpus.json"
 EXPECTED_RECORDINGS = 145
 
@@ -43,3 +45,14 @@ def test_corpus_digest_is_reproducible_from_its_parts() -> None:
         "\n".join(r["sha256"] for r in data["recordings"]).encode()
     ).hexdigest()
     assert recomputed == data["corpus_sha256"]
+
+
+def test_checkpoint_digest_matches_the_backend() -> None:
+    """The backend refuses to load a checkpoint whose digest differs from its constant.
+
+    If the two records of the trained model's identity disagree, the backend either
+    refuses the checkpoint this corpus trained or accepts one the manifest does not
+    record. The check lives here because the image's test stage copies only backend/,
+    where the manifest is not present.
+    """
+    assert manifest()["checkpoint_sha256"] == OPGAN_CHECKPOINT_SHA256

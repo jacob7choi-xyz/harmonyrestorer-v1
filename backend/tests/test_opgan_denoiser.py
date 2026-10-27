@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
+import io
+import logging
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -11,8 +14,12 @@ import soundfile as sf
 from app.models.chunking import chunk_audio, overlap_add
 from app.services.opgan_denoiser import (
     _BATCH_SIZE,
+    CheckpointMismatchError,
     OpGANDenoiserService,
 )
+
+# Digest of the b"fake" checkpoint bytes the mocked-load tests write
+_FAKE_SHA256 = hashlib.sha256(b"fake").hexdigest()
 
 
 class TestChunkAudio:
@@ -97,7 +104,9 @@ class TestRestoreAudio:
 
         checkpoint = tmp_path / "model.pt"
         checkpoint.write_bytes(b"fake")
-        service = OpGANDenoiserService(output_dir=tmp_path, checkpoint_path=checkpoint)
+        service = OpGANDenoiserService(
+            output_dir=tmp_path, checkpoint_path=checkpoint, expected_sha256=_FAKE_SHA256
+        )
         service._generator = mock_gen
         service._device = torch.device("cpu")
 
@@ -131,7 +140,9 @@ class TestRestoreAudio:
 
         checkpoint = tmp_path / "model.pt"
         checkpoint.write_bytes(b"fake")
-        service = OpGANDenoiserService(output_dir=tmp_path, checkpoint_path=checkpoint)
+        service = OpGANDenoiserService(
+            output_dir=tmp_path, checkpoint_path=checkpoint, expected_sha256=_FAKE_SHA256
+        )
         service._generator = mock_gen
         service._device = torch.device("cpu")
 
@@ -153,13 +164,17 @@ class TestOpGANDenoiserInit:
         """Output directory is created if it does not exist."""
         output_dir = tmp_path / "new_dir"
         checkpoint = tmp_path / "model.pt"
-        service = OpGANDenoiserService(output_dir=output_dir, checkpoint_path=checkpoint)
+        service = OpGANDenoiserService(
+            output_dir=output_dir, checkpoint_path=checkpoint, expected_sha256=_FAKE_SHA256
+        )
         assert output_dir.is_dir()
         assert service.output_dir == output_dir.resolve()
 
     def test_generator_not_loaded_on_init(self, tmp_path: Path) -> None:
         """Generator is not loaded until denoise is called."""
-        service = OpGANDenoiserService(output_dir=tmp_path, checkpoint_path=tmp_path / "model.pt")
+        service = OpGANDenoiserService(
+            output_dir=tmp_path, checkpoint_path=tmp_path / "model.pt", expected_sha256=_FAKE_SHA256
+        )
         assert service._generator is None
 
 
@@ -177,6 +192,7 @@ class TestGetGenerator:
         service = OpGANDenoiserService(
             output_dir=tmp_path / "output",
             checkpoint_path=tmp_path / "nonexistent.pt",
+            expected_sha256=_FAKE_SHA256,
         )
 
         with pytest.raises(FileNotFoundError):
@@ -185,6 +201,61 @@ class TestGetGenerator:
         assert service._generator is None, (
             "_generator must stay None after a failed load so the next call retries"
         )
+
+
+class TestCheckpointDigest:
+    """Tests for the checkpoint digest check in _get_generator."""
+
+    def test_mismatched_checkpoint_is_rejected_before_loading(
+        self, tmp_path: Path, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A checkpoint whose digest differs is never passed to torch.load.
+
+        In a scratch run, a checkpoint with the same keys and different weights loaded
+        without a warning and produced different audio, so the check compares digests.
+        """
+        checkpoint = tmp_path / "model.pt"
+        checkpoint.write_bytes(b"some other checkpoint")
+        expected = hashlib.sha256(b"the expected checkpoint").hexdigest()
+        service = OpGANDenoiserService(
+            output_dir=tmp_path, checkpoint_path=checkpoint, expected_sha256=expected
+        )
+
+        with (
+            patch("app.services.opgan_denoiser.torch.load") as mock_load,
+            caplog.at_level(logging.ERROR, logger="app.services.opgan_denoiser"),
+            pytest.raises(CheckpointMismatchError),
+        ):
+            service._get_generator()
+
+        mock_load.assert_not_called()
+        assert service._generator is None
+        assert expected in caplog.text
+        assert hashlib.sha256(b"some other checkpoint").hexdigest() in caplog.text
+
+    @patch("app.services.opgan_denoiser.OpGANGenerator")
+    @patch("app.services.opgan_denoiser.torch.load")
+    def test_matching_checkpoint_loads_the_bytes_that_were_hashed(
+        self, mock_load: MagicMock, mock_gen_cls: MagicMock, tmp_path: Path
+    ) -> None:
+        """torch.load receives the bytes that were hashed, not the path read again."""
+        mock_load.return_value = {"generator_state_dict": {}, "epoch": 1}
+        mock_gen = mock_gen_cls.return_value
+        mock_gen.load_state_dict.return_value = MagicMock(missing_keys=[], unexpected_keys=[])
+        checkpoint = tmp_path / "model.pt"
+        checkpoint.write_bytes(b"the expected checkpoint")
+        service = OpGANDenoiserService(
+            output_dir=tmp_path,
+            checkpoint_path=checkpoint,
+            expected_sha256=hashlib.sha256(b"the expected checkpoint").hexdigest(),
+        )
+
+        service._get_generator()
+
+        source = mock_load.call_args.args[0]
+        assert isinstance(source, io.BytesIO)
+        assert source.getvalue() == b"the expected checkpoint"
+        assert service._generator is mock_gen
 
 
 class TestOpGANDenoise:
@@ -225,7 +296,9 @@ class TestOpGANDenoise:
         checkpoint.write_bytes(b"fake")
 
         output_dir = tmp_path / "output"
-        service = OpGANDenoiserService(output_dir=output_dir, checkpoint_path=checkpoint)
+        service = OpGANDenoiserService(
+            output_dir=output_dir, checkpoint_path=checkpoint, expected_sha256=_FAKE_SHA256
+        )
 
         input_path = tmp_path / "test.wav"
         self._make_wav(input_path)
@@ -237,7 +310,11 @@ class TestOpGANDenoise:
 
     def test_missing_checkpoint_raises(self, tmp_path: Path) -> None:
         """FileNotFoundError raised when checkpoint doesn't exist."""
-        service = OpGANDenoiserService(output_dir=tmp_path, checkpoint_path=tmp_path / "missing.pt")
+        service = OpGANDenoiserService(
+            output_dir=tmp_path,
+            checkpoint_path=tmp_path / "missing.pt",
+            expected_sha256=_FAKE_SHA256,
+        )
 
         input_path = tmp_path / "test.wav"
         self._make_wav(input_path)
@@ -272,7 +349,9 @@ class TestOpGANDenoise:
         checkpoint.write_bytes(b"fake")
 
         output_dir = tmp_path / "output"
-        service = OpGANDenoiserService(output_dir=output_dir, checkpoint_path=checkpoint)
+        service = OpGANDenoiserService(
+            output_dir=output_dir, checkpoint_path=checkpoint, expected_sha256=_FAKE_SHA256
+        )
 
         # Write 44.1kHz input
         input_path = tmp_path / "test_44k.wav"
@@ -312,7 +391,9 @@ class TestOpGANDenoise:
         checkpoint.write_bytes(b"fake")
 
         output_dir = tmp_path / "output"
-        service = OpGANDenoiserService(output_dir=output_dir, checkpoint_path=checkpoint)
+        service = OpGANDenoiserService(
+            output_dir=output_dir, checkpoint_path=checkpoint, expected_sha256=_FAKE_SHA256
+        )
 
         # Write stereo input
         input_path = tmp_path / "stereo.wav"

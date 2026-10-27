@@ -31,6 +31,13 @@ class DenoiserEngine(StrEnum):
 _DEFAULT_UVR_MODEL = "UVR-DeNoise.pth"
 _SUPPORTED_UVR_MODELS: frozenset[str] = frozenset({_DEFAULT_UVR_MODEL})
 
+# SHA-256 of the trained checkpoint, checked before it is loaded. It is a constant rather
+# than an environment variable so that serving a different model needs a code change.
+# A test keeps it equal to checkpoint_sha256 in benchmark/manifests/training_corpus.json.
+OPGAN_CHECKPOINT_SHA256 = (
+    "7c47dd70703d3431c363001300ead8d9628a2e69b5e7f0a43fe38a3bfc613a80"  # pragma: allowlist secret
+)
+
 
 class Settings:
     """Central configuration. Override any value via env vars or .env file."""
