@@ -39,17 +39,17 @@ docker compose up --build
 
 ## Quality Gate
 
-All checks must pass before submitting a PR:
+All checks must pass before submitting a PR. Python checks for `backend/`, `dataset/` and `benchmark/`, the same script CI runs (from the repo root):
 
 ```bash
-cd backend
-black --check . && isort --check . && ruff check . && mypy . && pytest -v
+scripts/gate_python.sh
 ```
 
-Auto-fix formatting:
+Auto-fix formatting and lint findings:
 
 ```bash
-black . && isort . && ruff check --fix .
+uv run ruff format backend/ dataset/ benchmark/ scripts/
+uv run ruff check --fix backend/ dataset/ benchmark/ scripts/
 ```
 
 Frontend checks, the same script CI runs (from the repo root, after `npm ci` in `frontend/`):
@@ -147,7 +147,7 @@ checkpoints/           # Model checkpoints (gitignored)
 
 ## Code Standards
 
-- **Python**: Black formatter, isort imports, ruff linter, mypy type checker
+- **Python**: Ruff formatter and linter, mypy type checker
 - **TypeScript**: ESLint, strict mode
 - **Line length**: 100
 - **Type hints**: Required on all public functions
@@ -169,7 +169,7 @@ cd .. && pytest dataset/tests/ -v
 cd frontend && npm run test
 
 # Single backend test
-cd backend && pytest tests/test_health.py::test_health_returns_ok -v
+cd backend && pytest tests/test_health.py::test_health_includes_job_counts -v
 
 # Backend with coverage
 cd backend && pytest --cov=app --cov-report=html -v

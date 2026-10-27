@@ -38,7 +38,7 @@ UVR did not meet those assumptions. The evidence, gathered on 2026-10-16 and 202
 - Loading models or engine code at runtime from packages or paths.
 - Choosing the engine per request. The engine stays a deployment setting.
 - Accepting a model name or path outside an allowlist. The `UVR_MODEL_NAME` allowlist in `config.py` is unchanged.
-- Changing `benchmark/`. Protocol v4 is frozen and names the two systems (`opgan_minus_uvr` in `benchmark/protocol.py` and `v4.json`), and `docs/benchmark-protocol.md:167-169` says a changed model needs a fresh partition.
+- Changing `benchmark/`. Protocol v4 is frozen and names the two systems (`opgan_minus_uvr` in `benchmark/protocol.py` and `v4.json`), and `docs/benchmark-protocol.md:167-169` says a model changed in response to the test results needs a fresh partition.
 
 ## Consequences
 
