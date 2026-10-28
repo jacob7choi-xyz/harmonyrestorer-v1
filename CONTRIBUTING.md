@@ -2,9 +2,9 @@
 
 ## Prerequisites
 
-- Python 3.11+
-- Node.js 18+
-- conda (recommended) or venv
+- [uv](https://github.com/astral-sh/uv), which installs the locked Python dependencies from `uv.lock`
+- Python 3.11, the version in `.python-version`
+- Node.js `^20.19.0` or `>=22.12.0`, the range the installed Vite declares (CI uses Node 22)
 - Docker (optional, for full stack)
 
 ## Setup
@@ -12,15 +12,11 @@
 ### Backend
 
 ```bash
-# Create environment
-conda create -n harmonyrestorer-v1 python=3.11 -y
-conda activate harmonyrestorer-v1
-
-# Install dependencies
-pip install -e ".[dev]"
+# Install every dependency group and extra, the environment the quality gate checks
+uv sync --all-groups --all-extras
 
 # Run dev server
-cd backend && uvicorn app.main:app --reload --port 8000
+cd backend && uv run uvicorn app.main:app --reload --port 8000
 ```
 
 ### Frontend
@@ -65,7 +61,8 @@ The dataset pipeline downloads public domain classical recordings, preprocesses 
 ### 1. Install dataset dependencies
 
 ```bash
-pip install -e ".[dataset]"
+# The backend setup above already installs the dataset extra; this is the same command
+uv sync --all-groups --all-extras
 ```
 
 ### 2. Download source audio
@@ -73,7 +70,7 @@ pip install -e ".[dataset]"
 Downloads FLAC recordings from the Musopen collection on Internet Archive (145 tracks, ~7 GB):
 
 ```bash
-python -m dataset.acquire --output data/raw/ --max-tracks 200 --formats .flac
+uv run python -m dataset.acquire --output data/raw/ --max-tracks 200 --formats .flac
 ```
 
 Useful flags:
@@ -86,7 +83,7 @@ Useful flags:
 Resamples to 16 kHz mono and slices into 2-second frames, discarding silence:
 
 ```bash
-python -m dataset.preprocess data/raw/ --output data/frames/
+uv run python -m dataset.preprocess data/raw/ --output data/frames/
 ```
 
 ### 4. Generate noisy/clean pairs
@@ -94,7 +91,7 @@ python -m dataset.preprocess data/raw/ --output data/frames/
 Applies synthetic analog degradation (tape hiss, vinyl crackle, mains hum, HF rolloff, tape saturation) to create 5 noisy variants per clean frame:
 
 ```bash
-python -m dataset.generate_pairs data/frames/ --output data/pairs/ --seed 42
+uv run python -m dataset.generate_pairs data/frames/ --output data/pairs/ --seed 42
 ```
 
 - `--seed 42` makes the noise generation deterministic and reproducible
@@ -106,7 +103,7 @@ python -m dataset.generate_pairs data/frames/ --output data/pairs/ --seed 42
 Requires a CUDA GPU for practical training times. A Tesla T4 (15 GB VRAM) works well:
 
 ```bash
-python -m dataset.train --pairs data/pairs/ --epochs 100 --batch-size 16
+uv run python -m dataset.train --pairs data/pairs/ --epochs 100 --batch-size 16
 ```
 
 Training features:
@@ -123,7 +120,7 @@ MPS (Apple Silicon) works but is ~6x slower than a T4. CPU is not practical.
 backend/app/           # FastAPI backend
   routes/              # API endpoints
   services/            # Business logic (denoiser, job manager)
-  _archive/            # OpGAN model code (do not modify)
+  models/              # OpGAN model, Self-ONN layers, chunking
 frontend/src/          # React/TypeScript frontend
 dataset/               # Training data pipeline & evaluation
   acquire.py           # Download from Internet Archive
@@ -159,20 +156,20 @@ checkpoints/           # Model checkpoints (gitignored)
 ## Running Tests
 
 ```bash
-# Backend tests (54 tests)
-cd backend && pytest -v
+# Backend tests
+cd backend && uv run pytest -v
 
-# Dataset tests (113 tests, run from project root)
-cd .. && pytest dataset/tests/ -v
+# Dataset tests (run from project root)
+cd .. && uv run pytest dataset/tests/ -v
 
-# Frontend tests (45 tests)
+# Frontend tests
 cd frontend && npm run test
 
 # Single backend test
-cd backend && pytest tests/test_health.py::test_health_includes_job_counts -v
+cd backend && uv run pytest tests/test_health.py::test_health_includes_job_counts -v
 
 # Backend with coverage
-cd backend && pytest --cov=app --cov-report=html -v
+cd backend && uv run pytest --cov=app --cov-report=html -v
 ```
 
 ## Security Rules

@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # The single definition of a green Python gate, for backend, dataset, and benchmark.
 #
-# GitHub Actions invokes this script rather than restating the checks, so local and
-# remote agree by construction. Maintaining the list in two places produced a real
-# failure: the secrets scan ran only in CI, so a scanner rejection was undetectable
-# before pushing. Add a check here and both consumers get it.
+# GitHub Actions invokes this script rather than restating the checks, so local runs and
+# CI run the same checks; results can still differ, for example when an advisory is
+# published between a local run and a CI run. Maintaining the list in two places
+# produced a real failure: the secrets scan ran only in CI, so a scanner rejection was
+# undetectable before pushing. Add a check here and both consumers get it.
 #
 # Usage: scripts/gate_python.sh
-# Frontend has its own gate in package.json scripts and its own CI job.
+# The frontend gate is scripts/gate_frontend.sh.
 
 set -euo pipefail
 
