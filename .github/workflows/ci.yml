@@ -82,6 +82,17 @@ jobs:
       - name: Backend tests in the image
         run: docker run --rm --network none harmonyrestorer:test
 
+      # The compiler toolchain belongs only in the build stages. The test stage is built
+      # from base, as runtime is, so this fails if any of these tools is on its PATH, as
+      # they were when build-essential was installed in the stage both were built from.
+      # It does not cover tools added only to the runtime stage, which CI does not build
+      # because the checkpoint is not in the repository.
+      - name: No compiler tools on the test image's PATH
+        run: >-
+          docker run --rm --network none --entrypoint sh harmonyrestorer:test -c
+          'for t in gcc cc g++ make as ld cpp; do
+          if command -v "$t" >/dev/null; then echo "found $t"; exit 1; fi; done'
+
   frontend:
     runs-on: ubuntu-latest
     timeout-minutes: 60
