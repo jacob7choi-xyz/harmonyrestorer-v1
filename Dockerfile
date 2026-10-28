@@ -2,17 +2,19 @@
 # stays the one whose provenance attestation was checked.
 FROM ghcr.io/astral-sh/uv:0.12.23@sha256:61d393e44e249f2e4b526b6c7ddcecce245946826e608e11c93ad4f5bba55b21 AS uv
 
-# Stages: deps installs the system packages and the locked dependencies; test adds the
-# test group and the backend tests to run them against the image's own ffmpeg and
-# libsndfile; runtime is last, so a build without --target produces the deployable image.
-FROM python:3.11-slim AS deps
+# Stages: build installs the locked dependencies, compiling diffq; build-test adds the
+# test group; base holds the system packages used at run time (see below); test and
+# runtime start from base and copy in a finished .venv, so neither contains the compiler.
+# test runs the backend tests against the image's own ffmpeg and libsndfile. runtime is
+# last, so a build without --target produces the deployable image.
+FROM python:3.11-slim AS build
 
 WORKDIR /app
 
-# System dependencies for audio processing. build-essential compiles diffq, which is
-# published without a wheel for this platform.
+# build-essential compiles diffq, which is published without a wheel for this platform.
+# build-test inherits it; test and runtime do not include it.
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends ffmpeg libsndfile1 curl build-essential && \
+    apt-get install -y --no-install-recommends build-essential && \
     rm -rf /var/lib/apt/lists/*
 
 COPY --from=uv /uv /usr/local/bin/uv
@@ -38,18 +40,36 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project --no-install-package diffq --no-build && \
     uv sync --frozen --no-dev --no-install-project --no-build-isolation-package diffq
 
+FROM build AS build-test
+
+RUN uv sync --frozen --no-dev --no-install-project --group test
+
+# The .venv's python links to /usr/local/bin/python3, so base names the same image as
+# build. The application uses ffmpeg and libsndfile1; the HEALTHCHECK uses curl.
+FROM python:3.11-slim AS base
+
+WORKDIR /app
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ffmpeg libsndfile1 curl && \
+    rm -rf /var/lib/apt/lists/*
+
 ENV PATH="/app/.venv/bin:${PATH}"
 
 # CI builds this stage rather than runtime because the checkpoint is not in the
-# repository; the backend tests passed with only the dependencies and backend/ present.
+# repository; the backend tests passed with only the dependencies, pyproject.toml and
+# backend/ present. pyproject.toml holds the pytest settings, including asyncio_mode.
 # .dockerignore keeps backend/.env out.
-FROM deps AS test
+FROM base AS test
 
-RUN uv sync --frozen --no-dev --no-install-project --group test
+COPY --from=build-test /app/.venv /app/.venv
+COPY pyproject.toml ./
 COPY backend/ backend/
 CMD ["python", "-m", "pytest", "backend/tests", "-q"]
 
-FROM deps AS runtime
+FROM base AS runtime
+
+COPY --from=build /app/.venv /app/.venv
 
 # Application code
 COPY backend/app/ backend/app/

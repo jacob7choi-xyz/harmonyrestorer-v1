@@ -54,7 +54,7 @@ Experiments on 2026-10-18, on macOS arm64 and in the linux/amd64 image (emulated
 
 ## Open Gaps
 
-- ffmpeg is not version-pinned (`Dockerfile:15`), and the base image `python:3.11-slim` is referenced by tag rather than digest. Pinning is left for the deployment reproducibility work.
+- ffmpeg is not version-pinned (`Dockerfile:54`), and the base image `python:3.11-slim` is referenced by tag rather than digest. Pinning is left for the deployment reproducibility work.
 
   > **Note:** Updated 2026-10-27. ffmpeg and libsndfile are still not pinned. The CI `image` job builds the test stage and runs the backend tests in it on pushes to `main` or `develop`, on pull requests to `main`, and on a weekly schedule that the workflow ties to these packages being unpinned (`.github/workflows/ci.yml:3-12`). The base image is still referenced by tag.
 - An MP4 external data reference was crafted and did not open its target with ffmpeg 9.0.2. In the image's 7.1.5 both reference options default to off; their defaults in other builds, and the crafted file against other builds, have not been checked.

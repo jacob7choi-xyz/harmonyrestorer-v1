@@ -8,7 +8,7 @@
 
 ## Context
 
-The trained checkpoint, `checkpoints/final.pt`, is not in the repository (`docs/benchmarks.md:20`). The runtime image copies whatever file is at that path when it is built (`Dockerfile:56`), and the OpGAN service loaded whatever file `OPGAN_CHECKPOINT` named (`config.py`). No code in `backend/app/` hashed the checkpoint or compared it with a recorded digest.
+The trained checkpoint, `checkpoints/final.pt`, is not in the repository (`docs/benchmarks.md:20`). The runtime image copies whatever file is at that path when it is built (`Dockerfile:76`), and the OpGAN service loaded whatever file `OPGAN_CHECKPOINT` named (`config.py`). No code in `backend/app/` hashed the checkpoint or compared it with a recorded digest.
 
 Loading with `torch.load(..., weights_only=True)` limits what a checkpoint can execute while it is loaded. It does not identify the weights. In a scratch run on 2026-10-25, on macOS with MPS rather than in the image, a checkpoint saved with the same keys and randomly initialized weights logged "OpGAN model loaded (epoch 999)" with no warning, and on the same 2 s input it produced 16 kHz output with an RMS of 0.0141, against 0.2029 from `final.pt`. This shows that a substituted file is not detected; it does not show how likely a substitution is.
 
@@ -21,7 +21,7 @@ After the change, in the linux/amd64 runtime image (emulated on Apple silicon), 
 1. **The expected digest is a constant.** `OPGAN_CHECKPOINT_SHA256` in `config.py` holds the SHA-256 of the trained checkpoint. It is not read from the environment: an environment variable would be set in the same place as `OPGAN_CHECKPOINT`, so one wrong configuration could set both. Serving a different model therefore needs a code change. This does not by itself mean the change is reviewed: `scripts/deploy_backend.sh` builds from the local working tree. The benchmark protocol also asks for a fresh partition for a model changed in response to test results (`docs/benchmark-protocol.md:167-169`), and the manifest records the trained model's digest. `build_denoiser` passes the constant to the service, which requires it as a keyword argument.
 2. **The digest is checked when the model is loaded.** The service reads the file once, hashes those bytes, and passes the same bytes to `torch.load` through `io.BytesIO`. The file is not read a second time, so it cannot change between the check and the load, and bytes that fail the check never reach the loader. Hashing the 18,027,171-byte file took 0.0089 s in one run on macOS, probably from the page cache.
 3. **A mismatch fails closed.** The service logs both digests at ERROR and raises `CheckpointMismatchError`, and the generator is not cached, so the next job checks again. The job fails through the existing handler in `JobManager.process`. There is no setting to skip the check.
-4. **The two records are tied by a test.** `benchmark/tests/test_training_corpus_manifest.py` asserts that the constant equals the manifest's `checkpoint_sha256`. It lives there because the image's test stage copies only `backend/` (`Dockerfile:49`), where the manifest is not present; pytest's `pythonpath` lets it import `app.config`.
+4. **The two records are tied by a test.** `benchmark/tests/test_training_corpus_manifest.py` asserts that the constant equals the manifest's `checkpoint_sha256`. It lives there because the image's test stage copies only `pyproject.toml` and `backend/` (`Dockerfile:66-67`), and the manifest is in neither; pytest's `pythonpath` lets it import `app.config`.
 
 ## Consequences
 
