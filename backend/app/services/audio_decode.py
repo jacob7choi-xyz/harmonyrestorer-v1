@@ -73,10 +73,17 @@ def ffmpeg_version(timeout_s: float) -> str | None:
             check=False,
         )
     # OSError covers a missing binary (FileNotFoundError), one without execute permission
-    # (PermissionError) and one that is not a valid program (exec format error)
-    except (OSError, subprocess.TimeoutExpired):
+    # (PermissionError) and one that is not a valid program (exec format error). Each cause
+    # is logged here; the caller logs that decoding is unavailable.
+    except OSError as e:
+        logger.warning("ffmpeg could not be started: %s", e)
+        return None
+    except subprocess.TimeoutExpired:
+        logger.warning("ffmpeg -version did not finish within %ss", timeout_s)
         return None
     if result.returncode != 0:
+        stderr = result.stderr.decode(errors="replace").strip()[:_STDERR_LOG_CHARS]
+        logger.warning("ffmpeg -version exited with %d: %s", result.returncode, stderr)
         return None
     first_line = result.stdout.decode(errors="replace").splitlines()[:1]
     return first_line[0] if first_line else None

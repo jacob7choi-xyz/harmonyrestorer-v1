@@ -7,6 +7,7 @@ a mocked subprocess cannot show.
 
 from __future__ import annotations
 
+import logging
 import subprocess
 from pathlib import Path
 
@@ -326,3 +327,46 @@ class TestFfmpegVersion:
         raising, as a missing one is."""
         _ffmpeg_on_path(tmp_path / "bin", monkeypatch, contents, mode)
         assert ffmpeg_version(timeout_s=_TIMEOUT_S) is None
+
+    @pytest.mark.parametrize(
+        ("contents", "mode", "expected"),
+        [
+            (*_NOT_EXECUTABLE, "Permission denied"),
+            (*_INVALID_EXECUTABLE, "Exec format error"),
+            (b"#!/bin/sh\necho broken build >&2\nexit 3\n", 0o755, "exited with 3: broken build"),
+        ],
+        ids=["not-executable", "invalid-executable", "nonzero-exit"],
+    )
+    def test_logs_why_ffmpeg_could_not_run(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+        contents: bytes,
+        mode: int,
+        expected: str,
+    ) -> None:
+        """The cause is logged, so a startup log can tell these cases apart."""
+        _ffmpeg_on_path(tmp_path / "bin", monkeypatch, contents, mode)
+        with caplog.at_level(logging.WARNING, logger="app.services.audio_decode"):
+            assert ffmpeg_version(timeout_s=_TIMEOUT_S) is None
+        assert any(
+            rec.levelno == logging.WARNING and expected in rec.getMessage()
+            for rec in caplog.records
+        )
+
+    def test_logs_a_timeout(
+        self, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+    ) -> None:
+        """A version query that does not finish in time is logged with its limit."""
+
+        def timing_out(*args: object, **kwargs: object) -> None:
+            raise subprocess.TimeoutExpired(cmd="ffmpeg", timeout=_TIMEOUT_S)
+
+        monkeypatch.setattr(audio_decode.subprocess, "run", timing_out)
+        with caplog.at_level(logging.WARNING, logger="app.services.audio_decode"):
+            assert ffmpeg_version(timeout_s=_TIMEOUT_S) is None
+        assert any(
+            rec.levelno == logging.WARNING and "did not finish within 30.0s" in rec.getMessage()
+            for rec in caplog.records
+        )
