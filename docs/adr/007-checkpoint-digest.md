@@ -33,6 +33,8 @@ After the change, in the linux/amd64 runtime image (emulated on Apple silicon), 
 - Deploying a retrained model needs a commit that changes the constant and the manifest together.
 - The checkpoint's bytes, 18,027,171 for `final.pt`, are held in memory while they are hashed and loaded. After a successful load this happens once per process; after a mismatch nothing is cached, so each OpGAN job reads and hashes the file again.
 - CI cannot run the check against the real checkpoint, because the file is not in the repository. Only local runs show that `final.pt` matches.
+
+  > **Note:** Updated 2026-10-29. The checkpoint is published as a release asset (ADR 008). CI builds the runtime image with it and requires `/health` to return 200 and one upload to complete, which runs this check against the real file at startup and again when the model is loaded.
 - The check runs on the first OpGAN job, not at startup, so `/health` does not report a mismatched or missing checkpoint.
 
   > **Note:** Updated 2026-10-26. With the OpGAN engine, the app now also reads and hashes the checkpoint once at startup, and `/health` reports `opgan_checkpoint_at_startup` and returns 503 until the process restarts if the file was missing or mismatched (both run), or could not be read (from the code, which catches `OSError`; not run). `/health` reflects the startup result only: a file replaced after startup leaves it at 200 while the load-time check above refuses the file, and a file fixed after startup leaves it at 503 until a restart. The file is read twice per process. With the UVR engine the check is not run and not reported.

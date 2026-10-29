@@ -56,10 +56,10 @@ RUN apt-get update && \
 
 ENV PATH="/app/.venv/bin:${PATH}"
 
-# CI builds this stage rather than runtime because the checkpoint is not in the
-# repository; the backend tests passed with only the dependencies, pyproject.toml and
-# backend/ present. pyproject.toml holds the pytest settings, including asyncio_mode.
-# .dockerignore keeps backend/.env out.
+# CI runs the backend tests here; they passed with only the dependencies, pyproject.toml
+# and backend/ present, so this stage needs no checkpoint (CI fetches one for runtime,
+# docs/adr/008-checkpoint-release.md). pyproject.toml holds the pytest settings,
+# including asyncio_mode. .dockerignore keeps backend/.env out.
 FROM base AS test
 
 COPY --from=build-test /app/.venv /app/.venv

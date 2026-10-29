@@ -64,9 +64,9 @@ jobs:
         run: scripts/gate_python.sh
 
   # The backend job tests against Ubuntu's ffmpeg; the image ships Debian's. This job
-  # builds the Dockerfile's test stage and runs the backend tests inside it, against the
-  # system packages and locked dependencies the image installs plus the test group.
-  # Networking is off; the backend tests passed without it.
+  # runs the backend tests in the Dockerfile's test stage, against the system packages
+  # and locked dependencies the image installs plus the test group, with networking off,
+  # then builds the runtime stage with the published checkpoint and checks that it serves.
   image:
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -82,16 +82,29 @@ jobs:
       - name: Backend tests in the image
         run: docker run --rm --network none harmonyrestorer:test
 
-      # The compiler toolchain belongs only in the build stages. The test stage is built
-      # from base, as runtime is, so this fails if any of these tools is on its PATH, as
-      # they were when build-essential was installed in the stage both were built from.
-      # It does not cover tools added only to the runtime stage, which CI does not build
-      # because the checkpoint is not in the repository.
-      - name: No compiler tools on the test image's PATH
-        run: >-
-          docker run --rm --network none --entrypoint sh harmonyrestorer:test -c
-          'for t in gcc cc g++ make as ld cpp; do
-          if command -v "$t" >/dev/null; then echo "found $t"; exit 1; fi; done'
+      # The checkpoint is a release asset, not a committed file
+      # (docs/adr/008-checkpoint-release.md). The script checks its digest before moving
+      # it into place; the image checks it again at startup, which the last step relies on.
+      - name: Fetch the checkpoint
+        run: python3 scripts/fetch_checkpoint.py
+
+      - name: Build the runtime stage
+        run: docker build --target runtime -t harmonyrestorer:runtime .
+
+      # The compiler toolchain belongs only in the build stages, so this fails if any of
+      # these tools is on the PATH of either image built from base, as they were when
+      # build-essential was installed in the stage both were built from.
+      - name: No compiler tools on the test or runtime image's PATH
+        run: |
+          for image in harmonyrestorer:test harmonyrestorer:runtime; do
+            docker run --rm --network none --entrypoint sh "$image" -c \
+              'for t in gcc cc g++ make as ld cpp; do
+              if command -v "$t" >/dev/null; then echo "found $t in $0"; exit 1; fi; done' "$image"
+          done
+
+      # /health, then one file through the API, in the runtime image with networking off
+      - name: Runtime image serves
+        run: scripts/check_runtime_image.sh harmonyrestorer:runtime
 
   frontend:
     runs-on: ubuntu-latest
