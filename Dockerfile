@@ -86,8 +86,9 @@ WORKDIR /app/backend
 
 EXPOSE 8000
 
+# Checks the port the CMD below serves on, which follows PORT when a platform sets it
 HEALTHCHECK --interval=30s --timeout=10s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f "http://localhost:${PORT:-8000}/health" || exit 1
 
 # Exactly one worker: inference admission control is process-local, so the
 # instance-wide inference bound requires a single application process.
