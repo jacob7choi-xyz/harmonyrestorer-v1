@@ -22,6 +22,9 @@ cp frontend/.env.example frontend/.env.local
 # Every dependency group and extra, the environment the quality gate checks
 uv sync --all-groups --all-extras
 
+# The trained OpGAN checkpoint, from its GitHub release, checked against its recorded digest
+uv run python scripts/fetch_checkpoint.py
+
 # Backend
 cd backend && uv run uvicorn app.main:app --reload --port 8000
 
@@ -109,6 +112,9 @@ frontend/src/
 # Required on first run: env files must exist before docker compose reads them
 cp backend/.env.example backend/.env
 cp frontend/.env.example frontend/.env.local
+
+# The backend image copies the checkpoint when it is built
+uv run python scripts/fetch_checkpoint.py
 
 docker compose up --build    # Start full stack
 docker compose down          # Stop

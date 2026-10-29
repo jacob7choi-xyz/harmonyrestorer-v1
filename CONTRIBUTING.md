@@ -15,6 +15,9 @@
 # Install every dependency group and extra, the environment the quality gate checks
 uv sync --all-groups --all-extras
 
+# The trained OpGAN checkpoint, from its GitHub release, checked against its recorded digest
+uv run python scripts/fetch_checkpoint.py
+
 # Run dev server
 cd backend && uv run uvicorn app.main:app --reload --port 8000
 ```
@@ -30,6 +33,8 @@ npm run dev    # Dev server on :3000
 ### Docker (full stack)
 
 ```bash
+# The backend image copies the checkpoint when it is built
+uv run python scripts/fetch_checkpoint.py
 docker compose up --build
 ```
 

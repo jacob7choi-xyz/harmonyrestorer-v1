@@ -17,7 +17,7 @@ Training: 100 epochs, ~51 hours on Tesla T4, ~$100 total GCP cost (all training,
 - Dataset: Musopen classical, 146,200 noisy/clean pairs, 5 noise variants per frame
 - Caveat: evaluated on same distribution as training (in-distribution)
 - Full per-file results: `opgan_metrics.json` (not committed, 33 MB)
-- Checkpoint: `checkpoints/final.pt` (not committed, 17 MB)
+- Checkpoint: `checkpoints/final.pt` (not committed, 18,027,171 bytes), published as an asset of the `opgan-checkpoint-v1` release (`scripts/fetch_checkpoint.py`)
 
 ## UVR Baseline (2026-03-18)
 
