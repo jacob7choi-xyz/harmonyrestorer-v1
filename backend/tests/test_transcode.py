@@ -189,6 +189,28 @@ class TestTranscodeAdmission:
         assert _TRANSCODE_SLOTS.acquire(blocking=False)
         _TRANSCODE_SLOTS.release()
 
+    def test_missing_source_raises_and_holds_nothing(self, tmp_path, monkeypatch) -> None:
+        """A source that is gone when conversion starts leaves the slot and budget free."""
+        from app.services import transcode as transcode_module
+        from app.services.artifacts import ArtifactBudget
+
+        budget = ArtifactBudget(limit_bytes=1024, directories=[])
+        monkeypatch.setattr(transcode_module, "artifact_budget", budget)
+
+        def forbidden(*args: object, **kwargs: object) -> None:
+            raise AssertionError("ffmpeg must not run for a missing source")
+
+        monkeypatch.setattr(subprocess, "run", forbidden)
+        with pytest.raises(FileNotFoundError):
+            transcode_output(tmp_path / "gone_denoised.wav", "mp3")
+
+        slot_free = _TRANSCODE_SLOTS.acquire(blocking=False)
+        # Released either way: when the failure leaked the slot, this undoes the leak so
+        # later tests are not affected
+        _TRANSCODE_SLOTS.release()
+        assert slot_free
+        assert budget.try_reserve(1024) is True
+
     def test_encoder_thread_cap_is_requested(self, wav_file, monkeypatch) -> None:
         """The argv carries the single-thread mechanism; the CPU property
         itself is verified on the candidate revision."""

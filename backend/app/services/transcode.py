@@ -58,6 +58,7 @@ def transcode_output(wav_path: Path, fmt: str) -> Path:
 
     Raises:
         TranscodeError: If the format is unknown, ffmpeg fails, or times out.
+        FileNotFoundError: If the source WAV no longer exists; nothing is held.
     """
     if fmt == "wav":
         return wav_path
@@ -68,12 +69,13 @@ def transcode_output(wav_path: Path, fmt: str) -> Path:
     if target.exists():
         return target
 
+    # Deliberately conservative reservation (2x source) so no per-codec
+    # output-size proof is required; released when the subprocess exits. The
+    # source is read before the slot is taken, so a missing source holds nothing.
+    reservation = wav_path.stat().st_size * 2
     if not _TRANSCODE_SLOTS.acquire(blocking=False):
         logger.warning("Conversion slot busy; rejecting %s to %s", wav_path.name, fmt)
         raise TranscodeBusyError("Another conversion is in progress")
-    # Deliberately conservative reservation (2x source) so no per-codec
-    # output-size proof is required; released when the subprocess exits
-    reservation = wav_path.stat().st_size * 2
     if not artifact_budget.try_reserve(reservation):
         _TRANSCODE_SLOTS.release()
         raise TranscodeBusyError("Storage capacity unavailable for conversion")
