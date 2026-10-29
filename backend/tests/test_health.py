@@ -87,6 +87,23 @@ def test_health_is_degraded_when_ffmpeg_failed_at_startup(
     assert data["checks"]["directories"]["ok"] is True
 
 
+def test_health_is_degraded_when_ffmpeg_cannot_run_at_startup(
+    matching_checkpoint: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An ffmpeg without execute permission is reported as a missing one is: the app
+    starts and /health is degraded, rather than startup failing."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    ffmpeg = bin_dir / "ffmpeg"
+    ffmpeg.write_bytes(b"#!/bin/sh\necho fake\n")
+    ffmpeg.chmod(0o644)
+    monkeypatch.setenv("PATH", str(bin_dir))
+    with TestClient(app) as c:
+        r = c.get("/health")
+    assert r.status_code == 503
+    assert r.json()["checks"]["ffmpeg_at_startup"] == {"ok": False}
+
+
 @pytest.mark.parametrize(
     "contents",
     [b"some other checkpoint", None],

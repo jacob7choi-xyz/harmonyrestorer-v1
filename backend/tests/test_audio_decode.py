@@ -39,6 +39,23 @@ def _tone(path: Path, seconds: float, sr: int = 16_000, channels: int = 1) -> No
     sf.write(str(path), data, sr, subtype="FLOAT")
 
 
+# An ffmpeg that exists but cannot be started: a script without execute permission, and
+# an executable file that is not a valid program
+_NOT_EXECUTABLE = (b"#!/bin/sh\necho fake\n", 0o644)
+_INVALID_EXECUTABLE = (b"\x7fELF\x02\x01\x01not a program", 0o755)
+
+
+def _ffmpeg_on_path(
+    directory: Path, monkeypatch: pytest.MonkeyPatch, contents: bytes, mode: int
+) -> None:
+    """Make *directory* the only PATH entry, holding an ffmpeg with *contents* and *mode*."""
+    directory.mkdir()
+    ffmpeg = directory / "ffmpeg"
+    ffmpeg.write_bytes(contents)
+    ffmpeg.chmod(mode)
+    monkeypatch.setenv("PATH", str(directory))
+
+
 def _decode(
     src: Path, dst: Path, demuxer: str, sample_rate: int = 16_000, max_s: int = 600
 ) -> float:
@@ -236,6 +253,18 @@ class TestDecodeToWav:
             _decode(src, tmp_path / "out.wav", "wav")
         assert [p.name for p in tmp_path.iterdir()] == ["in.wav"]
 
+    def test_ffmpeg_that_cannot_run_raises_decoder_unavailable(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An ffmpeg without execute permission is a server-side failure, not a bad upload,
+        and leaves no output behind."""
+        src = tmp_path / "in.wav"
+        _tone(src, 0.5)
+        _ffmpeg_on_path(tmp_path / "bin", monkeypatch, *_NOT_EXECUTABLE)
+        with pytest.raises(DecoderUnavailableError):
+            _decode(src, tmp_path / "out.wav", "wav")
+        assert sorted(p.name for p in tmp_path.iterdir()) == ["bin", "in.wav"]
+
     def test_argv_pins_input_handling(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -283,4 +312,17 @@ class TestFfmpegVersion:
             raise FileNotFoundError("ffmpeg")
 
         monkeypatch.setattr(audio_decode.subprocess, "run", not_installed)
+        assert ffmpeg_version(timeout_s=_TIMEOUT_S) is None
+
+    @pytest.mark.parametrize(
+        ("contents", "mode"),
+        [_NOT_EXECUTABLE, _INVALID_EXECUTABLE],
+        ids=["not-executable", "invalid-executable"],
+    )
+    def test_is_none_when_ffmpeg_cannot_run(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, contents: bytes, mode: int
+    ) -> None:
+        """An ffmpeg that exists but cannot be started is reported as None rather than
+        raising, as a missing one is."""
+        _ffmpeg_on_path(tmp_path / "bin", monkeypatch, contents, mode)
         assert ffmpeg_version(timeout_s=_TIMEOUT_S) is None

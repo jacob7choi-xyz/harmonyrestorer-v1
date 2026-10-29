@@ -60,7 +60,8 @@ def ffmpeg_version(timeout_s: float) -> str | None:
         timeout_s: Wall-clock limit for the version query.
 
     Returns:
-        The version line, or None if ffmpeg is missing, fails, or times out.
+        The version line, or None if ffmpeg is missing, cannot be started (for example
+        without execute permission), fails, or times out.
     """
     try:
         # Fixed argv, no shell
@@ -71,7 +72,9 @@ def ffmpeg_version(timeout_s: float) -> str | None:
             timeout=timeout_s,
             check=False,
         )
-    except (FileNotFoundError, subprocess.TimeoutExpired):
+    # OSError covers a missing binary (FileNotFoundError), one without execute permission
+    # (PermissionError) and one that is not a valid program (exec format error)
+    except (OSError, subprocess.TimeoutExpired):
         return None
     if result.returncode != 0:
         return None
@@ -178,8 +181,9 @@ def _run(argv: list[str], source: Path, timeout_s: float) -> None:
             timeout=timeout_s,
             check=False,
         )
-    except FileNotFoundError as e:
-        raise DecoderUnavailableError("ffmpeg is not installed") from e
+    except OSError as e:
+        # Missing, without execute permission, or not a valid program
+        raise DecoderUnavailableError(f"ffmpeg could not be started: {e}") from e
     except subprocess.TimeoutExpired as e:
         raise DecoderUnavailableError(f"ffmpeg did not finish within {timeout_s}s") from e
     if result.returncode != 0:
@@ -216,7 +220,7 @@ def decode_to_wav(
     Raises:
         AudioTooLongError: If the decoded audio is longer than max_seconds.
         AudioDecodeError: If the upload cannot be decoded or holds no audio.
-        DecoderUnavailableError: If ffmpeg is missing or times out.
+        DecoderUnavailableError: If ffmpeg is missing, cannot be started, or times out.
     """
     fd, tmp_name = tempfile.mkstemp(
         prefix=f".{destination.stem}.", suffix=".wav.tmp", dir=destination.parent
