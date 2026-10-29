@@ -7,7 +7,7 @@ AI-powered audio denoising. Upload noisy audio, get clean audio back.
 - **Stack**: FastAPI + React/TypeScript, Docker-ready
 - **Tests**: backend, dataset, benchmark, gate policy and frontend suites, run by the [quality gate](#quality-gate)
 
-Live at [harmonyrestorer.online](https://harmonyrestorer.online).
+The frontend is at [harmonyrestorer.online](https://harmonyrestorer.online). The backend was not serving when checked on 2026-10-28.
 
 ## Quick Start
 
@@ -29,7 +29,7 @@ cd backend && uv run uvicorn app.main:app --reload --port 8000
 cd frontend && npm ci && npm run dev
 ```
 
-> **Note:** To run the frontend against the live deployed backend instead of a local server, set `VITE_API_URL=https://harmonyrestorer-backend-468785563224.us-central1.run.app/api/v1` in `frontend/.env.local` and run only the frontend step.
+> **Note:** To run the frontend against the deployed backend instead of a local server (it was not serving when checked on 2026-10-28), set `VITE_API_URL=https://harmonyrestorer-backend-468785563224.us-central1.run.app/api/v1` in `frontend/.env.local` and run only the frontend step.
 
 ## API
 
