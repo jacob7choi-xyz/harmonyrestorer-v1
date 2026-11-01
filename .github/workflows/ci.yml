@@ -11,8 +11,8 @@ on:
   schedule:
     - cron: "0 6 * * 1"
 
-# Least privilege, declared here rather than inherited from the repository default,
-# which this file cannot see. No job here writes to the repository.
+# Least privilege, declared here rather than inherited from the repository default, which
+# this file cannot see. No job writes to the repository; publish alone adds packages: write.
 permissions:
   contents: read
 
@@ -22,8 +22,8 @@ permissions:
 
 # Each job stops after 60 minutes instead of GitHub's 6-hour default. In the 30 runs to
 # 2026-10-27, jobs usually took 3 minutes or less, and the slowest took 43, nearly all
-# of it in the backend's apt download. Every job downloads packages, so each gets the
-# same limit.
+# of it in the backend's apt download. Every job downloads packages or a saved image, so
+# each gets the same limit.
 jobs:
   backend:
     runs-on: ubuntu-latest
@@ -105,6 +105,86 @@ jobs:
       # /health, then one file through the API, in the runtime image with networking off
       - name: Runtime image serves
         run: scripts/check_runtime_image.sh harmonyrestorer:runtime
+
+      # On pushes to main only, hands the runtime image that passed the checks above to the
+      # publish job, so the image pushed is this build and not a rebuild with newer Debian
+      # packages. pipefail, so a failed docker save fails the step instead of uploading a
+      # truncated archive.
+      - name: Save the tested runtime image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          set -o pipefail
+          docker image inspect --format '{{.Id}}' harmonyrestorer:runtime > runtime-image-id
+          docker save harmonyrestorer:runtime | gzip -1 > runtime-image.tar.gz
+
+      - name: Upload the tested runtime image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: runtime-image
+          path: |
+            runtime-image.tar.gz
+            runtime-image-id
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  # Pushes the runtime image that passed the image job's checks, only on pushes to main and
+  # only when all three jobs succeeded; the results are checked by name so a job skipped
+  # later by its own condition cannot count as a pass. It is the only job that can write
+  # packages, and it checks out no code and runs none of the project's. A deploy should
+  # use the digest it reports, not the tag. Nothing deploys the image yet.
+  publish:
+    needs: [backend, image, frontend]
+    if: >-
+      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      needs.backend.result == 'success' && needs.image.result == 'success' &&
+      needs.frontend.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      packages: write
+    env:
+      IMAGE: ghcr.io/jacob7choi-xyz/harmonyrestorer-backend
+
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: runtime-image
+
+      # Fails unless the loaded image has the ID recorded before it was saved
+      - name: Load the tested image
+        run: |
+          docker load < runtime-image.tar.gz
+          tested="$(cat runtime-image-id)"
+          loaded="$(docker image inspect --format '{{.Id}}' harmonyrestorer:runtime)"
+          if [ "$loaded" != "$tested" ]; then
+            echo "loaded image $loaded is not the tested image $tested"
+            exit 1
+          fi
+
+      # The token goes to docker on stdin, never on the command line. The digest is read
+      # from the push output, and the step fails if none is found.
+      - name: Push to the GitHub Container Registry
+        env:
+          REGISTRY_TOKEN: ${{ github.token }}
+          REGISTRY_USER: ${{ github.repository_owner }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          set -o pipefail
+          printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io -u "$REGISTRY_USER" --password-stdin
+          docker tag harmonyrestorer:runtime "$IMAGE:$COMMIT"
+          docker push "$IMAGE:$COMMIT" | tee push.log
+          digest="$(grep -o 'digest: sha256:[0-9a-f]\{64\}' push.log | cut -d' ' -f2)"
+          if [ -z "$digest" ]; then
+            echo "no digest found in the push output"
+            exit 1
+          fi
+          echo "Pushed $IMAGE@$digest (tag $COMMIT)" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Log out of the registry
+        if: always()
+        run: docker logout ghcr.io
 
   frontend:
     runs-on: ubuntu-latest

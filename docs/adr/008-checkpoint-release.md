@@ -22,6 +22,8 @@ The training recordings come from the Internet Archive item `MusopenCollectionAs
 2. **CI builds and starts the runtime image with the real checkpoint.** The image job downloads the asset over HTTPS and compares its SHA-256 with `checkpoint_sha256` in `benchmark/manifests/training_corpus.json`, which a test keeps equal to `OPGAN_CHECKPOINT_SHA256`. That comparison only makes a wrong download fail before the build. The check that guards loading is still the one in `read_verified_checkpoint` (ADR 007). The script makes the file readable by all users, because the runtime stage copies it with its mode and runs as a non-root user. The job then builds `--target runtime`, checks that no compiler tool is on the image's `PATH`, starts the container with `--network none`, and requires `/health` to return 200 (`scripts/check_runtime_image.sh`). With the default OpGAN engine, `/health` returns 200 only if the startup digest check passed (`backend/app/routes/health.py:47-51`). The startup check hashes the file without loading the weights, so the job also sends one audio file through the API, which checks the digest again and loads the weights.
 3. **CI's permissions do not change.** The repository is public, and `scripts/fetch_checkpoint.py` downloads the asset without credentials. The workflow keeps `contents: read` (`.github/workflows/ci.yml:16-17`).
 
+   > **Note:** Updated 2026-11-01. A `publish` job now adds `packages: write` for itself only. On pushes to `main`, once the `backend`, `image` and `frontend` jobs have succeeded, it loads the runtime image that the `image` job saved after its checks, pushes it to the GitHub Container Registry tagged with the commit SHA, and reports its digest. The workflow-level permission stays `contents: read`. Nothing deploys that image yet.
+
 ## Consequences
 
 ### Positive
@@ -43,6 +45,8 @@ The training recordings come from the Internet Archive item `MusopenCollectionAs
 These depend on where the backend is deployed and are not part of this decision. Deployment to Google Cloud is deferred while the deployment is made independent of any one provider.
 
 - A CI job that pushes the tested runtime image to the GitHub Container Registry on pushes to `main`. It would be the only job given `packages: write`, it would log in only after every build and test step, and it would push the image it tested rather than a rebuild.
+
+  > **Note:** Updated 2026-11-01. Implemented as the `publish` job in `.github/workflows/ci.yml`; it has not yet run on `main`. GitHub's documentation gives private as the default visibility when a package is first published.
 - Deploying that image by digest. `scripts/deploy_backend.sh` targets Cloud Run, deploys by tag, and prints "unknown" when it cannot read the digest (lines 83-85); a deploy by digest would stop instead.
 - A choice of visibility for the container package, which would contain the weights. GitHub's documentation says a newly published package is private by default and that a public package cannot be made private again. Which visibility a platform can pull from depends on the platform. For Cloud Run, its documentation (last updated 2026-10-26 when read) says it can deploy public GitHub Container Registry images directly, and private ones through an Artifact Registry remote repository. Other platforms were not checked.
 
