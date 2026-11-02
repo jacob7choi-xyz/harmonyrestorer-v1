@@ -46,9 +46,11 @@ These depend on where the backend is deployed and are not part of this decision.
 
 - A CI job that pushes the tested runtime image to the GitHub Container Registry on pushes to `main`. It would be the only job given `packages: write`, it would log in only after every build and test step, and it would push the image it tested rather than a rebuild.
 
-  > **Note:** Updated 2026-11-01. Implemented as the `publish` job in `.github/workflows/ci.yml`; it has not yet run on `main`. GitHub's documentation gives private as the default visibility when a package is first published.
+  > **Note:** Updated 2026-11-02. Implemented as the `publish` job in `.github/workflows/ci.yml`. It first ran on `main` on 2026-11-01 (run 41350013280) and pushed the image for commit `a6b8bab`. GitHub's documentation gives private as the default visibility when a package is first published, but on 2026-11-02 the image could be pulled without credentials. Why it was not private was not determined.
 - Deploying that image by digest. `scripts/deploy_backend.sh` targets Cloud Run, deploys by tag, and prints "unknown" when it cannot read the digest (lines 83-85); a deploy by digest would stop instead.
 - A choice of visibility for the container package, which would contain the weights. GitHub's documentation says a newly published package is private by default and that a public package cannot be made private again. Which visibility a platform can pull from depends on the platform. For Cloud Run, its documentation (last updated 2026-10-26 when read) says it can deploy public GitHub Container Registry images directly, and private ones through an Artifact Registry remote repository. Other platforms were not checked.
+
+  > **Note:** Updated 2026-11-02. The package can be pulled without credentials, and its visibility is left as it is. The image published from `a6b8bab` was checked on 2026-11-02: its files under `/app`, outside the virtual environment and the checkpoint, match the tracked files in `backend/app` at that commit; its checkpoint has the release's digest; and a search of every text file for common credential token patterns found none. Binary files were not searched. As far as these checks show, its contents come from sources that are already public: the repository, the release, the package indexes named in `uv.lock`, the Debian archive and the base image. The virtual environment was covered only by that search; the wheels it was installed from are pinned by hash in `uv.lock`.
 
 ## Alternatives Considered
 
