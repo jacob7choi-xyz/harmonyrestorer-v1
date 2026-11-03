@@ -119,7 +119,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# --- Middleware (outermost runs first) ---
+# --- Middleware ---
+# Each add_middleware call wraps the middleware added before it, so the last one added runs
+# first. CORS is added last so that responses returned early by the rate limiter (429, 503)
+# also carry CORS headers; otherwise the browser blocks the frontend from reading them.
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+app.add_middleware(RateLimitMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -127,8 +132,6 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type", "Accept"],
 )
-app.add_middleware(GZipMiddleware, minimum_size=1000)
-app.add_middleware(RateLimitMiddleware)
 
 # --- Exception handlers ---
 app.add_exception_handler(Exception, unhandled_exception_handler)

@@ -13,12 +13,13 @@ SMALL_WAV = b"RIFF" + b"\x00" * 4 + b"WAVE" + b"\x00" * 32
 # --- Rate limiting ---
 
 
-def test_rate_limit_none_client_returns_503():
+def test_rate_limit_none_client_returns_503() -> None:
     """POST /api/v1/denoise returns 503 when request.client is None.
 
     Covers the proxy misconfiguration case where the backend receives a
     request without a validated peer address. The fail-closed response
-    prevents all such requests from sharing a single "unknown" bucket.
+    prevents all such requests from sharing a single "unknown" bucket. The 503
+    carries the CORS header so the frontend can read it.
     """
     from tests.conftest import _clear_rate_limiter
 
@@ -34,13 +35,16 @@ def test_rate_limit_none_client_returns_503():
             await self._app(scope, receive, send)
 
     _clear_rate_limiter(app)
+    origin = settings.cors_origins[0]
     with TestClient(_NullClientApp(app)) as c:
         r = c.post(
             "/api/v1/denoise",
+            headers={"Origin": origin},
             files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
         )
     assert r.status_code == 503
     assert "proxy misconfiguration" in r.json()["detail"]
+    assert r.headers.get("access-control-allow-origin") == origin
 
 
 def test_rate_limit_different_ips_have_independent_buckets(mock_denoiser, monkeypatch):
@@ -111,6 +115,34 @@ def test_rate_limiter_returns_429_after_limit(client, mock_denoiser, monkeypatch
     )
     assert r.status_code == 429
     assert "Too many requests" in r.json()["detail"]
+
+
+def test_rate_limited_upload_carries_cors_header(client, mock_denoiser, monkeypatch) -> None:
+    """A 429 from the rate limiter carries the CORS header for an allowed origin.
+
+    The deployed frontend calls the backend from another origin. Without the header
+    the browser's fetch rejects, so frontend/src/api/client.ts cannot read the 429 detail.
+    """
+    monkeypatch.setattr(settings, "max_jobs_per_ip", 100)
+    origin = settings.cors_origins[0]
+    headers = {"Origin": origin}
+
+    for i in range(settings.rate_limit_max_requests):
+        r = client.post(
+            "/api/v1/denoise",
+            headers=headers,
+            files={"file": (f"cors{i}.wav", SMALL_WAV, "audio/wav")},
+        )
+        assert r.status_code == 200, f"Request {i + 1} should succeed"
+
+    r = client.post(
+        "/api/v1/denoise",
+        headers=headers,
+        files={"file": ("cors_over.wav", SMALL_WAV, "audio/wav")},
+    )
+    assert r.status_code == 429
+    assert "Too many requests" in r.json()["detail"]
+    assert r.headers.get("access-control-allow-origin") == origin
 
 
 def test_rate_limit_window_expiry_allows_new_requests(client, mock_denoiser, monkeypatch) -> None:
