@@ -12,6 +12,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.responses import Response
 from starlette.types import ASGIApp
 
+from app.client_identity import client_identity
 from app.config import settings
 
 logger = logging.getLogger(__name__)
@@ -56,7 +57,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             Otherwise the response from the next handler.
         """
         if request.method == "POST" and request.url.path == "/api/v1/denoise":
-            if request.client is None:
+            client_ip = client_identity(request)
+            if client_ip is None:
                 logger.warning(
                     "Rejecting upload request with no client address (proxy misconfiguration)"
                 )
@@ -65,7 +67,6 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     content={"detail": "Service unavailable: proxy misconfiguration."},
                 )
 
-            client_ip = request.client.host
             logger.debug("Rate-limit check for client_ip=%s", client_ip)
 
             now = time.time()

@@ -13,6 +13,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from starlette.background import BackgroundTask
 
+from app.client_identity import client_identity
 from app.config import settings
 from app.schemas import DenoiseUploadResponse, JobStatus, JobStatusEnum
 from app.services.admission import InferenceAdmission
@@ -193,7 +194,7 @@ async def denoise_audio(
     the configured inference concurrency. In-flight work and in-memory
     job state do not survive process or instance termination.
     """
-    client_ip = request.client.host if request.client else ""
+    client_ip = client_identity(request) or ""
 
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file provided")

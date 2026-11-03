@@ -60,6 +60,7 @@ backend/app/
 ├── schemas.py           # Pydantic models, JobStatusEnum
 ├── exceptions.py        # Error handlers (no stack traces to users)
 ├── middleware.py        # Per-IP rate limiting
+├── client_identity.py   # Client address shared by the rate limit and per-IP job cap
 ├── routes/
 │   ├── health.py        # GET /, GET /health
 │   └── denoise.py       # Upload, status, download
