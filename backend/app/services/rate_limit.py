@@ -51,6 +51,7 @@ class InMemoryRateLimiter:
         self._window_seconds = window_seconds
         self._clock = clock
         self._requests: dict[str, list[float]] = {}
+        self._last_sweep = clock()
 
     async def allow(self, client_id: str) -> bool:
         """Count one request from *client_id* if it is within the limit.
@@ -65,6 +66,9 @@ class InMemoryRateLimiter:
         # between reading this client's count and recording the new request
         now = self._clock()
         cutoff = now - self._window_seconds
+        if now - self._last_sweep >= self._window_seconds:
+            self._drop_idle_clients(cutoff)
+            self._last_sweep = now
         active = [t for t in self._requests.get(client_id, []) if t > cutoff]
         if len(active) >= self._max_requests:
             self._requests[client_id] = active
@@ -72,6 +76,19 @@ class InMemoryRateLimiter:
         active.append(now)
         self._requests[client_id] = active
         return True
+
+    def _drop_idle_clients(self, cutoff: float) -> None:
+        """Forget clients whose newest request is older than *cutoff*.
+
+        A client's entry is otherwise rewritten only when that client sends
+        another request, so addresses that never return would stay forever.
+        Called at most once per window, so the O(clients) scan is amortized
+        over that window's requests. Times are appended in clock order, so
+        the last one is the newest.
+        """
+        self._requests = {
+            client_id: times for client_id, times in self._requests.items() if times[-1] > cutoff
+        }
 
 
 def build_rate_limiter(backend: RateLimiterBackend) -> RateLimiter:

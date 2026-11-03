@@ -42,6 +42,21 @@ class TestInMemoryRateLimiter(RateLimiterContract):
 
         assert await limiter.allow("client-a")
 
+    async def test_clients_idle_for_a_window_are_dropped(self) -> None:
+        """A client that stops sending requests is forgotten once a window has passed.
+
+        Without this, every address that ever uploaded would stay in memory.
+        """
+        clock = FakeClock()
+        limiter = InMemoryRateLimiter(10, 60, clock=clock)
+        for i in range(100):
+            assert await limiter.allow(f"client-{i}")
+
+        clock.advance(61)
+        assert await limiter.allow("client-new")
+
+        assert list(limiter._requests) == ["client-new"]
+
 
 def test_build_rate_limiter_returns_the_in_memory_adapter_for_memory() -> None:
     """The memory backend builds an InMemoryRateLimiter."""
