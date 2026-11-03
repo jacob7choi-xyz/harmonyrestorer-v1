@@ -1,11 +1,13 @@
 """Tests for security features: rate limiting, error sanitization, input validation."""
 
-import time
 from unittest.mock import patch
 
 from app.config import Settings, settings
 from app.main import app
+from app.services.rate_limit import InMemoryRateLimiter
 from fastapi.testclient import TestClient
+
+from tests.rate_limiter_contract import FakeClock
 
 SMALL_WAV = b"RIFF" + b"\x00" * 4 + b"WAVE" + b"\x00" * 32
 
@@ -149,12 +151,14 @@ def test_rate_limit_window_expiry_allows_new_requests(client, mock_denoiser, mon
     """After the rate-limit window expires, stale timestamps are pruned and
     the client can upload again without a server restart.
 
-    Covers the sliding-window prune branch in middleware.py:
-        active = [t for t in self._requests[ip] if t > cutoff]
+    Covers the sliding-window prune in InMemoryRateLimiter.allow
+    (app/services/rate_limit.py), driven by a clock the test advances.
     """
     monkeypatch.setattr(settings, "max_jobs_per_ip", 100)
     limit = settings.rate_limit_max_requests
     window = settings.rate_limit_window_seconds
+    clock = FakeClock()
+    app.state.rate_limiter = InMemoryRateLimiter(limit, window, clock=clock)
 
     # Fill the bucket to exhaustion
     for i in range(limit):
@@ -171,12 +175,11 @@ def test_rate_limit_window_expiry_allows_new_requests(client, mock_denoiser, mon
     assert r.status_code == 429
 
     # Advance time past the window so all stored timestamps are stale
-    future = time.time() + window + 1
-    with patch("app.middleware.time.time", return_value=future):
-        r = client.post(
-            "/api/v1/denoise",
-            files={"file": ("renewed.wav", SMALL_WAV, "audio/wav")},
-        )
+    clock.advance(window + 1)
+    r = client.post(
+        "/api/v1/denoise",
+        files={"file": ("renewed.wav", SMALL_WAV, "audio/wav")},
+    )
 
     assert r.status_code == 200, "Request after window expiry must succeed"
 

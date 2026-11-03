@@ -20,6 +20,12 @@ class DenoiserEngine(StrEnum):
     UVR = "uvr"
 
 
+class RateLimiterBackend(StrEnum):
+    """Where the upload rate limit is counted, selected with RATE_LIMITER."""
+
+    MEMORY = "memory"
+
+
 # UVR model names checked to run here. UVR-DeNoise ran end to end in images built from
 # this Dockerfile. Names of two other audio-separator types are kept out on evidence: the
 # MDX architecture module failed to import in those images (torchvision's compiled
@@ -92,6 +98,15 @@ class Settings:
         self.rate_limit_window_seconds = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
         if self.rate_limit_window_seconds < 1:
             raise ValueError("RATE_LIMIT_WINDOW_SECONDS must be at least 1")
+        limiter = os.getenv("RATE_LIMITER", RateLimiterBackend.MEMORY)
+        try:
+            # Exact match on the value; case is not normalized
+            self.rate_limiter = RateLimiterBackend(limiter)
+        except ValueError as e:
+            raise ValueError(
+                f"Invalid RATE_LIMITER={limiter!r}, "
+                f"must be one of {sorted(member.value for member in RateLimiterBackend)}"
+            ) from e
         self.cors_origins: list[str] = [
             o.strip()
             for o in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")

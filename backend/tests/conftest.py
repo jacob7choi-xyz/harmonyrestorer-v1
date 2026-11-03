@@ -5,19 +5,15 @@ from unittest.mock import MagicMock, patch
 import pytest
 from app.config import settings
 from app.main import app
-from app.middleware import RateLimitMiddleware
 from app.services.jobs import job_manager
+from app.services.rate_limit import build_rate_limiter
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 
-def _clear_rate_limiter(application) -> None:  # type: ignore[no-untyped-def]
-    """Walk the middleware stack and clear rate limiter state."""
-    stack = application.middleware_stack
-    while stack is not None:
-        if isinstance(stack, RateLimitMiddleware):
-            stack._requests.clear()
-            return
-        stack = getattr(stack, "app", None)
+def _clear_rate_limiter(application: FastAPI) -> None:
+    """Give the app a fresh rate limiter, so earlier requests do not count."""
+    application.state.rate_limiter = build_rate_limiter(settings.rate_limiter)
 
 
 @pytest.fixture()
@@ -28,6 +24,7 @@ def client():
         _clear_rate_limiter(app)
         yield c
     job_manager._jobs.clear()
+    _clear_rate_limiter(app)
 
 
 def _fake_decode(source, destination, **kwargs):  # type: ignore[no-untyped-def]

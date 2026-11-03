@@ -3,56 +3,41 @@
 from __future__ import annotations
 
 import logging
-import time
-from collections import defaultdict
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.responses import Response
-from starlette.types import ASGIApp
 
 from app.client_identity import client_identity
-from app.config import settings
+from app.services.rate_limit import RateLimiter
 
 logger = logging.getLogger(__name__)
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
-    """Simple per-IP rate limiter for upload endpoints.
+    """Per-client rate limit for uploads.
 
-    Rejects requests on POST /api/v1/denoise with 429 when a client exceeds
-    the configured request rate. Returns 503 when the client IP cannot be
-    determined, which indicates a proxy misconfiguration rather than a
-    client error.
+    Rejects POST /api/v1/denoise with 429 when the client is over the limit
+    kept by the RateLimiter on app.state.rate_limiter, which app.composition
+    installs. Returns 503 when the request has no client address, which
+    indicates a proxy misconfiguration rather than a client error.
 
-    Safe to use only when the backend is not directly reachable from the
-    internet. In production, the backend must sit behind a trusted reverse
-    proxy (Nginx) that overwrites X-Forwarded-For with $remote_addr, and
-    Uvicorn must be started with --proxy-headers so request.client is
-    populated with the real client IP before this middleware runs.
+    The client is identified by client_identity(). Behind a proxy, that is the
+    real client only if Uvicorn trusts the proxy's forwarded headers (the
+    forwarded-allow-ips setting in the Dockerfile CMD) and clients cannot
+    reach the backend without passing through the proxy.
     """
 
-    def __init__(self, app: ASGIApp) -> None:
-        """Initialize the rate limiter.
-
-        Args:
-            app: The ASGI application to wrap.
-        """
-        super().__init__(app)
-        self.max_requests: int = settings.rate_limit_max_requests
-        self.window_seconds: int = settings.rate_limit_window_seconds
-        self._requests: dict[str, list[float]] = defaultdict(list)
-
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        """Rate limit POST /api/v1/denoise by client IP.
+        """Rate limit POST /api/v1/denoise by client identity.
 
         Args:
             request: The incoming HTTP request.
             call_next: The next middleware or route handler in the stack.
 
         Returns:
-            503 if the client IP is absent (proxy misconfiguration).
+            503 if the client address is absent (proxy misconfiguration).
             429 if the client has exceeded the rate limit.
             Otherwise the response from the next handler.
         """
@@ -68,23 +53,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 )
 
             logger.debug("Rate-limit check for client_ip=%s", client_ip)
-
-            now = time.time()
-            cutoff = now - self.window_seconds
-
-            active = [t for t in self._requests[client_ip] if t > cutoff]
-            if not active:
-                del self._requests[client_ip]
-                active = []
-            else:
-                self._requests[client_ip] = active
-
-            if len(active) >= self.max_requests:
+            limiter: RateLimiter = request.app.state.rate_limiter
+            if not await limiter.allow(client_ip):
                 return JSONResponse(
                     status_code=429,
                     content={"detail": "Too many requests. Try again later."},
                 )
-
-            self._requests[client_ip].append(now)
 
         return await call_next(request)

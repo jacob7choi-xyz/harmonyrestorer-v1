@@ -1,7 +1,7 @@
 """Tests for Settings validation: every env var that has a validation guard."""
 
 import pytest
-from app.config import DenoiserEngine, Settings
+from app.config import DenoiserEngine, RateLimiterBackend, Settings
 
 
 def _base_dirs(monkeypatch, tmp_path) -> None:
@@ -176,6 +176,23 @@ def test_denoiser_engine_defaults_to_opgan(monkeypatch, tmp_path) -> None:
     _base_dirs(monkeypatch, tmp_path)
     monkeypatch.delenv("DENOISER_ENGINE", raising=False)
     assert Settings().denoiser_engine is DenoiserEngine.OPGAN
+
+
+# --- RATE_LIMITER ---
+
+
+def test_rate_limiter_rejects_unknown_value(monkeypatch) -> None:
+    """A RATE_LIMITER other than memory raises ValueError when settings load."""
+    monkeypatch.setenv("RATE_LIMITER", "redis")
+    with pytest.raises(ValueError, match="Invalid RATE_LIMITER"):
+        Settings()
+
+
+def test_rate_limiter_defaults_to_memory(monkeypatch, tmp_path) -> None:
+    """With RATE_LIMITER unset, the backend is memory."""
+    _base_dirs(monkeypatch, tmp_path)
+    monkeypatch.delenv("RATE_LIMITER", raising=False)
+    assert Settings().rate_limiter is RateLimiterBackend.MEMORY
 
 
 # --- UVR_MODEL_NAME ---

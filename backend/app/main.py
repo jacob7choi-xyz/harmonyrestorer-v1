@@ -12,6 +12,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 
+from app.composition import install_adapters
 from app.config import OPGAN_CHECKPOINT_SHA256, DenoiserEngine, settings
 from app.exceptions import unhandled_exception_handler
 from app.middleware import RateLimitMiddleware
@@ -118,6 +119,11 @@ app = FastAPI(
     openapi_url="/api/openapi.json" if settings.enable_docs else None,
     lifespan=lifespan,
 )
+
+# --- Adapters ---
+# Installed at import rather than in the lifespan, so they exist even if a host
+# serves requests without running the lifespan
+install_adapters(app)
 
 # --- Middleware ---
 # Each add_middleware call wraps the middleware added before it, so the last one added runs

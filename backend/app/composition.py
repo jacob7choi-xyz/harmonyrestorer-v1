@@ -1,0 +1,17 @@
+"""Composition root: builds the configured adapters and attaches them to the app (ADR 010)."""
+
+from __future__ import annotations
+
+from fastapi import FastAPI
+
+from app.config import settings
+from app.services.rate_limit import build_rate_limiter
+
+
+def install_adapters(app: FastAPI) -> None:
+    """Build the configured adapters and attach them to app.state.
+
+    Args:
+        app: The application whose requests will use the adapters.
+    """
+    app.state.rate_limiter = build_rate_limiter(settings.rate_limiter)

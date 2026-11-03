@@ -56,6 +56,7 @@ Processing runs synchronously inside the upload request; the response carries th
 ```
 backend/app/
 ├── main.py              # App factory, middleware, lifespan
+├── composition.py       # Composition root: builds the configured adapters (ADR 010)
 ├── config.py            # Settings (env vars, validated at startup)
 ├── schemas.py           # Pydantic models, JobStatusEnum
 ├── exceptions.py        # Error handlers (no stack traces to users)
@@ -74,6 +75,7 @@ backend/app/
 │   ├── denoiser.py        # UVR wrapper, lazy model loading (fallback)
 │   ├── wav_io.py          # Mono read and atomic WAV write shared by both services
 │   ├── admission.py       # Fail-fast inference admission (one at a time)
+│   ├── rate_limit.py      # RateLimiter contract, in-memory adapter, builder
 │   ├── transcode.py       # Download format conversion, own admission slot
 │   ├── artifacts.py       # Atomic byte budget for the memory-backed filesystem
 │   └── jobs.py            # JobManager; processing runs inside the upload request
