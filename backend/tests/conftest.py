@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from app.config import settings
 from app.main import app
+from app.services.job_store import build_job_store
 from app.services.jobs import job_manager
 from app.services.rate_limit import build_rate_limiter
 from fastapi import FastAPI
@@ -16,14 +17,19 @@ def _clear_rate_limiter(application: FastAPI) -> None:
     application.state.rate_limiter = build_rate_limiter(settings.rate_limiter)
 
 
+def _clear_job_store(application: FastAPI) -> None:
+    """Give the app an empty job store, built with the current settings' caps."""
+    application.state.job_store = build_job_store(settings.job_store)
+
+
 @pytest.fixture()
 def client():
     """TestClient with clean job state for each test."""
-    job_manager._jobs.clear()
+    _clear_job_store(app)
     with TestClient(app) as c:
         _clear_rate_limiter(app)
         yield c
-    job_manager._jobs.clear()
+    _clear_job_store(app)
     _clear_rate_limiter(app)
 
 

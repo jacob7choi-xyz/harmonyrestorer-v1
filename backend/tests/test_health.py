@@ -1,5 +1,6 @@
 """Tests for health and root endpoints."""
 
+import asyncio
 import hashlib
 from pathlib import Path
 
@@ -55,6 +56,18 @@ def test_health_includes_job_counts(client):
     data = r.json()
     assert "jobs" in data
     assert data["jobs"] == {}  # no jobs yet
+
+
+def test_health_counts_jobs_in_the_app_job_store(client) -> None:
+    """/health reports the counts of the job store on app.state."""
+
+    async def add_queued_jobs() -> None:
+        await app.state.job_store.create("job-1", "", "audio")
+        await app.state.job_store.create("job-2", "", "audio")
+
+    asyncio.run(add_queued_jobs())
+
+    assert client.get("/health").json()["jobs"] == {"queued": 2}
 
 
 def test_health_reports_ffmpeg_at_startup(

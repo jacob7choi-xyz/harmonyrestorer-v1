@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import FastAPI
 
 from app.config import settings
+from app.services.job_store import build_job_store
 from app.services.rate_limit import build_rate_limiter
 
 
@@ -15,3 +16,4 @@ def install_adapters(app: FastAPI) -> None:
         app: The application whose requests will use the adapters.
     """
     app.state.rate_limiter = build_rate_limiter(settings.rate_limiter)
+    app.state.job_store = build_job_store(settings.job_store)

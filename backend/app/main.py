@@ -56,12 +56,13 @@ _configure_logging()
 logger = logging.getLogger(__name__)
 
 
-async def _cleanup_loop() -> None:
+async def _cleanup_loop(app: FastAPI) -> None:
     """Periodically evict expired jobs and their output files."""
     while True:
         await asyncio.sleep(settings.cleanup_interval_seconds)
         try:
-            job_manager.cleanup_expired()
+            # Read on each pass, so the loop always uses the store the app has now
+            await job_manager.cleanup_expired(app.state.job_store)
         except Exception:
             logger.exception("Error during job cleanup")
 
@@ -103,7 +104,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         # Reported by /health; the bytes read here are not kept
         app.state.opgan_checkpoint_at_startup_ok = await run_in_threadpool(_opgan_checkpoint_ok)
 
-    cleanup_task = asyncio.create_task(_cleanup_loop())
+    cleanup_task = asyncio.create_task(_cleanup_loop(app))
     yield
     cleanup_task.cancel()
 

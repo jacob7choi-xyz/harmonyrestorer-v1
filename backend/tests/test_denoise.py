@@ -1,13 +1,18 @@
 """Tests for the denoise API endpoints."""
 
+import asyncio
 from unittest.mock import Mock, patch
 
 import numpy as np
 import pytest
 import soundfile as sf
 from app.config import DenoiserEngine, settings
+from app.main import app
 from app.services.audio_decode import decoded_size_cap
 from app.services.engines import input_sample_rate, peak_output_bytes
+from app.services.job_store import JobStore
+
+from tests.conftest import _clear_job_store
 
 SMALL_WAV = b"RIFF" + b"\x00" * 4 + b"WAVE" + b"\x00" * 32
 
@@ -20,6 +25,29 @@ SAMPLE_BYTES: dict[str, bytes] = {
     ".m4a": b"\x00" * 4 + b"ftyp" + b"\x00" * 36,
     ".aac": b"\xff\xf1" + b"\x00" * 40,
 }
+
+
+def _store() -> JobStore:
+    """The job store the app is using."""
+    store: JobStore = app.state.job_store
+    return store
+
+
+def _job_counts() -> dict[str, int]:
+    """Jobs per status in the app's job store."""
+    return asyncio.run(_store().counts())
+
+
+def _add_completed_job(job_id: str, client_ip: str) -> None:
+    """Put a COMPLETED job for *client_ip* in the app's job store."""
+
+    async def add() -> None:
+        store = _store()
+        await store.create(job_id, client_ip, "audio")
+        await store.start(job_id)
+        await store.complete(job_id, 1.0, f"/api/v1/download/{job_id}")
+
+    asyncio.run(add())
 
 
 # --- Upload ---
@@ -87,44 +115,35 @@ def test_upload_rejects_unsupported_format(client):
 
 def test_upload_rejects_oversized_file(client) -> None:
     """Oversized uploads return 413 and do not create a job or temp file."""
-    from app.services.jobs import job_manager
-
-    original_job_count = len(job_manager._jobs)
     with patch.object(settings, "max_upload_bytes", 10):
         r = client.post(
             "/api/v1/denoise",
             files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
         )
     assert r.status_code == 413
-    assert len(job_manager._jobs) == original_job_count
+    assert _job_counts() == {}
 
 
 def test_upload_accepts_file_at_size_limit(client, mock_denoiser, monkeypatch) -> None:
     """A file exactly at max_upload_bytes is accepted."""
-    from app.services.jobs import job_manager
-
-    original_job_count = len(job_manager._jobs)
     monkeypatch.setattr(settings, "max_upload_bytes", len(SMALL_WAV))
     r = client.post(
         "/api/v1/denoise",
         files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
     )
     assert r.status_code == 200
-    assert len(job_manager._jobs) == original_job_count + 1
+    assert sum(_job_counts().values()) == 1
 
 
 def test_upload_rejects_file_one_byte_over_limit(client, monkeypatch) -> None:
     """A file one byte over max_upload_bytes is rejected with 413 and no job is created."""
-    from app.services.jobs import job_manager
-
-    original_job_count = len(job_manager._jobs)
     monkeypatch.setattr(settings, "max_upload_bytes", len(SMALL_WAV) - 1)
     r = client.post(
         "/api/v1/denoise",
         files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
     )
     assert r.status_code == 413
-    assert len(job_manager._jobs) == original_job_count
+    assert _job_counts() == {}
 
 
 def test_upload_rejects_missing_file(client):
@@ -229,7 +248,6 @@ def test_upload_rejected_when_artifact_budget_exhausted(client, mock_decode, mon
     no job, no files, and the inference slot is restored."""
     from app.routes import denoise as denoise_module
     from app.services.artifacts import ArtifactBudget
-    from app.services.jobs import job_manager
 
     tiny = ArtifactBudget(limit_bytes=1, directories=[])
     monkeypatch.setattr(denoise_module, "artifact_budget", tiny)
@@ -243,7 +261,7 @@ def test_upload_rejected_when_artifact_budget_exhausted(client, mock_decode, mon
     assert r.status_code == 503
     assert "storage" in r.json()["detail"].lower()
     assert r.headers.get("retry-after") == "60"
-    assert job_manager._jobs == {}
+    assert _job_counts() == {}
     assert set(settings.upload_dir.iterdir()) == files_before
     assert denoise_module.admission.try_acquire() is True
     denoise_module.admission.release()
@@ -290,7 +308,6 @@ def test_lifecycle_start_failure_rolls_back_the_job_transaction(
     import asyncio as asyncio_module
 
     from app.routes import denoise as denoise_module
-    from app.services.jobs import job_manager
 
     real_create_task = asyncio_module.create_task
 
@@ -309,7 +326,7 @@ def test_lifecycle_start_failure_rolls_back_the_job_transaction(
     )
 
     assert r.status_code == 500
-    assert job_manager._jobs == {}
+    assert _job_counts() == {}
     assert set(settings.upload_dir.iterdir()) == files_before
     # Admission capacity restored
     assert denoise_module.admission.try_acquire() is True
@@ -378,6 +395,31 @@ def test_download_conversion_busy_returns_503_with_retry_after(
     assert client.get(f"/api/v1/download/{job_id}").status_code == 200
 
 
+def test_download_holds_the_guard_while_converting(client, mock_denoiser, monkeypatch) -> None:
+    """A download holds the cleanup guard while its format conversion runs, then releases it."""
+    from app.routes import denoise as denoise_module
+    from app.services.jobs import job_manager
+
+    held_during_conversion: list[bool] = []
+
+    def recording_transcode(wav_path, fmt):  # type: ignore[no-untyped-def]
+        held_during_conversion.append(wav_path.name.split("_")[0] in job_manager._downloading)
+        return wav_path
+
+    monkeypatch.setattr(denoise_module, "transcode_output", recording_transcode)
+    r = client.post(
+        "/api/v1/denoise",
+        files={"file": ("song.wav", SMALL_WAV, "audio/wav")},
+    )
+    job_id = r.json()["job_id"]
+
+    d = client.get(f"/api/v1/download/{job_id}")
+
+    assert d.status_code == 200
+    assert held_during_conversion == [True]
+    assert job_id not in job_manager._downloading
+
+
 def test_download_conversion_failure_returns_500_and_releases_guard(
     client, mock_denoiser, monkeypatch
 ) -> None:
@@ -422,11 +464,9 @@ def test_status_response_does_not_leak_download_stem(client, mock_denoiser) -> N
 def test_upload_rejected_when_inference_busy(client, mock_denoiser) -> None:
     """Busy admission is an immediate 503 with no job record and no new files."""
     from app.routes import denoise as denoise_module
-    from app.services.jobs import job_manager
 
     assert denoise_module.admission.try_acquire()
     try:
-        jobs_before = dict(job_manager._jobs)
         files_before = set(settings.upload_dir.iterdir())
 
         r = client.post(
@@ -436,7 +476,7 @@ def test_upload_rejected_when_inference_busy(client, mock_denoiser) -> None:
 
         assert r.status_code == 503
         assert r.headers.get("retry-after") == "30"
-        assert job_manager._jobs == jobs_before
+        assert _job_counts() == {}
         assert set(settings.upload_dir.iterdir()) == files_before
     finally:
         denoise_module.admission.release()
@@ -479,6 +519,7 @@ def test_status_after_processing(client, mock_denoiser) -> None:
     assert r.status_code == 200
     assert r.json()["status"] == "completed"
     assert r.json()["progress"] == 100
+    assert r.json()["download_url"] == f"/api/v1/download/{job_id}"
 
 
 def test_status_invalid_uuid(client):
@@ -507,20 +548,15 @@ def test_download_completed_job(client, mock_denoiser):
     assert r.headers["content-type"] == "audio/wav"
 
 
-def test_download_not_completed(client):
-    from datetime import datetime
-
-    from app.schemas import JobStatus, JobStatusEnum
-    from app.services.jobs import job_manager
-
+def test_download_not_completed(client) -> None:
+    """A job that is still PROCESSING cannot be downloaded."""
     job_id = "00000000-0000-0000-0000-000000000001"
-    job_manager._jobs[job_id] = JobStatus(
-        job_id=job_id,
-        status=JobStatusEnum.PROCESSING,
-        progress=50,
-        message="Working...",
-        created_at=datetime.now(),
-    )
+
+    async def add_processing_job() -> None:
+        await _store().create(job_id, "", "audio")
+        await _store().start(job_id)
+
+    asyncio.run(add_processing_job())
 
     r = client.get(f"/api/v1/download/{job_id}")
     assert r.status_code == 400
@@ -542,22 +578,10 @@ def test_per_ip_cap_returns_429_and_removes_input_file(client, mock_decode, monk
     that fires after the temp file has been renamed to input_path: if that cleanup were
     missing, rejected uploads would accumulate on disk indefinitely.
     """
-    from datetime import UTC, datetime
-
-    from app.schemas import JobStatus, JobStatusEnum
-    from app.services.jobs import job_manager
-
     monkeypatch.setattr(settings, "max_jobs_per_ip", 1)
+    _clear_job_store(app)
     # "testclient" is the peer host Starlette's TestClient reports via request.client.host
-    job_manager._jobs["existing"] = JobStatus(
-        job_id="existing",
-        client_ip="testclient",
-        status=JobStatusEnum.COMPLETED,
-        progress=100,
-        message="done",
-        created_at=datetime.now(UTC),
-        completed_at=datetime.now(UTC),
-    )
+    _add_completed_job("existing", "testclient")
     upload_files_before = set(settings.upload_dir.iterdir())
 
     r = client.post(
@@ -567,8 +591,7 @@ def test_per_ip_cap_returns_429_and_removes_input_file(client, mock_decode, monk
 
     assert r.status_code == 429
     assert "Too many active jobs" in r.json()["detail"]
-    assert "existing" in job_manager._jobs
-    assert len(job_manager._jobs) == 1
+    assert _job_counts() == {"completed": 1}
     assert set(settings.upload_dir.iterdir()) == upload_files_before
 
 
@@ -578,22 +601,10 @@ def test_global_cap_returns_503_and_removes_input_file(client, mock_decode, monk
     Uses max_total_jobs=1 with an existing job from a different IP so the global cap
     fires before the per-IP check. Verifies the same route cleanup path as the 429 case.
     """
-    from datetime import UTC, datetime
-
-    from app.schemas import JobStatus, JobStatusEnum
-    from app.services.jobs import job_manager
-
     monkeypatch.setattr(settings, "max_total_jobs", 1)
     monkeypatch.setattr(settings, "max_jobs_per_ip", 1)
-    job_manager._jobs["existing"] = JobStatus(
-        job_id="existing",
-        client_ip="other-client",
-        status=JobStatusEnum.COMPLETED,
-        progress=100,
-        message="done",
-        created_at=datetime.now(UTC),
-        completed_at=datetime.now(UTC),
-    )
+    _clear_job_store(app)
+    _add_completed_job("existing", "other-client")
     upload_files_before = set(settings.upload_dir.iterdir())
 
     r = client.post(
@@ -603,15 +614,12 @@ def test_global_cap_returns_503_and_removes_input_file(client, mock_decode, monk
 
     assert r.status_code == 503
     assert "Server is busy" in r.json()["detail"]
-    assert "existing" in job_manager._jobs
-    assert len(job_manager._jobs) == 1
+    assert _job_counts() == {"completed": 1}
     assert set(settings.upload_dir.iterdir()) == upload_files_before
 
 
-def test_download_after_job_cleanup(client, mock_denoiser):
+def test_download_after_job_cleanup(client, mock_denoiser) -> None:
     """Download should return 404 after the job has been cleaned up."""
-    from app.services.jobs import job_manager
-
     r = client.post(
         "/api/v1/denoise",
         files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
@@ -619,8 +627,7 @@ def test_download_after_job_cleanup(client, mock_denoiser):
     job_id = r.json()["job_id"]
 
     # Simulate cleanup removing the job
-    with job_manager._lock:
-        del job_manager._jobs[job_id]
+    asyncio.run(_store().delete(job_id))
 
     r = client.get(f"/api/v1/download/{job_id}")
     assert r.status_code == 404
@@ -673,8 +680,6 @@ class TestUploadDecoding:
         """A VBR MP3 without a Xing header reads as shorter than it is through
         soundfile. Measured by its decoded length, a 30 s file does not pass a 25 s
         cap, and the rejected upload leaves no job and no file."""
-        from app.services.jobs import job_manager
-
         wav = tmp_path / "tone.wav"
         _tone_wav(wav, 30.0)
         mp3 = tmp_path / "vbr.mp3"
@@ -689,7 +694,7 @@ class TestUploadDecoding:
 
         assert r.status_code == 400
         assert "too long" in r.json()["detail"].lower()
-        assert job_manager._jobs == {}
+        assert _job_counts() == {}
         assert set(settings.upload_dir.iterdir()) == uploads_before
         stub_denoiser.denoise.assert_not_called()
 
@@ -734,9 +739,8 @@ class TestUploadDecoding:
     def _assert_nothing_left(self, uploads_before: set) -> None:
         """No job, no upload file, and the admission slot and reservation released."""
         from app.routes import denoise as denoise_module
-        from app.services.jobs import job_manager
 
-        assert job_manager._jobs == {}
+        assert _job_counts() == {}
         assert set(settings.upload_dir.iterdir()) == uploads_before
         assert denoise_module.artifact_budget._reserved == 0
         assert denoise_module.admission.try_acquire() is True

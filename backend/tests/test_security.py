@@ -7,6 +7,7 @@ from app.main import app
 from app.services.rate_limit import InMemoryRateLimiter
 from fastapi.testclient import TestClient
 
+from tests.conftest import _clear_job_store
 from tests.rate_limiter_contract import FakeClock
 
 SMALL_WAV = b"RIFF" + b"\x00" * 4 + b"WAVE" + b"\x00" * 32
@@ -74,6 +75,7 @@ def test_rate_limit_different_ips_have_independent_buckets(mock_denoiser, monkey
     monkeypatch.setattr(settings, "max_jobs_per_ip", 100)
     limit = settings.rate_limit_max_requests
     _clear_rate_limiter(app)
+    _clear_job_store(app)
 
     # Exhaust the limit for IP A
     with TestClient(_FixedClientApp(app, "10.0.0.1")) as c:
@@ -98,9 +100,10 @@ def test_rate_limit_different_ips_have_independent_buckets(mock_denoiser, monkey
     assert r.status_code == 200, "IP B must not be affected by IP A's exhausted bucket"
 
 
-def test_rate_limiter_returns_429_after_limit(client, mock_denoiser, monkeypatch):
+def test_rate_limiter_returns_429_after_limit(client, mock_denoiser, monkeypatch) -> None:
     """Uploads exceeding rate_limit_max_requests should be rejected with 429."""
     monkeypatch.setattr(settings, "max_jobs_per_ip", 100)
+    _clear_job_store(app)
     limit = settings.rate_limit_max_requests
 
     for i in range(limit):
@@ -126,6 +129,7 @@ def test_rate_limited_upload_carries_cors_header(client, mock_denoiser, monkeypa
     the browser's fetch rejects, so frontend/src/api/client.ts cannot read the 429 detail.
     """
     monkeypatch.setattr(settings, "max_jobs_per_ip", 100)
+    _clear_job_store(app)
     origin = settings.cors_origins[0]
     headers = {"Origin": origin}
 
@@ -155,6 +159,7 @@ def test_rate_limit_window_expiry_allows_new_requests(client, mock_denoiser, mon
     (app/services/rate_limit.py), driven by a clock the test advances.
     """
     monkeypatch.setattr(settings, "max_jobs_per_ip", 100)
+    _clear_job_store(app)
     limit = settings.rate_limit_max_requests
     window = settings.rate_limit_window_seconds
     clock = FakeClock()
@@ -228,16 +233,18 @@ def test_enable_docs_setting_defaults_false(monkeypatch) -> None:
 # --- Stack trace suppression ---
 
 
-def test_unhandled_exception_returns_generic_error():
+def test_unhandled_exception_returns_generic_error() -> None:
     """Unhandled exceptions must return 'Internal server error', never a stack trace."""
     from tests.conftest import _clear_rate_limiter, _fake_decode
 
     with TestClient(app, raise_server_exceptions=False) as c:
         _clear_rate_limiter(app)
+        _clear_job_store(app)
         with (
             patch("app.routes.denoise.decode_to_wav", side_effect=_fake_decode),
-            patch(
-                "app.routes.denoise.job_manager.create_job",
+            patch.object(
+                app.state.job_store,
+                "create",
                 side_effect=RuntimeError("secret database password exposed"),
             ),
         ):

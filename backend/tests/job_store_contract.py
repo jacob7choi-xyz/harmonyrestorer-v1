@@ -116,10 +116,10 @@ class JobStoreContract:
         assert await store.get("next") is not None
 
     async def test_per_ip_cap_rejects_only_that_client(self, make_store: MakeStore) -> None:
-        """A client at its cap is rejected while another client is not."""
+        """A client with a QUEUED and a PROCESSING job is at a cap of 2; another client is not."""
         store = make_store(10, 2, 3600, FakeWallClock())
         await store.create("a1", "client-a", "audio")
-        await store.create("a2", "client-a", "audio")
+        await _processing(store, "a2", "client-a")
 
         with pytest.raises(IPJobCapError):
             await store.create("a3", "client-a", "audio")

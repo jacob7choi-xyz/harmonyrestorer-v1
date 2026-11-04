@@ -1,8 +1,10 @@
-"""Tests for the in-memory JobStore adapter and its builder."""
+"""Tests for the in-memory JobStore adapter, its builder, and the composition root."""
 
 import pytest
+from app.composition import install_adapters
 from app.config import JobStoreBackend
 from app.services.job_store import InMemoryJobStore, build_job_store
+from fastapi import FastAPI
 
 from tests.job_store_contract import JobStoreContract, MakeStore
 
@@ -21,3 +23,12 @@ class TestInMemoryJobStore(JobStoreContract):
 def test_build_job_store_returns_the_in_memory_adapter_for_memory() -> None:
     """The memory backend builds an InMemoryJobStore."""
     assert isinstance(build_job_store(JobStoreBackend.MEMORY), InMemoryJobStore)
+
+
+def test_install_adapters_attaches_a_job_store() -> None:
+    """The composition root puts the configured job store on app.state."""
+    app = FastAPI()
+
+    install_adapters(app)
+
+    assert isinstance(app.state.job_store, InMemoryJobStore)

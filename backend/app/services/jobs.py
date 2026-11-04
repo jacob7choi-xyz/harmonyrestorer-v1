@@ -1,4 +1,4 @@
-"""Job management service."""
+"""Runs the denoiser for jobs and protects their files while they are downloaded."""
 
 import logging
 import threading
@@ -7,9 +7,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from app.config import settings
-from app.schemas import JobStatus, JobStatusEnum
 from app.services.engines import Denoiser, build_denoiser
-from app.services.job_store import RESOURCE_STATUSES, IPJobCapError, JobCapError
+from app.services.job_store import JobStore
 
 logger = logging.getLogger(__name__)
 
@@ -28,182 +27,54 @@ class _DownloadGuard:
 
 
 class JobManager:
-    """Manages denoising jobs and their lifecycle."""
+    """Runs the denoiser for jobs and guards their files during downloads.
+
+    Job records are kept by the configured JobStore (app.state.job_store),
+    not here.
+    """
 
     def __init__(self) -> None:
-        self._jobs: dict[str, JobStatus] = {}
         self._denoiser: Denoiser | None = None
-        self._lock = threading.Lock()
+        # Taken by worker threads building the denoiser
+        self._denoiser_lock = threading.Lock()
         self._downloading: dict[str, _DownloadGuard] = {}
+        # Starlette runs the synchronous unmark_downloading background task in a
+        # worker thread, so the guards are changed from both threads and the loop
+        self._guard_lock = threading.Lock()
 
     def _get_denoiser(self) -> Denoiser:
         """Lazy-load the denoiser singleton based on configured engine."""
-        with self._lock:
+        with self._denoiser_lock:
             if self._denoiser is None:
                 self._denoiser = build_denoiser(settings.denoiser_engine)
         return self._denoiser
 
-    @property
-    def job_counts(self) -> dict[str, int]:
-        """Return counts by status for health reporting."""
-        with self._lock:
-            counts: dict[str, int] = {}
-            for job in self._jobs.values():
-                counts[job.status] = counts.get(job.status, 0) + 1
-            return counts
-
-    def _count_resource_occupying_jobs(self, client_ip: str | None = None) -> int:
-        """Count resource-occupying jobs. Must be called with self._lock held.
-
-        Args:
-            client_ip: If provided, count only jobs from this client IP.
-                       If None, count all resource-occupying jobs globally.
-
-        Returns:
-            Number of jobs in QUEUED, PROCESSING, or COMPLETED status.
-        """
-        return sum(
-            1
-            for job in self._jobs.values()
-            if job.status in RESOURCE_STATUSES and (client_ip is None or job.client_ip == client_ip)
-        )
-
-    def create_job(
-        self, job_id: str, client_ip: str = "", download_stem: str = "audio"
-    ) -> JobStatus:
-        """Register a new processing job, enforcing global and per-IP caps.
-
-        Args:
-            job_id: UUID string for the new job.
-            client_ip: Verified client IP address from the upload request.
-            download_stem: Sanitized stem for the eventual download filename.
-
-        Returns:
-            The newly created JobStatus.
-
-        Raises:
-            JobCapError: If the global resource-occupying job cap is reached.
-            IPJobCapError: If the per-IP resource-occupying job cap is reached.
-        """
-        with self._lock:
-            global_count = self._count_resource_occupying_jobs()
-            if global_count >= settings.max_total_jobs:
-                raise JobCapError(
-                    f"Global job cap reached ({global_count}/{settings.max_total_jobs})"
-                )
-            if client_ip:
-                ip_count = self._count_resource_occupying_jobs(client_ip)
-                if ip_count >= settings.max_jobs_per_ip:
-                    raise IPJobCapError(
-                        f"Per-IP job cap reached for {client_ip}"
-                        f" ({ip_count}/{settings.max_jobs_per_ip})"
-                    )
-            job = JobStatus(
-                job_id=job_id,
-                client_ip=client_ip,
-                download_stem=download_stem,
-                status=JobStatusEnum.QUEUED,
-                progress=0,
-                message="Audio uploaded, queued for processing",
-                created_at=datetime.now(UTC),
-            )
-            self._jobs[job_id] = job
-        return job
-
-    def get_job(self, job_id: str) -> JobStatus | None:
-        """Look up a job by ID."""
-        with self._lock:
-            return self._jobs.get(job_id)
-
-    def mark_downloading(self, job_id: str) -> bool:
-        """Take a download hold on a job. Returns False if the job is gone.
+    def mark_downloading(self, job_id: str) -> None:
+        """Take a download hold on a job.
 
         Holds are reference counted so concurrent downloads of different
-        formats each keep the files alive independently. Acquisition after
-        cleanup has claimed the job is impossible: cleanup removes the job
-        record under the same lock, and this method refuses missing jobs.
+        formats each keep the files alive independently. The caller must have
+        read the job from the store, and found it COMPLETED, without awaiting
+        anything since: cleanup_expired then cannot select the job between
+        that read and this hold.
         """
-        with self._lock:
-            if job_id not in self._jobs:
-                return False
+        with self._guard_lock:
             guard = self._downloading.get(job_id)
             if guard is None:
                 self._downloading[job_id] = _DownloadGuard(count=1, started_at=datetime.now(UTC))
             else:
                 guard.count += 1
                 guard.started_at = datetime.now(UTC)
-            return True
 
     def unmark_downloading(self, job_id: str) -> None:
         """Release one download hold; the guard drops only at zero holds."""
-        with self._lock:
+        with self._guard_lock:
             guard = self._downloading.get(job_id)
             if guard is None:
                 return
             guard.count -= 1
             if guard.count <= 0:
                 del self._downloading[job_id]
-
-    def discard_job(self, job_id: str) -> None:
-        """Remove a job record that was never exposed to any client.
-
-        Rollback for a failed job-creation transaction, not a job outcome:
-        call only before the job_id has been returned in any response.
-        """
-        with self._lock:
-            self._jobs.pop(job_id, None)
-
-    def start_processing(self, job_id: str) -> bool:
-        """Move a job from QUEUED to PROCESSING.
-
-        Returns:
-            True if the job was QUEUED and is now PROCESSING. False if the job
-            is missing or in another state, in which case nothing changes.
-        """
-        with self._lock:
-            job = self._jobs.get(job_id)
-            if job is None or job.status != JobStatusEnum.QUEUED:
-                return False
-            job.status = JobStatusEnum.PROCESSING
-            job.progress = 10
-            job.message = "Denoising audio..."
-            return True
-
-    def complete_job(self, job_id: str, processing_time: float) -> bool:
-        """Move a job from PROCESSING to COMPLETED.
-
-        Returns:
-            True if the job was PROCESSING and is now COMPLETED. False if the
-            job is missing or in another state, in which case nothing changes.
-        """
-        with self._lock:
-            job = self._jobs.get(job_id)
-            if job is None or job.status != JobStatusEnum.PROCESSING:
-                return False
-            job.status = JobStatusEnum.COMPLETED
-            job.progress = 100
-            job.message = "Denoising complete"
-            job.completed_at = datetime.now(UTC)
-            job.download_url = f"/api/v1/download/{job_id}"
-            job.processing_time = processing_time
-            return True
-
-    def fail_job(self, job_id: str) -> bool:
-        """Move a job from PROCESSING to FAILED.
-
-        Returns:
-            True if the job was PROCESSING and is now FAILED. False if the job
-            is missing or in another state, in which case nothing changes.
-        """
-        with self._lock:
-            job = self._jobs.get(job_id)
-            if job is None or job.status != JobStatusEnum.PROCESSING:
-                return False
-            job.status = JobStatusEnum.FAILED
-            job.progress = -1
-            job.message = "Processing failed"
-            job.completed_at = datetime.now(UTC)
-            return True
 
     def run_denoiser(self, job_id: str, input_path: Path) -> float:
         """Denoise *input_path* into the job's output file. Runs in a worker thread.
@@ -237,38 +108,30 @@ class JobManager:
             if intermediate_output is not None:
                 intermediate_output.unlink(missing_ok=True)
 
-    def cleanup_expired(self) -> int:
-        """Remove finished jobs older than TTL and delete their output files.
+    async def cleanup_expired(self, store: JobStore) -> int:
+        """Remove finished jobs older than the TTL and delete their output files.
 
         First evicts stale download markers left by disconnected clients, then
-        removes jobs in COMPLETED or FAILED status that have exceeded the TTL.
-        Skips jobs actively being downloaded to prevent races with concurrent
-        downloads and background tasks.
+        removes jobs that store.expired_ids() lists, except jobs being
+        downloaded.
+
+        Args:
+            store: The job store holding the records.
+
+        Returns:
+            The number of jobs removed.
         """
-        now = datetime.now(UTC)
-        with self._lock:
-            # Evict stale download markers left by disconnected clients
-            stale_markers = [
-                job_id
-                for job_id, guard in self._downloading.items()
-                if (now - guard.started_at).total_seconds() > settings.download_ttl_seconds
-            ]
-            for job_id in stale_markers:
-                del self._downloading[job_id]
-                logger.warning("Evicted stale download marker for job %s", job_id)
+        self._evict_stale_download_markers()
+        # The download guard holds only while no await between reading the
+        # guards and deleting the records lets a download start: true for the
+        # in-memory store, whose methods never await. A networked JobStore must
+        # not go live before FileStore replaces the guard (ADR 010).
+        candidates = await store.expired_ids()
+        with self._guard_lock:
+            expired_ids = [job_id for job_id in candidates if job_id not in self._downloading]
+        for job_id in expired_ids:
+            await store.delete(job_id)
 
-            expired_ids = [
-                job_id
-                for job_id, job in self._jobs.items()
-                if job_id not in self._downloading
-                and job.status in (JobStatusEnum.COMPLETED, JobStatusEnum.FAILED)
-                and job.completed_at
-                and (now - job.completed_at).total_seconds() > settings.job_ttl_seconds
-            ]
-            for job_id in expired_ids:
-                del self._jobs[job_id]
-
-        # Delete files outside the lock to avoid blocking other operations.
         # The glob also removes any cached download-format conversions.
         for job_id in expired_ids:
             for output_file in settings.processed_dir.glob(f"{job_id}_denoised.*"):
@@ -278,6 +141,19 @@ class JobManager:
             logger.info("Cleaned up %d expired job(s)", len(expired_ids))
 
         return len(expired_ids)
+
+    def _evict_stale_download_markers(self) -> None:
+        """Drop download holds older than DOWNLOAD_TTL_SECONDS, left by disconnected clients."""
+        now = datetime.now(UTC)
+        with self._guard_lock:
+            stale_markers = [
+                job_id
+                for job_id, guard in self._downloading.items()
+                if (now - guard.started_at).total_seconds() > settings.download_ttl_seconds
+            ]
+            for job_id in stale_markers:
+                del self._downloading[job_id]
+                logger.warning("Evicted stale download marker for job %s", job_id)
 
 
 job_manager = JobManager()

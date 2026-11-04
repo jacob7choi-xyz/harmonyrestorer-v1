@@ -7,7 +7,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from app.config import DenoiserEngine, settings
-from app.services.jobs import job_manager
+from app.services.job_store import JobStore
 
 router = APIRouter(tags=["health"])
 
@@ -50,11 +50,12 @@ async def health_check(request: Request) -> JSONResponse:
         checks["opgan_checkpoint_at_startup"] = {"ok": checkpoint_ok}
         all_ok = all_ok and checkpoint_ok
 
+    store: JobStore = request.app.state.job_store
     status = "healthy" if all_ok else "degraded"
     payload = {
         "status": status,
         "timestamp": datetime.now(UTC).isoformat(),
         "checks": checks,
-        "jobs": job_manager.job_counts,
+        "jobs": await store.counts(),
     }
     return JSONResponse(content=payload, status_code=200 if all_ok else 503)

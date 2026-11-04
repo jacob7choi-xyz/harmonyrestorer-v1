@@ -27,7 +27,8 @@ from app.services.audio_decode import (
     demuxer_for,
 )
 from app.services.engines import input_sample_rate, peak_output_bytes
-from app.services.jobs import IPJobCapError, JobCapError, job_manager
+from app.services.job_store import IPJobCapError, JobCapError, JobStore
+from app.services.jobs import job_manager
 from app.services.transcode import (
     DOWNLOAD_FORMATS,
     TranscodeBusyError,
@@ -59,7 +60,9 @@ def _observe_inference_task(task: asyncio.Task[None]) -> None:
         logger.error("Inference lifecycle task failed unexpectedly", exc_info=exc)
 
 
-async def _run_inference(job_id: str, input_path: Path, reservation_bytes: int) -> None:
+async def _run_inference(
+    store: JobStore, job_id: str, input_path: Path, reservation_bytes: int
+) -> None:
     """Run one inference; release its slot and byte reservation on completion.
 
     Both resources are owned by this task, not the HTTP handler: a
@@ -69,13 +72,13 @@ async def _run_inference(job_id: str, input_path: Path, reservation_bytes: int) 
     subsequent budget scans see the persisted truth.
     """
     try:
-        await _process_job(job_id, input_path)
+        await _process_job(store, job_id, input_path)
     finally:
         admission.release()
         artifact_budget.release(reservation_bytes)
 
 
-async def _process_job(job_id: str, input_path: Path) -> None:
+async def _process_job(store: JobStore, job_id: str, input_path: Path) -> None:
     """Take a job from QUEUED to COMPLETED or FAILED, denoising in a worker thread.
 
     Job status changes happen here, on the event loop; the worker thread
@@ -91,7 +94,7 @@ async def _process_job(job_id: str, input_path: Path) -> None:
     status written here at that point could contradict the files the
     thread has yet to write or remove.
     """
-    if not job_manager.start_processing(job_id):
+    if not await store.start(job_id):
         logger.error("Job %s was not queued when processing started", job_id)
         input_path.unlink(missing_ok=True)
         return
@@ -99,9 +102,9 @@ async def _process_job(job_id: str, input_path: Path) -> None:
         processing_time = await run_in_threadpool(job_manager.run_denoiser, job_id, input_path)
     except Exception as e:
         logger.error("Job %s failed: %s", job_id, e, exc_info=True)
-        job_manager.fail_job(job_id)
+        await store.fail(job_id)
         return
-    if not job_manager.complete_job(job_id, processing_time):
+    if not await store.complete(job_id, processing_time, f"{router.prefix}/download/{job_id}"):
         logger.error("Job %s left PROCESSING before it completed; removing its output", job_id)
         (settings.processed_dir / f"{job_id}_denoised.wav").unlink(missing_ok=True)
         return
@@ -334,8 +337,9 @@ async def denoise_audio(
         finally:
             raw_path.unlink(missing_ok=True)
 
+        store: JobStore = request.app.state.job_store
         try:
-            job_manager.create_job(
+            await store.create(
                 job_id,
                 client_ip=client_ip,
                 download_stem=_sanitize_download_stem(file.filename),
@@ -354,12 +358,14 @@ async def denoise_audio(
             ) from exc
 
         try:
-            task = asyncio.create_task(_run_inference(job_id, input_path, upload_reservation))
+            task = asyncio.create_task(
+                _run_inference(store, job_id, input_path, upload_reservation)
+            )
         except Exception as err:
             # Transaction rollback at the ownership-transfer boundary: the
             # client never received this job_id, so no record or file may
             # survive; the outer finally returns the admission slot
-            job_manager.discard_job(job_id)
+            await store.delete(job_id)
             input_path.unlink(missing_ok=True)
             logger.exception("Failed to start inference lifecycle for %s", job_id)
             raise HTTPException(status_code=500, detail="Failed to start processing") from err
@@ -375,7 +381,7 @@ async def denoise_audio(
     # Shield: a cancelled request must not cancel the inference lifecycle.
     await asyncio.shield(task)
 
-    job = job_manager.get_job(job_id)
+    job = await store.get(job_id)
     if job is None:
         # Reachable only if TTL cleanup raced within milliseconds of completion
         return DenoiseUploadResponse(
@@ -387,17 +393,18 @@ async def denoise_audio(
 
 
 @router.get("/status/{job_id}", response_model=JobStatus)
-async def get_job_status(job_id: str) -> JobStatus:
+async def get_job_status(job_id: str, request: Request) -> JobStatus:
     """Get processing job status."""
     _validate_job_id(job_id)
-    job = job_manager.get_job(job_id)
+    store: JobStore = request.app.state.job_store
+    job = await store.get(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
 
 
 @router.get("/download/{job_id}")
-async def download_audio(job_id: str, format: str = Query("wav")) -> FileResponse:
+async def download_audio(job_id: str, request: Request, format: str = Query("wav")) -> FileResponse:
     """Download restored audio in the requested format.
 
     The restoration is always rendered at 16kHz mono; the format choice
@@ -412,16 +419,17 @@ async def download_audio(job_id: str, format: str = Query("wav")) -> FileRespons
             detail=f"Unsupported format. Choose one of: {', '.join(sorted(DOWNLOAD_FORMATS))}",
         )
 
-    job = job_manager.get_job(job_id)
+    store: JobStore = request.app.state.job_store
+    job = await store.get(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job not found")
 
     if job.status != JobStatusEnum.COMPLETED:
         raise HTTPException(status_code=400, detail="Processing not completed")
 
-    # Guard against cleanup deleting the file mid-transfer
-    if not job_manager.mark_downloading(job_id):
-        raise HTTPException(status_code=404, detail="Job not found")
+    # Guard against cleanup deleting the file mid-transfer. Nothing is awaited
+    # between reading the job above and taking the hold (see mark_downloading).
+    job_manager.mark_downloading(job_id)
 
     try:
         output_path = settings.processed_dir / f"{job_id}_denoised.wav"

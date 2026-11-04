@@ -76,9 +76,10 @@ backend/app/
 │   ├── wav_io.py          # Mono read and atomic WAV write shared by both services
 │   ├── admission.py       # Fail-fast inference admission (one at a time)
 │   ├── rate_limit.py      # RateLimiter contract, in-memory adapter, builder
+│   ├── job_store.py       # JobStore contract (job records, caps), in-memory adapter, builder
 │   ├── transcode.py       # Download format conversion, own admission slot
 │   ├── artifacts.py       # Atomic byte budget for the memory-backed filesystem
-│   └── jobs.py            # JobManager; processing runs inside the upload request
+│   └── jobs.py            # Runs the denoiser in a worker thread; download guard and cleanup
 
 frontend/src/
 ├── main.tsx             # Vite entry point
