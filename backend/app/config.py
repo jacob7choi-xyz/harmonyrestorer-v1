@@ -26,6 +26,12 @@ class RateLimiterBackend(StrEnum):
     MEMORY = "memory"
 
 
+class JobStoreBackend(StrEnum):
+    """Where job records are kept, selected with JOB_STORE."""
+
+    MEMORY = "memory"
+
+
 # UVR model names checked to run here. UVR-DeNoise ran end to end in images built from
 # this Dockerfile. Names of two other audio-separator types are kept out on evidence: the
 # MDX architecture module failed to import in those images (torchvision's compiled
@@ -138,6 +144,15 @@ class Settings:
         self.download_ttl_seconds = int(os.getenv("DOWNLOAD_TTL_SECONDS", "300"))
         if self.download_ttl_seconds < 1:
             raise ValueError("DOWNLOAD_TTL_SECONDS must be at least 1")
+        store = os.getenv("JOB_STORE", JobStoreBackend.MEMORY)
+        try:
+            # Exact match on the value; case is not normalized
+            self.job_store = JobStoreBackend(store)
+        except ValueError as e:
+            raise ValueError(
+                f"Invalid JOB_STORE={store!r}, "
+                f"must be one of {sorted(member.value for member in JobStoreBackend)}"
+            ) from e
         # Process-local bound on concurrently executing inferences; the
         # deployment runs one application worker per instance, so this is
         # also the instance-wide bound.

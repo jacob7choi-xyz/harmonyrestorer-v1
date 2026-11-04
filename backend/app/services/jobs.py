@@ -9,21 +9,9 @@ from pathlib import Path
 from app.config import settings
 from app.schemas import JobStatus, JobStatusEnum
 from app.services.engines import Denoiser, build_denoiser
+from app.services.job_store import RESOURCE_STATUSES, IPJobCapError, JobCapError
 
 logger = logging.getLogger(__name__)
-
-
-class JobCapError(Exception):
-    """Raised when the global resource-occupying job cap is reached."""
-
-
-class IPJobCapError(Exception):
-    """Raised when the per-IP resource-occupying job cap is reached."""
-
-
-_RESOURCE_STATUSES: frozenset[JobStatusEnum] = frozenset(
-    {JobStatusEnum.QUEUED, JobStatusEnum.PROCESSING, JobStatusEnum.COMPLETED}
-)
 
 
 @dataclass
@@ -77,8 +65,7 @@ class JobManager:
         return sum(
             1
             for job in self._jobs.values()
-            if job.status in _RESOURCE_STATUSES
-            and (client_ip is None or job.client_ip == client_ip)
+            if job.status in RESOURCE_STATUSES and (client_ip is None or job.client_ip == client_ip)
         )
 
     def create_job(

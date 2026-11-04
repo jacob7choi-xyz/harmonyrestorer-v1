@@ -1,7 +1,7 @@
 """Tests for Settings validation: every env var that has a validation guard."""
 
 import pytest
-from app.config import DenoiserEngine, RateLimiterBackend, Settings
+from app.config import DenoiserEngine, JobStoreBackend, RateLimiterBackend, Settings
 
 
 def _base_dirs(monkeypatch, tmp_path) -> None:
@@ -193,6 +193,23 @@ def test_rate_limiter_defaults_to_memory(monkeypatch, tmp_path) -> None:
     _base_dirs(monkeypatch, tmp_path)
     monkeypatch.delenv("RATE_LIMITER", raising=False)
     assert Settings().rate_limiter is RateLimiterBackend.MEMORY
+
+
+# --- JOB_STORE ---
+
+
+def test_job_store_rejects_unknown_value(monkeypatch) -> None:
+    """A JOB_STORE other than memory raises ValueError when settings load."""
+    monkeypatch.setenv("JOB_STORE", "dynamodb")
+    with pytest.raises(ValueError, match="Invalid JOB_STORE"):
+        Settings()
+
+
+def test_job_store_defaults_to_memory(monkeypatch, tmp_path) -> None:
+    """With JOB_STORE unset, the backend is memory."""
+    _base_dirs(monkeypatch, tmp_path)
+    monkeypatch.delenv("JOB_STORE", raising=False)
+    assert Settings().job_store is JobStoreBackend.MEMORY
 
 
 # --- UVR_MODEL_NAME ---
