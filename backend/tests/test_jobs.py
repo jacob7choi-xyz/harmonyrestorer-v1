@@ -159,47 +159,65 @@ def test_download_guard_refcount_protects_concurrent_downloads() -> None:
     assert mgr.mark_downloading("old") is False
 
 
-def test_process_failure_removes_intermediate_output(tmp_path, monkeypatch) -> None:
-    """A failed final rename marks the job FAILED and leaves no orphan file.
-
-    The intermediate output is not matched by the cleanup glob, so it must
-    never survive process().
-    """
-    from unittest.mock import MagicMock
-
-    from app.config import settings
-
-    mgr = JobManager()
-    mgr.create_job("orphan-test")
-
-    input_file = tmp_path / "orphan-test.wav"
+def test_run_denoiser_moves_output_into_place(tmp_path, monkeypatch) -> None:
+    """On success the output lands at the job's path; the input and intermediate are gone."""
+    processed = tmp_path / "processed"
+    processed.mkdir()
+    monkeypatch.setattr(settings, "processed_dir", processed)
+    input_file = tmp_path / "input.wav"
     input_file.write_bytes(b"RIFF" + b"\x00" * 16)
-
-    intermediate = settings.processed_dir / "orphan-test_opgan.wav"
-    denoiser = MagicMock()
+    intermediate = processed / "job_opgan.wav"
 
     def fake_denoise(path):  # type: ignore[no-untyped-def]
         intermediate.write_bytes(b"RIFF" + b"\x00" * 16)
         return intermediate
 
-    denoiser.denoise.side_effect = fake_denoise
-    mgr._denoiser = denoiser
+    mgr = JobManager()
+    mgr.create_job("job")
+    mgr._denoiser = MagicMock()
+    mgr._denoiser.denoise.side_effect = fake_denoise
 
+    processing_time = mgr.run_denoiser("job", input_file)
+
+    assert processing_time >= 0
+    assert (processed / "job_denoised.wav").exists()
+    assert not intermediate.exists()
+    assert not input_file.exists()
+
+
+def test_run_denoiser_failure_removes_intermediate_output(tmp_path, monkeypatch) -> None:
+    """A failed final rename raises and leaves no orphan file and no status change.
+
+    The intermediate output is not matched by the cleanup glob, so it must
+    never survive run_denoiser(). The worker leaves the job record to its
+    caller, so the job is still QUEUED afterwards.
+    """
+    processed = tmp_path / "processed"
+    processed.mkdir()
+    monkeypatch.setattr(settings, "processed_dir", processed)
+    input_file = tmp_path / "input.wav"
+    input_file.write_bytes(b"RIFF" + b"\x00" * 16)
+    intermediate = processed / "orphan-test_opgan.wav"
+
+    def fake_denoise(path):  # type: ignore[no-untyped-def]
+        intermediate.write_bytes(b"RIFF" + b"\x00" * 16)
+        return intermediate
+
+    mgr = JobManager()
+    mgr.create_job("orphan-test")
+    mgr._denoiser = MagicMock()
+    mgr._denoiser.denoise.side_effect = fake_denoise
     # Force the final rename to fail: the destination is a directory
-    final_path = settings.processed_dir / "orphan-test_denoised.wav"
-    final_path.mkdir()
-    try:
-        mgr.process("orphan-test", input_file)
+    (processed / "orphan-test_denoised.wav").mkdir()
 
-        job = mgr.get_job("orphan-test")
-        assert job is not None
-        assert job.status == JobStatusEnum.FAILED
-        assert not intermediate.exists()
-        assert not input_file.exists()
-    finally:
-        final_path.rmdir()
-        intermediate.unlink(missing_ok=True)
-        mgr._denoiser = None
+    with pytest.raises(OSError):
+        mgr.run_denoiser("orphan-test", input_file)
+
+    assert not intermediate.exists()
+    assert not input_file.exists()
+    job = mgr.get_job("orphan-test")
+    assert job is not None
+    assert job.status == JobStatusEnum.QUEUED
 
 
 def test_cleanup_deletes_all_cached_format_variants() -> None:
@@ -238,42 +256,95 @@ def test_job_counts_empty():
     assert mgr.job_counts == {}
 
 
-# --- process() error paths ---
+# --- status changes ---
 
 
-def test_process_sets_failed_on_denoiser_error(tmp_path):
-    """When the denoiser raises, job status should be FAILED."""
+def test_start_processing_moves_a_queued_job_to_processing() -> None:
+    """A QUEUED job moves to PROCESSING, once."""
     mgr = JobManager()
-    mock_denoiser = MagicMock()
-    mock_denoiser.denoise.side_effect = RuntimeError("model crashed")
-    mgr._denoiser = mock_denoiser
+    mgr.create_job("job")
 
-    input_file = tmp_path / "input.wav"
-    input_file.write_bytes(b"fake audio")
+    assert mgr.start_processing("job") is True
+    assert mgr.start_processing("job") is False
 
-    mgr.create_job("fail-job")
-    mgr.process("fail-job", input_file)
+    job = mgr.get_job("job")
+    assert job is not None
+    assert job.status == JobStatusEnum.PROCESSING
+    assert job.progress == 10
 
-    job = mgr.get_job("fail-job")
+
+def test_start_processing_refuses_a_missing_job() -> None:
+    """A job that does not exist is not created by starting it."""
+    mgr = JobManager()
+
+    assert mgr.start_processing("missing") is False
+    assert mgr.get_job("missing") is None
+
+
+def test_complete_job_moves_a_processing_job_to_completed() -> None:
+    """A PROCESSING job moves to COMPLETED with its download URL and timing."""
+    mgr = JobManager()
+    mgr.create_job("job")
+    mgr.start_processing("job")
+
+    assert mgr.complete_job("job", 1.5) is True
+
+    job = mgr.get_job("job")
+    assert job is not None
+    assert job.status == JobStatusEnum.COMPLETED
+    assert job.progress == 100
+    assert job.download_url == "/api/v1/download/job"
+    assert job.processing_time == 1.5
+    assert job.completed_at is not None
+
+
+def test_complete_job_refuses_a_job_that_is_not_processing() -> None:
+    """A QUEUED job cannot skip PROCESSING, and a FAILED job cannot become COMPLETED."""
+    mgr = JobManager()
+    mgr.create_job("queued")
+    mgr.create_job("failed")
+    mgr.start_processing("failed")
+    mgr.fail_job("failed")
+
+    assert mgr.complete_job("queued", 1.0) is False
+    assert mgr.complete_job("failed", 1.0) is False
+
+    queued = mgr.get_job("queued")
+    failed = mgr.get_job("failed")
+    assert queued is not None and queued.status == JobStatusEnum.QUEUED
+    assert failed is not None and failed.status == JobStatusEnum.FAILED
+
+
+def test_fail_job_moves_a_processing_job_to_failed() -> None:
+    """A PROCESSING job moves to FAILED with progress -1."""
+    mgr = JobManager()
+    mgr.create_job("job")
+    mgr.start_processing("job")
+
+    assert mgr.fail_job("job") is True
+
+    job = mgr.get_job("job")
     assert job is not None
     assert job.status == JobStatusEnum.FAILED
     assert job.progress == -1
+    assert job.completed_at is not None
 
 
-def test_process_handles_vanished_job(tmp_path) -> None:
-    """If a job is removed before processing starts, process() exits cleanly
-    and still removes the input file."""
+def test_fail_job_refuses_a_job_that_is_not_processing() -> None:
+    """A COMPLETED job keeps its result, and a QUEUED job is not failed before it starts."""
     mgr = JobManager()
-    input_file = tmp_path / "input.wav"
-    input_file.write_bytes(b"fake audio")
+    mgr.create_job("done")
+    mgr.start_processing("done")
+    mgr.complete_job("done", 1.0)
+    mgr.create_job("queued")
 
-    mgr.create_job("vanish-job")
-    # Simulate cleanup removing the job before process runs
-    del mgr._jobs["vanish-job"]
+    assert mgr.fail_job("done") is False
+    assert mgr.fail_job("queued") is False
 
-    # Should not raise
-    mgr.process("vanish-job", input_file)
-    assert not input_file.exists()
+    done = mgr.get_job("done")
+    queued = mgr.get_job("queued")
+    assert done is not None and done.status == JobStatusEnum.COMPLETED
+    assert queued is not None and queued.status == JobStatusEnum.QUEUED
 
 
 # --- download guard ---

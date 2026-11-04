@@ -166,65 +166,85 @@ class JobManager:
         with self._lock:
             self._jobs.pop(job_id, None)
 
-    def process(self, job_id: str, input_path: Path) -> None:
-        """Run denoising to completion inside the upload request lifecycle.
+    def start_processing(self, job_id: str) -> bool:
+        """Move a job from QUEUED to PROCESSING.
 
-        Called from the inference lifecycle task via a worker thread.
-        Converts any processing failure into a FAILED job status instead of
-        raising: this is an intentional, documented fail-open boundary so
-        one bad file can never take down the pipeline, and the caller reads
-        the outcome from the job record.
+        Returns:
+            True if the job was QUEUED and is now PROCESSING. False if the job
+            is missing or in another state, in which case nothing changes.
+        """
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None or job.status != JobStatusEnum.QUEUED:
+                return False
+            job.status = JobStatusEnum.PROCESSING
+            job.progress = 10
+            job.message = "Denoising audio..."
+            return True
+
+    def complete_job(self, job_id: str, processing_time: float) -> bool:
+        """Move a job from PROCESSING to COMPLETED.
+
+        Returns:
+            True if the job was PROCESSING and is now COMPLETED. False if the
+            job is missing or in another state, in which case nothing changes.
+        """
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None or job.status != JobStatusEnum.PROCESSING:
+                return False
+            job.status = JobStatusEnum.COMPLETED
+            job.progress = 100
+            job.message = "Denoising complete"
+            job.completed_at = datetime.now(UTC)
+            job.download_url = f"/api/v1/download/{job_id}"
+            job.processing_time = processing_time
+            return True
+
+    def fail_job(self, job_id: str) -> bool:
+        """Move a job from PROCESSING to FAILED.
+
+        Returns:
+            True if the job was PROCESSING and is now FAILED. False if the job
+            is missing or in another state, in which case nothing changes.
+        """
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if job is None or job.status != JobStatusEnum.PROCESSING:
+                return False
+            job.status = JobStatusEnum.FAILED
+            job.progress = -1
+            job.message = "Processing failed"
+            job.completed_at = datetime.now(UTC)
+            return True
+
+    def run_denoiser(self, job_id: str, input_path: Path) -> float:
+        """Denoise *input_path* into the job's output file. Runs in a worker thread.
+
+        Reads and changes no job record; the caller records the outcome. The
+        input file and any intermediate output are removed whether or not
+        this succeeds.
+
+        Args:
+            job_id: The job whose output file is written.
+            input_path: The decoded WAV to denoise.
+
+        Returns:
+            Seconds from the start of this call until the output was produced.
+
+        Raises:
+            Whatever the denoiser or the final rename raises.
         """
         start_time = datetime.now(UTC)
         intermediate_output: Path | None = None
-        with self._lock:
-            job = self._jobs.get(job_id)
-            if job is None:
-                logger.error("Job %s vanished before processing started", job_id)
-                input_path.unlink(missing_ok=True)
-                return
-
         try:
-            with self._lock:
-                if job_id not in self._jobs:
-                    logger.error("Job %s removed during processing", job_id)
-                    return
-                job.status = JobStatusEnum.PROCESSING
-                job.progress = 10
-                job.message = "Denoising audio..."
-
-            denoiser = self._get_denoiser()
-            output_path = denoiser.denoise(input_path)
-            intermediate_output = Path(output_path)
-
-            final_path = settings.processed_dir / f"{job_id}_denoised.wav"
+            intermediate_output = Path(self._get_denoiser().denoise(input_path))
             processing_time = (datetime.now(UTC) - start_time).total_seconds()
-            with self._lock:
-                if job_id not in self._jobs:
-                    logger.error("Job %s removed during processing", job_id)
-                    Path(output_path).unlink(missing_ok=True)
-                    return
-                Path(output_path).replace(final_path)
-                job.status = JobStatusEnum.COMPLETED
-                job.progress = 100
-                job.message = "Denoising complete"
-                job.completed_at = datetime.now(UTC)
-                job.download_url = f"/api/v1/download/{job_id}"
-                job.processing_time = processing_time
-
-            logger.info("Completed job %s in %.1fs", job_id, processing_time)
-
-        except Exception as e:
-            logger.error("Job %s failed: %s", job_id, e, exc_info=True)
-            with self._lock:
-                if job_id in self._jobs:
-                    job.status = JobStatusEnum.FAILED
-                    job.progress = -1
-                    job.message = "Processing failed"
-                    job.completed_at = datetime.now(UTC)
+            intermediate_output.replace(settings.processed_dir / f"{job_id}_denoised.wav")
+            return processing_time
         finally:
             input_path.unlink(missing_ok=True)
-            # Invariant: the intermediate output never survives process().
+            # Invariant: the intermediate output never survives this call.
             # After a successful rename this path no longer exists; after
             # any failure it must not linger (cleanup only globs _denoised.*)
             if intermediate_output is not None:

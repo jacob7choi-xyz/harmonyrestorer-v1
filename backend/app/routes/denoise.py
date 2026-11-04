@@ -53,9 +53,9 @@ def _observe_inference_task(task: asyncio.Task[None]) -> None:
         return
     exc = task.exception()
     if exc is not None:
-        # process() converts processing errors to a FAILED job internally,
-        # so an exception escaping the lifecycle means the pipeline itself
-        # is broken, not just one job.
+        # _process_job converts worker errors to a FAILED job, so an
+        # exception escaping the lifecycle means the pipeline itself is
+        # broken, not just one job.
         logger.error("Inference lifecycle task failed unexpectedly", exc_info=exc)
 
 
@@ -65,14 +65,47 @@ async def _run_inference(job_id: str, input_path: Path, reservation_bytes: int) 
     Both resources are owned by this task, not the HTTP handler: a
     cancelled request must not free inference capacity or budget headroom
     while the worker thread is still executing. The reservation is
-    released after process() has materialized or removed its files, so
+    released after the worker has materialized or removed its files, so
     subsequent budget scans see the persisted truth.
     """
     try:
-        await run_in_threadpool(job_manager.process, job_id, input_path)
+        await _process_job(job_id, input_path)
     finally:
         admission.release()
         artifact_budget.release(reservation_bytes)
+
+
+async def _process_job(job_id: str, input_path: Path) -> None:
+    """Take a job from QUEUED to COMPLETED or FAILED, denoising in a worker thread.
+
+    Job status changes happen here, on the event loop; the worker thread
+    only denoises and moves files. Any exception from the worker becomes a
+    FAILED job instead of propagating: this is an intentional, documented
+    fail-open boundary so one bad file can never take down the pipeline,
+    and the upload handler reads the outcome from the job record.
+    Exceptions from the status changes themselves are not caught and reach
+    _observe_inference_task.
+
+    If this task is cancelled while the worker runs, the thread keeps
+    running and no status is recorded, so the job stays PROCESSING. A
+    status written here at that point could contradict the files the
+    thread has yet to write or remove.
+    """
+    if not job_manager.start_processing(job_id):
+        logger.error("Job %s was not queued when processing started", job_id)
+        input_path.unlink(missing_ok=True)
+        return
+    try:
+        processing_time = await run_in_threadpool(job_manager.run_denoiser, job_id, input_path)
+    except Exception as e:
+        logger.error("Job %s failed: %s", job_id, e, exc_info=True)
+        job_manager.fail_job(job_id)
+        return
+    if not job_manager.complete_job(job_id, processing_time):
+        logger.error("Job %s left PROCESSING before it completed; removing its output", job_id)
+        (settings.processed_dir / f"{job_id}_denoised.wav").unlink(missing_ok=True)
+        return
+    logger.info("Completed job %s in %.1fs", job_id, processing_time)
 
 
 _MAX_MB = settings.max_upload_bytes / (1024 * 1024)

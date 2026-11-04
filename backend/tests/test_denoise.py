@@ -447,13 +447,13 @@ def test_upload_processes_exactly_once(client, mock_denoiser, monkeypatch) -> No
     from app.services.jobs import job_manager
 
     calls: list[str] = []
-    original_process = job_manager.process
+    original_run_denoiser = job_manager.run_denoiser
 
-    def counting_process(job_id, input_path) -> None:
+    def counting_run_denoiser(job_id, input_path) -> float:
         calls.append(job_id)
-        original_process(job_id, input_path)
+        return original_run_denoiser(job_id, input_path)
 
-    monkeypatch.setattr(job_manager, "process", counting_process)
+    monkeypatch.setattr(job_manager, "run_denoiser", counting_run_denoiser)
 
     r = client.post(
         "/api/v1/denoise",

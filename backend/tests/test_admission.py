@@ -1,13 +1,25 @@
-"""Tests for inference admission control and lifecycle-task slot ownership."""
+"""Tests for inference admission control, lifecycle-task slot ownership, and job status."""
 
 import asyncio
 import threading
+from collections.abc import Iterator
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
+from app.config import settings
 from app.routes import denoise
+from app.schemas import JobStatusEnum
 from app.services.admission import InferenceAdmission
 from app.services.jobs import job_manager
+
+
+@pytest.fixture()
+def clean_jobs() -> Iterator[None]:
+    """Start and end with no job records in the shared job manager."""
+    job_manager._jobs.clear()
+    yield
+    job_manager._jobs.clear()
 
 
 class TestInferenceAdmission:
@@ -38,16 +50,21 @@ class _BlockingFakeInference:
     def __init__(self) -> None:
         self.started = threading.Event()
         self.finish = threading.Event()
+        self.done = threading.Event()
 
-    def __call__(self, job_id: str, input_path: Path) -> None:
+    def __call__(self, job_id: str, input_path: Path) -> float:
         self.started.set()
-        assert self.finish.wait(timeout=10), "test never released fake inference"
+        try:
+            assert self.finish.wait(timeout=10), "test never released fake inference"
+        finally:
+            self.done.set()
+        return 0.0
 
 
 class TestLifecycleOwnership:
     """Slot ownership belongs to the lifecycle task, not the HTTP handler."""
 
-    async def test_route_cancellation_does_not_release_slot(self, monkeypatch) -> None:
+    async def test_route_cancellation_does_not_release_slot(self, monkeypatch, clean_jobs) -> None:
         """Cancel A mid-inference: B stays rejected until A truly completes, then C admits.
 
         This is the invariant that makes orphaned work bounded: a cancelled
@@ -55,7 +72,8 @@ class TestLifecycleOwnership:
         still executing.
         """
         fake = _BlockingFakeInference()
-        monkeypatch.setattr(job_manager, "process", fake)
+        monkeypatch.setattr(job_manager, "run_denoiser", fake)
+        job_manager.create_job("job-a")
 
         assert denoise.admission.try_acquire()
         task = asyncio.create_task(denoise._run_inference("job-a", Path("/tmp/none"), 0))
@@ -87,14 +105,15 @@ class TestLifecycleOwnership:
         assert denoise.admission.try_acquire() is True
         denoise.admission.release()
 
-    async def test_inference_does_not_block_event_loop(self, monkeypatch) -> None:
+    async def test_inference_does_not_block_event_loop(self, monkeypatch, clean_jobs) -> None:
         """The event loop stays responsive while a fake inference occupies the thread.
 
         This proves loop liveness only; CPU-headroom behavior under real
         inference is verified in the live deployment characterization.
         """
         fake = _BlockingFakeInference()
-        monkeypatch.setattr(job_manager, "process", fake)
+        monkeypatch.setattr(job_manager, "run_denoiser", fake)
+        job_manager.create_job("job-a")
 
         assert denoise.admission.try_acquire()
         task = asyncio.create_task(denoise._run_inference("job-a", Path("/tmp/none"), 0))
@@ -113,12 +132,16 @@ class TestLifecycleOwnership:
         denoise.admission.release()
 
     async def test_lifecycle_releases_slot_on_processing_exception(self, monkeypatch) -> None:
-        """An exception escaping process() still releases the slot via finally."""
+        """An exception escaping the lifecycle still releases the slot via finally.
 
-        def exploding(job_id: str, input_path: Path) -> None:
+        Worker errors become a FAILED job, so the escaping exception here comes
+        from a status change, which the lifecycle does not catch.
+        """
+
+        def exploding(job_id: str) -> bool:
             raise RuntimeError("lifecycle escape")
 
-        monkeypatch.setattr(job_manager, "process", exploding)
+        monkeypatch.setattr(job_manager, "start_processing", exploding)
 
         assert denoise.admission.try_acquire()
         task = asyncio.create_task(denoise._run_inference("job-x", Path("/tmp/none"), 0))
@@ -131,3 +154,67 @@ class TestLifecycleOwnership:
         assert denoise.admission.try_acquire() is True
         denoise.admission.release()
         assert task not in denoise._inference_tasks
+
+
+class TestLifecycleStatus:
+    """The lifecycle, not the worker thread, records each job's status."""
+
+    async def test_worker_failure_marks_job_failed(self, tmp_path, monkeypatch, clean_jobs) -> None:
+        """A denoiser error becomes a FAILED job, with no output file and no input left."""
+        monkeypatch.setattr(settings, "processed_dir", tmp_path)
+        denoiser = MagicMock()
+        denoiser.denoise.side_effect = RuntimeError("model crashed")
+        monkeypatch.setattr(job_manager, "_denoiser", denoiser)
+        input_file = tmp_path / "input.wav"
+        input_file.write_bytes(b"fake audio")
+        job_manager.create_job("fail-job")
+
+        await denoise._process_job("fail-job", input_file)
+
+        job = job_manager.get_job("fail-job")
+        assert job is not None
+        assert job.status == JobStatusEnum.FAILED
+        assert job.progress == -1
+        assert job.download_url is None
+        assert not (tmp_path / "fail-job_denoised.wav").exists()
+        assert not input_file.exists()
+
+    async def test_missing_job_removes_input_without_denoising(
+        self, tmp_path, monkeypatch, clean_jobs
+    ) -> None:
+        """With no QUEUED record, the input is removed and the denoiser never runs."""
+        denoiser = MagicMock()
+        monkeypatch.setattr(job_manager, "_denoiser", denoiser)
+        input_file = tmp_path / "input.wav"
+        input_file.write_bytes(b"fake audio")
+
+        await denoise._process_job("vanish-job", input_file)
+
+        assert not input_file.exists()
+        denoiser.denoise.assert_not_called()
+        assert job_manager.get_job("vanish-job") is None
+
+    async def test_cancelled_lifecycle_records_no_status(self, monkeypatch, clean_jobs) -> None:
+        """Cancelling the lifecycle mid-worker leaves the job PROCESSING.
+
+        The worker thread cannot be stopped and keeps going after the
+        cancellation, so a status written at that point could contradict the
+        files it has yet to write or remove.
+        """
+        fake = _BlockingFakeInference()
+        monkeypatch.setattr(job_manager, "run_denoiser", fake)
+        job_manager.create_job("job-c")
+        task = asyncio.create_task(denoise._process_job("job-c", Path("/tmp/none")))
+        try:
+            await asyncio.to_thread(fake.started.wait, 5)
+
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+
+            job = job_manager.get_job("job-c")
+            assert job is not None
+            assert job.status == JobStatusEnum.PROCESSING
+        finally:
+            fake.finish.set()
+            await asyncio.to_thread(fake.done.wait, 5)
