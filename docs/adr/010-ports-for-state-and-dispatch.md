@@ -119,6 +119,15 @@ Inference admission, the artifact byte budget, the transcode slot, the loaded mo
 
 Each step is its own plan and commits, with its contract tests in the same commits.
 
+> **Note:** Progress as of 2026-11-04. Steps 1 and 2 have landed: `RateLimiter` in commits `1b83802`, `e69a70c` and `e77a29c`, and `JobStore` in commits `25ed37a`, `1325dbe`, `f17821f` and `e63d59b`.
+>
+> The in-memory `JobStore` is narrower than the expiry rule in section 3 in two ways. A job exactly at its TTL still reads as present, because expiry needs strictly more than the TTL, as cleanup used before. Among the reads, only `get` and `expired_ids` treat an expired job as absent. `counts` includes every stored record until cleanup deletes it, and an expired COMPLETED job still counts toward the caps until then, because its files stay until cleanup removes them.
+>
+> Two rules follow for later adapters:
+>
+> - No networked `JobStore` should go live before `FileStore` replaces the download guard. The guard protects a download's files from cleanup until a cleanup pass finds the hold older than `DOWNLOAD_TTL_SECONDS`, and only while no `await` pauses between a route reading the job and taking the hold, or between cleanup reading the guards and deleting the records (`cleanup_expired` in `backend/app/services/jobs.py`). The in-memory store's methods never await; a store reached over the network would normally await on network I/O.
+> - A durable `JobStore` needs a rule for jobs left in PROCESSING. If the process is killed while the worker thread runs, or the inference task is cancelled, nothing records a final status (`_process_job` in `backend/app/routes/denoise.py`), so the job stays PROCESSING and keeps its place under the caps. An in-memory store loses such records when the process restarts; a durable store would keep them.
+
 ### Security
 
 - Storage keys are built only from the server-generated UUID job ID (`denoise.py:239`), never from a client filename or other client input.
