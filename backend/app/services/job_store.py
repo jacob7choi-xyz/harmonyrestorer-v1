@@ -53,7 +53,11 @@ class JobStore(Protocol):
         ...
 
     async def get(self, job_id: str) -> JobStatus | None:
-        """Return the job, or None if there is no such job."""
+        """Return the job, or None if there is no such job or it has expired.
+
+        A job expires once it finished more than the TTL ago (ADR 010). It
+        reads as absent from then on, whether or not cleanup has deleted it.
+        """
         ...
 
     async def start(self, job_id: str) -> bool:
@@ -73,7 +77,12 @@ class JobStore(Protocol):
         ...
 
     async def counts(self) -> dict[str, int]:
-        """Return the number of jobs in each status that has any."""
+        """Return the number of stored jobs in each status that has any.
+
+        Expired jobs not yet deleted are included. Expired COMPLETED jobs also
+        still count toward the caps, since their files stay until cleanup
+        removes them.
+        """
         ...
 
     async def expired_ids(self) -> list[str]:
@@ -141,9 +150,11 @@ class InMemoryJobStore:
         return job.model_copy()
 
     async def get(self, job_id: str) -> JobStatus | None:
-        """Return a copy of the job, or None if there is no such job."""
+        """Return a copy of the job, or None if there is no such job or it has expired."""
         job = self._jobs.get(job_id)
-        return None if job is None else job.model_copy()
+        if job is None or self._is_expired(job, self._clock()):
+            return None
+        return job.model_copy()
 
     async def start(self, job_id: str) -> bool:
         """Move a job from QUEUED to PROCESSING."""
@@ -193,13 +204,18 @@ class InMemoryJobStore:
     async def expired_ids(self) -> list[str]:
         """Return the IDs of COMPLETED or FAILED jobs finished more than the TTL ago."""
         now = self._clock()
-        # Only complete() and fail() set completed_at, so it also selects the finished jobs
-        return [
-            job_id
-            for job_id, job in self._jobs.items()
-            if job.completed_at is not None
+        return [job_id for job_id, job in self._jobs.items() if self._is_expired(job, now)]
+
+    def _is_expired(self, job: JobStatus, now: datetime) -> bool:
+        """Whether *job* finished more than the TTL before *now*.
+
+        Only complete() and fail() set completed_at, so it also selects the
+        finished jobs.
+        """
+        return (
+            job.completed_at is not None
             and (now - job.completed_at).total_seconds() > self._job_ttl_seconds
-        ]
+        )
 
     def _count_resource_occupying_jobs(self, client_ip: str | None = None) -> int:
         """Count jobs in a resource-occupying status, for one client or for all."""

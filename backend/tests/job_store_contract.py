@@ -288,7 +288,7 @@ class JobStoreContract:
         assert sorted(await store.expired_ids()) == ["old-completed", "old-failed"]
 
     async def test_a_job_exactly_one_ttl_old_has_not_expired(self, make_store: MakeStore) -> None:
-        """Expiry needs strictly more than the TTL to have passed."""
+        """Expiry needs strictly more than the TTL to have passed, for reads and for cleanup."""
         clock = FakeWallClock()
         store = make_store(10, 10, 60, clock)
         await _processing(store, "job")
@@ -296,5 +296,42 @@ class JobStoreContract:
 
         clock.advance(60)
         assert await store.expired_ids() == []
+        assert await store.get("job") is not None
         clock.advance(1)
         assert await store.expired_ids() == ["job"]
+        assert await store.get("job") is None
+
+    async def test_an_expired_job_reads_as_absent_before_it_is_deleted(
+        self, make_store: MakeStore
+    ) -> None:
+        """get treats a COMPLETED or FAILED job past the TTL as absent; cleanup still lists it."""
+        clock = FakeWallClock()
+        store = make_store(10, 10, 60, clock)
+        await _processing(store, "completed")
+        assert await store.complete("completed", 1.0, "/download/completed")
+        await _processing(store, "failed")
+        assert await store.fail("failed")
+        await _processing(store, "processing")
+
+        clock.advance(61)
+
+        assert await store.get("completed") is None
+        assert await store.get("failed") is None
+        assert await store.get("processing") is not None
+        assert sorted(await store.expired_ids()) == ["completed", "failed"]
+
+    async def test_an_expired_job_counts_until_it_is_deleted(self, make_store: MakeStore) -> None:
+        """An expired COMPLETED job still holds its place under the caps, and in counts,
+        until it is deleted: its files stay until cleanup removes them."""
+        clock = FakeWallClock()
+        store = make_store(1, 1, 60, clock)
+        await _processing(store, "old", "client-a")
+        assert await store.complete("old", 1.0, "/download/old")
+        clock.advance(61)
+
+        with pytest.raises(JobCapError):
+            await store.create("new", "client-b", "audio")
+        assert await store.counts() == {JobStatusEnum.COMPLETED: 1}
+
+        await store.delete("old")
+        await store.create("new", "client-b", "audio")

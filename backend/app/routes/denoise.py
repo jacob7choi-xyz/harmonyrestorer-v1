@@ -383,7 +383,7 @@ async def denoise_audio(
 
     job = await store.get(job_id)
     if job is None:
-        # Reachable only if TTL cleanup raced within milliseconds of completion
+        # Reachable only if the job expired between completing and this read
         return DenoiseUploadResponse(
             job_id=job_id,
             status=JobStatusEnum.COMPLETED,

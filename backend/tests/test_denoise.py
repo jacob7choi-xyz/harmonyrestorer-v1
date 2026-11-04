@@ -633,6 +633,34 @@ def test_download_after_job_cleanup(client, mock_denoiser) -> None:
     assert r.status_code == 404
 
 
+def test_expired_job_returns_404_before_cleanup_deletes_it(client, mock_denoiser) -> None:
+    """From its TTL onwards a job reads as absent on status and download (ADR 010),
+    while its record is still stored for cleanup to delete."""
+    from app.services.job_store import InMemoryJobStore
+
+    from tests.job_store_contract import FakeWallClock
+
+    clock = FakeWallClock()
+    app.state.job_store = InMemoryJobStore(
+        settings.max_total_jobs,
+        settings.max_jobs_per_ip,
+        settings.job_ttl_seconds,
+        clock=clock,
+    )
+    r = client.post(
+        "/api/v1/denoise",
+        files={"file": ("test.wav", SMALL_WAV, "audio/wav")},
+    )
+    job_id = r.json()["job_id"]
+    assert client.get(f"/api/v1/status/{job_id}").status_code == 200
+
+    clock.advance(settings.job_ttl_seconds + 1)
+
+    assert client.get(f"/api/v1/status/{job_id}").status_code == 404
+    assert client.get(f"/api/v1/download/{job_id}").status_code == 404
+    assert asyncio.run(_store().expired_ids()) == [job_id]
+
+
 def _ffmpeg(*args: str) -> None:
     """Build a real test input with ffmpeg, which CI installs."""
     import subprocess

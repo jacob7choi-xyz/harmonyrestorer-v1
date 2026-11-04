@@ -148,7 +148,7 @@ async def test_cleanup_removes_old_completed_jobs() -> None:
     removed = await JobManager().cleanup_expired(store)
 
     assert removed == 1
-    assert await store.get("old") is None
+    assert "old" not in await store.expired_ids()
 
 
 async def test_cleanup_keeps_recent_jobs() -> None:
@@ -187,7 +187,7 @@ async def test_cleanup_removes_old_failed_jobs() -> None:
     removed = await JobManager().cleanup_expired(store)
 
     assert removed == 1
-    assert await store.get("old-fail") is None
+    assert await store.expired_ids() == []
 
 
 async def test_cleanup_deletes_all_cached_format_variants(tmp_path, monkeypatch) -> None:
@@ -220,11 +220,11 @@ async def test_download_guard_refcount_protects_concurrent_downloads() -> None:
 
     mgr.unmark_downloading("old")
     assert await mgr.cleanup_expired(store) == 0
-    assert await store.get("old") is not None
+    assert "old" in await store.expired_ids()
 
     mgr.unmark_downloading("old")
     assert await mgr.cleanup_expired(store) == 1
-    assert await store.get("old") is None
+    assert "old" not in await store.expired_ids()
 
 
 async def test_cleanup_skips_downloading_jobs() -> None:
@@ -234,7 +234,7 @@ async def test_cleanup_skips_downloading_jobs() -> None:
 
     mgr.mark_downloading("old")
     assert await mgr.cleanup_expired(store) == 0
-    assert await store.get("old") is not None
+    assert "old" in await store.expired_ids()
 
     mgr.unmark_downloading("old")
     assert await mgr.cleanup_expired(store) == 1
@@ -259,5 +259,5 @@ async def test_cleanup_evicts_stale_downloading_job() -> None:
     removed = await mgr.cleanup_expired(store)
 
     assert removed == 1
-    assert await store.get("old") is None
+    assert "old" not in await store.expired_ids()
     assert "old" not in mgr._downloading
