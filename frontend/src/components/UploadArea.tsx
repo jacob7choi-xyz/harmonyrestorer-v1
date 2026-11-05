@@ -1,8 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Upload, FileAudio } from 'lucide-react';
+import { MAX_UPLOAD_BYTES, MAX_UPLOAD_MB } from '../config';
 
-const MAX_FILE_SIZE_MB = 50;
-const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 const MAX_DURATION_MINUTES = 10;
 const MAX_DURATION_SECONDS = MAX_DURATION_MINUTES * 60;
 
@@ -93,8 +92,8 @@ export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAr
       setError('Please select an audio file (WAV, MP3, FLAC, OGG, M4A, AAC)');
       return;
     }
-    if (file.size > MAX_FILE_SIZE_BYTES) {
-      setError(`File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Max ${MAX_FILE_SIZE_MB} MB.`);
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setError(`File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Max ${MAX_UPLOAD_MB} MB.`);
       return;
     }
     const durationOk = await checkDuration(file);
@@ -192,7 +191,7 @@ export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAr
       <p className="mt-4 text-xs text-ink-muted tracking-wide">
         {currentFile
           ? 'Tap the pill to choose a different file'
-          : 'or drop a file anywhere. WAV, FLAC, MP3, OGG, M4A, AAC, up to 50 MB. Restored audio is rendered at 16 kHz mono.'}
+          : `or drop a file anywhere. WAV, FLAC, MP3, OGG, M4A, AAC, up to ${MAX_UPLOAD_MB} MB. Restored audio is rendered at 16 kHz mono.`}
       </p>
 
       {error && (

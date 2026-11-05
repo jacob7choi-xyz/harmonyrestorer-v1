@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { Download, Play, Pause, RotateCcw, Music, Github, Linkedin, Instagram, Youtube } from 'lucide-react';
 import { uploadAudio, pollUntilDone, getDownloadUrl } from './api/client';
 import { UploadArea } from './components/UploadArea';
+import { MAX_UPLOAD_BYTES } from './config';
 import { TapeStrip, type TapeStripPalette } from './components/TapeStrip';
 import { Analytics } from '@vercel/analytics/react';
 import { useAudioDecoder, decodeBlobToWaveform } from './hooks/useAudioDecoder';
@@ -369,9 +370,8 @@ export default function HarmonyRestorer(): React.JSX.Element {
     const files = e.dataTransfer.files;
     if (files.length > 0) {
       const dropped = files[0];
-      const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
       if (dropped.type.startsWith('audio/')) {
-        if (dropped.size > MAX_FILE_SIZE_BYTES) return;
+        if (dropped.size > MAX_UPLOAD_BYTES) return;
         handleFileSelect(dropped);
       }
     }

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { UploadArea } from '../UploadArea'
+import { MAX_UPLOAD_BYTES } from '../../config'
 
 describe('UploadArea', () => {
   afterEach(() => {
@@ -50,7 +51,7 @@ describe('UploadArea', () => {
 
     const input = document.querySelector('input[type="file"]') as HTMLInputElement
     const bigFile = new File(['x'], 'big.wav', { type: 'audio/wav' })
-    Object.defineProperty(bigFile, 'size', { value: 51 * 1024 * 1024 })
+    Object.defineProperty(bigFile, 'size', { value: MAX_UPLOAD_BYTES + 1 })
 
     fireEvent.change(input, { target: { files: [bigFile] } })
 
