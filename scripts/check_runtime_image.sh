@@ -8,6 +8,9 @@
 # through the API, which checks the digest again and loads the weights, and the job must
 # complete and return a WAV.
 #
+# The container runs on a read-only filesystem with only /tmp writable, as Lambda runs
+# images (docs/adr/009-pay-per-use-hosting.md), so a write anywhere else fails this check.
+#
 # Usage: scripts/check_runtime_image.sh IMAGE
 # CI calls this after building the runtime stage; it needs Docker and python3.
 
@@ -47,7 +50,10 @@ request() {
   in_container curl --max-time 30 "$@"
 }
 
-docker run -d --name "$CONTAINER" --network none "$IMAGE" >/dev/null
+docker run -d --name "$CONTAINER" --network none \
+  --read-only --tmpfs /tmp:rw,size=1g \
+  -e UPLOAD_DIR=/tmp/uploads -e PROCESSED_DIR=/tmp/processed \
+  "$IMAGE" >/dev/null
 
 # Waits only while nothing answers (curl reports 000); the first HTTP answer must be 200
 code="000"
@@ -61,7 +67,8 @@ in_container cat /tmp/health.json 2>/dev/null && printf '\n'
 # An empty code means docker exec itself failed, usually because the container exited
 [ "$code" = "200" ] || fail "/health answered ${code:-nothing}, not 200"
 
-docker cp "$SAMPLE" "$CONTAINER:/tmp/sample.wav"
+# docker cp cannot write into a read-only container, so the file is piped in instead
+docker exec -i "$CONTAINER" sh -c 'cat > /tmp/sample.wav' < "$SAMPLE"
 job_id="$(request -fsS -F "file=@/tmp/sample.wav;type=audio/wav" "$API/denoise" \
   | json_field job_id)" || fail "the upload was not accepted"
 
