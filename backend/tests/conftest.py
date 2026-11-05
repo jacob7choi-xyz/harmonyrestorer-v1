@@ -5,11 +5,37 @@ from unittest.mock import MagicMock, patch
 import pytest
 from app.config import settings
 from app.main import app
+from app.services.artifacts import ArtifactBudget
 from app.services.job_store import build_job_store
 from app.services.jobs import job_manager
 from app.services.rate_limit import build_rate_limiter
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+
+
+@pytest.fixture(autouse=True)
+def isolated_artifact_dirs(tmp_path_factory, monkeypatch) -> None:
+    """Point uploads and results at folders made for this test.
+
+    Without this, tests write into backend/uploads and backend/processed and
+    nothing removes the files. The artifact budget is replaced too, because the
+    shared one captured the real folders when it was built at import, and the
+    cached denoiser is cleared, because a built one keeps the folder it was
+    given.
+    """
+    root = tmp_path_factory.mktemp("artifacts")
+    uploads = root / "uploads"
+    processed = root / "processed"
+    uploads.mkdir()
+    processed.mkdir()
+    monkeypatch.setattr(settings, "upload_dir", uploads)
+    monkeypatch.setattr(settings, "processed_dir", processed)
+    budget = ArtifactBudget(
+        limit_bytes=settings.max_artifact_bytes, directories=[uploads, processed]
+    )
+    monkeypatch.setattr("app.routes.denoise.artifact_budget", budget)
+    monkeypatch.setattr("app.services.transcode.artifact_budget", budget)
+    monkeypatch.setattr(job_manager, "_denoiser", None)
 
 
 def _clear_rate_limiter(application: FastAPI) -> None:
