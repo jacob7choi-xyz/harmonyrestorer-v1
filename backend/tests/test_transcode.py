@@ -256,6 +256,22 @@ class TestTranscodeAdmission:
 
         assert captured and captured[0].count("-threads") == 2
 
+    def test_ffmpeg_does_not_read_stdin(self, wav_file, monkeypatch) -> None:
+        """ffmpeg is told not to read stdin and is given none, as the upload decode is."""
+        captured: list[tuple[list[str], dict]] = []
+
+        def fake_run(argv, **kwargs):  # type: ignore[no-untyped-def]
+            captured.append((list(argv), kwargs))
+            Path(argv[-1]).write_bytes(b"encoded")
+            return subprocess.CompletedProcess(argv, 0, stdout=b"", stderr=b"")
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        transcode_output(wav_file, "mp3")
+
+        argv, kwargs = captured[0]
+        assert "-nostdin" in argv
+        assert kwargs.get("stdin") is subprocess.DEVNULL
+
 
 @pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg not installed")
 def test_real_ffmpeg_roundtrip(tmp_path) -> None:

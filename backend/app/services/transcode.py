@@ -88,6 +88,7 @@ def transcode_output(wav_path: Path, fmt: str) -> Path:
         # consume uncontrolled parallel CPU next to a running inference
         argv = [
             "ffmpeg",
+            "-nostdin",
             "-y",
             "-loglevel",
             "error",
@@ -103,6 +104,7 @@ def transcode_output(wav_path: Path, fmt: str) -> Path:
         # and fmt is allowlisted above; no shell is involved
         result = subprocess.run(  # nosec
             argv,
+            stdin=subprocess.DEVNULL,
             capture_output=True,
             timeout=_FFMPEG_TIMEOUT_SECONDS,
             check=False,
