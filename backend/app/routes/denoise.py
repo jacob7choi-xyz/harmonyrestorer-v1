@@ -356,6 +356,11 @@ async def denoise_audio(
                 status_code=503,
                 detail="Server is busy. Try again later.",
             ) from exc
+        except Exception:
+            # Any other failure to record the job still leaves the decoded
+            # upload with no owner; remove it, then let the error handler reply
+            input_path.unlink(missing_ok=True)
+            raise
 
         try:
             task = asyncio.create_task(

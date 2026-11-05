@@ -234,12 +234,17 @@ def test_enable_docs_setting_defaults_false(monkeypatch) -> None:
 
 
 def test_unhandled_exception_returns_generic_error() -> None:
-    """Unhandled exceptions must return 'Internal server error', never a stack trace."""
+    """Unhandled exceptions must return 'Internal server error', never a stack trace.
+
+    The failure here comes after the upload was decoded, so the decoded file
+    must also be removed rather than left counting against the byte budget.
+    """
     from tests.conftest import _clear_rate_limiter, _fake_decode
 
     with TestClient(app, raise_server_exceptions=False) as c:
         _clear_rate_limiter(app)
         _clear_job_store(app)
+        uploads_before = set(settings.upload_dir.iterdir())
         with (
             patch("app.routes.denoise.decode_to_wav", side_effect=_fake_decode),
             patch.object(
@@ -259,6 +264,7 @@ def test_unhandled_exception_returns_generic_error() -> None:
     # Ensure no stack trace or internal details leak
     assert "secret" not in str(body)
     assert "Traceback" not in str(body)
+    assert set(settings.upload_dir.iterdir()) == uploads_before
 
 
 # --- Magic byte validation ---
