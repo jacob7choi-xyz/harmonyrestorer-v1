@@ -111,6 +111,9 @@ def transcode_output(wav_path: Path, fmt: str) -> Path:
             stderr = result.stderr.decode(errors="replace")[:500]
             logger.error("ffmpeg failed converting %s to %s: %s", wav_path.name, fmt, stderr)
             raise TranscodeError(f"Conversion to {fmt} failed")
+        # Flush ffmpeg's output to disk before the rename makes it the cached file
+        with tmp_path.open("rb") as f:
+            os.fsync(f.fileno())
         tmp_path.replace(target)
         logger.info("Converted %s to %s", wav_path.name, target.name)
     except subprocess.TimeoutExpired as err:

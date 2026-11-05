@@ -247,6 +247,9 @@ def decode_to_wav(
             sample_rate, max_seconds
         ):
             raise AudioTooLongError(duration)
+        # Flush ffmpeg's output to disk before the rename makes it the decoded upload
+        with tmp.open("rb") as f:
+            os.fsync(f.fileno())
         tmp.replace(destination)
         return duration
     finally:

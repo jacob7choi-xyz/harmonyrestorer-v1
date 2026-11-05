@@ -1,5 +1,6 @@
 """Tests for the download format transcoder."""
 
+import os
 import shutil
 import subprocess
 import threading
@@ -47,6 +48,35 @@ class TestTranscodeOutput:
         # No temp files remain beside the outputs
         leftovers = [p for p in wav_file.parent.iterdir() if p not in (wav_file, result)]
         assert leftovers == []
+
+    def test_conversion_is_flushed_before_it_replaces_the_target(
+        self, wav_file, monkeypatch
+    ) -> None:
+        """The converted temp file is fsynced before it is renamed onto the target."""
+        events: list[tuple[str, int]] = []
+        real_fsync = os.fsync
+        real_replace = Path.replace
+
+        def recording_fsync(fd: int) -> None:
+            events.append(("fsync", os.fstat(fd).st_ino))
+            real_fsync(fd)
+
+        def recording_replace(self: Path, target: Path) -> Path:
+            events.append(("replace", self.stat().st_ino))
+            return real_replace(self, target)
+
+        def fake_run(argv, **kwargs):  # type: ignore[no-untyped-def]
+            Path(argv[-1]).write_bytes(b"encoded")
+            return subprocess.CompletedProcess(argv, 0, stdout=b"", stderr=b"")
+
+        monkeypatch.setattr(os, "fsync", recording_fsync)
+        monkeypatch.setattr(Path, "replace", recording_replace)
+        monkeypatch.setattr(subprocess, "run", fake_run)
+
+        result = transcode_output(wav_file, "mp3")
+
+        inode = result.stat().st_ino
+        assert events == [("fsync", inode), ("replace", inode)]
 
     def test_cached_conversion_skips_ffmpeg(self, wav_file, monkeypatch) -> None:
         cached = wav_file.with_suffix(".mp3")

@@ -8,6 +8,7 @@ a mocked subprocess cannot show.
 from __future__ import annotations
 
 import logging
+import os
 import subprocess
 from pathlib import Path
 
@@ -106,6 +107,33 @@ class TestDecodeToWav:
         info = sf.info(str(dst))
         assert (info.samplerate, info.channels, info.subtype) == (16_000, 1, "PCM_16")
         assert duration == pytest.approx(1.0, abs=0.01)
+
+    def test_decoded_file_is_flushed_before_it_replaces_the_destination(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The decoded temp file is fsynced before it is renamed onto the destination."""
+        src = tmp_path / "in.wav"
+        _tone(src, 1.0)
+        dst = tmp_path / "out.wav"
+        events: list[tuple[str, int]] = []
+        real_fsync = os.fsync
+        real_replace = Path.replace
+
+        def recording_fsync(fd: int) -> None:
+            events.append(("fsync", os.fstat(fd).st_ino))
+            real_fsync(fd)
+
+        def recording_replace(self: Path, target: Path) -> Path:
+            events.append(("replace", self.stat().st_ino))
+            return real_replace(self, target)
+
+        monkeypatch.setattr(os, "fsync", recording_fsync)
+        monkeypatch.setattr(Path, "replace", recording_replace)
+
+        _decode(src, dst, "wav", sample_rate=16_000)
+
+        inode = dst.stat().st_ino
+        assert events == [("fsync", inode), ("replace", inode)]
 
     def test_keeps_stereo_and_mixes_more_channels_down_to_stereo(self, tmp_path: Path) -> None:
         """Stereo passes through as stereo; a source with more channels becomes stereo,
