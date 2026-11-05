@@ -113,7 +113,8 @@ class JobManager:
 
         First evicts stale download markers left by disconnected clients, then
         removes jobs that store.expired_ids() lists, except jobs being
-        downloaded.
+        downloaded. A job whose files cannot be deleted keeps its record and
+        is retried on the next pass.
 
         Args:
             store: The job store holding the records.
@@ -123,24 +124,34 @@ class JobManager:
         """
         self._evict_stale_download_markers()
         # The download guard holds only while no await between reading the
-        # guards and deleting the records lets a download start: true for the
+        # guards and deleting the files and records lets a download start: true for the
         # in-memory store, whose methods never await. A networked JobStore must
         # not go live before FileStore replaces the guard (ADR 010).
         candidates = await store.expired_ids()
         with self._guard_lock:
             expired_ids = [job_id for job_id in candidates if job_id not in self._downloading]
+        removed = 0
         for job_id in expired_ids:
+            # Files first: if one cannot be deleted, the record stays, so the
+            # next pass finds the job again and retries
+            try:
+                self._delete_result_files(job_id)
+            except OSError as e:
+                logger.warning("Could not delete files of expired job %s: %s", job_id, e)
+                continue
             await store.delete(job_id)
+            removed += 1
 
-        # The glob also removes any cached download-format conversions.
-        for job_id in expired_ids:
-            for output_file in settings.processed_dir.glob(f"{job_id}_denoised.*"):
-                output_file.unlink(missing_ok=True)
+        if removed:
+            logger.info("Cleaned up %d expired job(s)", removed)
 
-        if expired_ids:
-            logger.info("Cleaned up %d expired job(s)", len(expired_ids))
+        return removed
 
-        return len(expired_ids)
+    @staticmethod
+    def _delete_result_files(job_id: str) -> None:
+        """Delete a job's result WAV and any cached download-format conversions."""
+        for output_file in settings.processed_dir.glob(f"{job_id}_denoised.*"):
+            output_file.unlink(missing_ok=True)
 
     def _evict_stale_download_markers(self) -> None:
         """Drop download holds older than DOWNLOAD_TTL_SECONDS, left by disconnected clients."""

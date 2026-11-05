@@ -1,6 +1,7 @@
 """Tests for JobManager: the denoiser it builds and runs, the download guard, and cleanup."""
 
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
@@ -202,6 +203,46 @@ async def test_cleanup_deletes_all_cached_format_variants(tmp_path, monkeypatch)
 
     assert removed == 1
     assert not any(f.exists() for f in files)
+
+
+async def test_cleanup_keeps_the_record_when_its_files_cannot_be_deleted(
+    tmp_path, monkeypatch
+) -> None:
+    """A job whose file cannot be deleted keeps its record, so the next pass retries it.
+
+    Other expired jobs are still cleaned up in the same pass.
+    """
+    monkeypatch.setattr(settings, "processed_dir", tmp_path)
+    clock = FakeWallClock()
+    store = InMemoryJobStore(10, 10, _TTL, clock=clock)
+    await _finished(store, "stuck")
+    await _finished(store, "fine")
+    clock.advance(_TTL + 1)
+    stuck_file = tmp_path / "stuck_denoised.wav"
+    fine_file = tmp_path / "fine_denoised.wav"
+    for f in (stuck_file, fine_file):
+        f.write_bytes(b"x")
+    real_unlink = Path.unlink
+
+    def failing_unlink(self: Path, missing_ok: bool = False) -> None:
+        if self == stuck_file:
+            raise PermissionError("cannot delete")
+        real_unlink(self, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", failing_unlink)
+    mgr = JobManager()
+
+    removed = await mgr.cleanup_expired(store)
+
+    assert removed == 1
+    assert await store.expired_ids() == ["stuck"]
+    assert stuck_file.exists()
+    assert not fine_file.exists()
+
+    monkeypatch.setattr(Path, "unlink", real_unlink)
+    assert await mgr.cleanup_expired(store) == 1
+    assert await store.expired_ids() == []
+    assert not stuck_file.exists()
 
 
 # --- download guard ---
