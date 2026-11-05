@@ -1,7 +1,13 @@
 """Tests for Settings validation: every env var that has a validation guard."""
 
 import pytest
-from app.config import DenoiserEngine, JobStoreBackend, RateLimiterBackend, Settings
+from app.config import (
+    DenoiserEngine,
+    FileStoreBackend,
+    JobStoreBackend,
+    RateLimiterBackend,
+    Settings,
+)
 
 
 def _base_dirs(monkeypatch, tmp_path) -> None:
@@ -210,6 +216,23 @@ def test_job_store_defaults_to_memory(monkeypatch, tmp_path) -> None:
     _base_dirs(monkeypatch, tmp_path)
     monkeypatch.delenv("JOB_STORE", raising=False)
     assert Settings().job_store is JobStoreBackend.MEMORY
+
+
+# --- FILE_STORE ---
+
+
+def test_file_store_rejects_unknown_value(monkeypatch) -> None:
+    """A FILE_STORE other than local raises ValueError when settings load."""
+    monkeypatch.setenv("FILE_STORE", "s3")
+    with pytest.raises(ValueError, match="Invalid FILE_STORE"):
+        Settings()
+
+
+def test_file_store_defaults_to_local(monkeypatch, tmp_path) -> None:
+    """With FILE_STORE unset, the backend is local."""
+    _base_dirs(monkeypatch, tmp_path)
+    monkeypatch.delenv("FILE_STORE", raising=False)
+    assert Settings().file_store is FileStoreBackend.LOCAL
 
 
 # --- UVR_MODEL_NAME ---

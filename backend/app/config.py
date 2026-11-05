@@ -32,6 +32,12 @@ class JobStoreBackend(StrEnum):
     MEMORY = "memory"
 
 
+class FileStoreBackend(StrEnum):
+    """Where job result files are kept, selected with FILE_STORE."""
+
+    LOCAL = "local"
+
+
 # UVR model names checked to run here. UVR-DeNoise ran end to end in images built from
 # this Dockerfile. Names of two other audio-separator types are kept out on evidence: the
 # MDX architecture module failed to import in those images (torchvision's compiled
@@ -152,6 +158,15 @@ class Settings:
             raise ValueError(
                 f"Invalid JOB_STORE={store!r}, "
                 f"must be one of {sorted(member.value for member in JobStoreBackend)}"
+            ) from e
+        file_store = os.getenv("FILE_STORE", FileStoreBackend.LOCAL)
+        try:
+            # Exact match on the value; case is not normalized
+            self.file_store = FileStoreBackend(file_store)
+        except ValueError as e:
+            raise ValueError(
+                f"Invalid FILE_STORE={file_store!r}, "
+                f"must be one of {sorted(member.value for member in FileStoreBackend)}"
             ) from e
         # Process-local bound on concurrently executing inferences; the
         # deployment runs one application worker per instance, so this is
