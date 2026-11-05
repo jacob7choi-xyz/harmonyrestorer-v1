@@ -88,7 +88,7 @@ Tests that reach into the current private state are expected to change to use th
 
 ### 4. Dispatch
 
-The `Dispatcher` port is built now, and `InlineDispatcher` is its first adapter. Whether a platform runs jobs inline or through a queue is decided per platform, when its adapter is written, with these criteria.
+The `Dispatcher` port is deferred; the note under section 8 says why. Until it exists, the upload route runs each job inline, as an `InlineDispatcher` would. Whether a platform runs jobs inline or through a queue is decided per platform, when its adapter is written, with these criteria.
 
 | Inline fits a platform when | A queue fits a platform when |
 |---|---|
@@ -119,7 +119,9 @@ Inference admission, the artifact byte budget, the transcode slot, the loaded mo
 
 Each step is its own plan and commits, with its contract tests in the same commits.
 
-> **Note:** Progress as of 2026-11-04. Steps 1 and 2 have landed: `RateLimiter` in commits `1b83802`, `e69a70c` and `e77a29c`, and `JobStore` in commits `25ed37a`, `1325dbe`, `f17821f` and `e63d59b`.
+> **Note:** Progress as of 2026-11-05. Steps 1 to 3 have landed: `RateLimiter` in commits `1b83802`, `e69a70c` and `e77a29c`, `JobStore` in commits `25ed37a`, `1325dbe`, `f17821f` and `e63d59b`, and `FileStore`, for result files only, in commits `411c3a3` and `61ce807`. Step 4 is deferred.
+>
+> Step 4, the `Dispatcher`, waits until a second adapter could work. In the code at `61ce807`, four things stand in the way of a dispatcher that runs jobs after the upload replies, such as a queue served by another instance. The decoded input is a local file under `settings.upload_dir`, and `FileStore` does not store uploads. Processing is not safe to repeat: a refused start and the worker both delete the input (`_process_job` in `backend/app/routes/denoise.py`, `run_denoiser` in `backend/app/services/jobs.py`). QUEUED and PROCESSING jobs never expire (`_is_expired` in `backend/app/services/job_store.py`). And on Cloud Run, `scripts/deploy_backend.sh` sets request-based CPU on the premise that inference runs inside the request. A port with only an inline adapter would move code without a second adapter to test its shape. The frontend ignores the status the upload returns and polls until the job finishes (`frontend/src/App.tsx`, `frontend/src/api/client.ts`), so a queued reply is expected to need no frontend change; this has not been tested.
 >
 > The in-memory `JobStore` is narrower than the expiry rule in section 3 in two ways. A job exactly at its TTL still reads as present, because expiry needs strictly more than the TTL, as cleanup used before. Among the reads, only `get` and `expired_ids` treat an expired job as absent. `counts` includes every stored record until cleanup deletes it, and an expired COMPLETED job still counts toward the caps until then, because its files stay until cleanup removes them.
 >
@@ -159,6 +161,8 @@ Each step is its own plan and commits, with its contract tests in the same commi
 - Whether an S3 presigned upload can enforce a maximum object size. The S3 pages for presigned POST policies could not be read with the fetch tool used on 2026-11-03. The size check after upload (Security, above) does not depend on the answer.
 - Whether a Lambda function URL has its own payload limit beyond the 6 MB synchronous limit, and whether AWS WAF can sit in front of a function URL directly.
 - The DynamoDB maximum item size, and Firestore's TTL timing.
+- Whether an AWS deployment would use API Gateway or a Lambda function URL, which is likely to decide between inline and queued dispatch there. Read through a summarizing fetch on 2026-11-04, to be checked against the pages before an AWS ADR relies on them: the REST API integration timeout goes up to 29 s and can be raised for Regional and private APIs, the HTTP API integration timeout is 30 s and cannot be raised, and the pages read named no separate limit for a function URL, so the function timeout, up to 900 s, is the documented bound. One job with 600 s of audio took about 14 to 26 s in the measurement above, depending on the vCPUs.
+- How a dispatcher that can deliver a job more than once would make processing safe to repeat, and how QUEUED or PROCESSING jobs would be reclaimed, for example with an owner or lease on PROCESSING.
 - Which client address Cloud Run passes to the app, and therefore what `FORWARDED_ALLOW_IPS` should be. This needs a live request log.
 
 ## Alternatives Considered
