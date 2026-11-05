@@ -1,11 +1,13 @@
-"""Tests for the local-disk FileStore adapter and its builder."""
+"""Tests for the local-disk FileStore adapter, its builder, and the composition root."""
 
 import uuid
 from pathlib import Path
 
 import pytest
+from app.composition import install_adapters
 from app.config import FileStoreBackend, settings
 from app.services.file_store import FileStore, LocalFileStore, build_file_store
+from fastapi import FastAPI
 
 from tests.file_store_contract import FileStoreContract
 
@@ -51,3 +53,12 @@ def test_build_file_store_roots_the_local_adapter_at_processed_dir() -> None:
     assert isinstance(store, LocalFileStore)
     job_id = str(uuid.uuid4())
     assert store.result_path(job_id).parent == settings.processed_dir
+
+
+def test_install_adapters_attaches_a_file_store() -> None:
+    """The composition root puts the configured file store on app.state."""
+    app = FastAPI()
+
+    install_adapters(app)
+
+    assert isinstance(app.state.file_store, LocalFileStore)

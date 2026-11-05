@@ -489,9 +489,9 @@ def test_upload_processes_exactly_once(client, mock_denoiser, monkeypatch) -> No
     calls: list[str] = []
     original_run_denoiser = job_manager.run_denoiser
 
-    def counting_run_denoiser(job_id, input_path) -> float:
+    def counting_run_denoiser(job_id, input_path, files) -> float:
         calls.append(job_id)
-        return original_run_denoiser(job_id, input_path)
+        return original_run_denoiser(job_id, input_path, files)
 
     monkeypatch.setattr(job_manager, "run_denoiser", counting_run_denoiser)
 

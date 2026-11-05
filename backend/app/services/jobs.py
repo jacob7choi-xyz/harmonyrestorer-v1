@@ -8,6 +8,7 @@ from pathlib import Path
 
 from app.config import settings
 from app.services.engines import Denoiser, build_denoiser
+from app.services.file_store import FileStore
 from app.services.job_store import JobStore
 
 logger = logging.getLogger(__name__)
@@ -76,7 +77,7 @@ class JobManager:
             if guard.count <= 0:
                 del self._downloading[job_id]
 
-    def run_denoiser(self, job_id: str, input_path: Path) -> float:
+    def run_denoiser(self, job_id: str, input_path: Path, files: FileStore) -> float:
         """Denoise *input_path* into the job's output file. Runs in a worker thread.
 
         Reads and changes no job record; the caller records the outcome. The
@@ -86,29 +87,30 @@ class JobManager:
         Args:
             job_id: The job whose output file is written.
             input_path: The decoded WAV to denoise.
+            files: The file store that takes the finished output as the result.
 
         Returns:
             Seconds from the start of this call until the output was produced.
 
         Raises:
-            Whatever the denoiser or the final rename raises.
+            Whatever the denoiser or files.put_result raises.
         """
         start_time = datetime.now(UTC)
         intermediate_output: Path | None = None
         try:
             intermediate_output = Path(self._get_denoiser().denoise(input_path))
             processing_time = (datetime.now(UTC) - start_time).total_seconds()
-            intermediate_output.replace(settings.processed_dir / f"{job_id}_denoised.wav")
+            files.put_result(job_id, intermediate_output)
             return processing_time
         finally:
             input_path.unlink(missing_ok=True)
             # Invariant: the intermediate output never survives this call.
-            # After a successful rename this path no longer exists; after
-            # any failure it must not linger (cleanup only globs _denoised.*)
+            # After put_result this path no longer exists; after any failure
+            # it must not linger, since cleanup removes only stored results
             if intermediate_output is not None:
                 intermediate_output.unlink(missing_ok=True)
 
-    async def cleanup_expired(self, store: JobStore) -> int:
+    async def cleanup_expired(self, store: JobStore, files: FileStore) -> int:
         """Remove finished jobs older than the TTL and delete their output files.
 
         First evicts stale download markers left by disconnected clients, then
@@ -118,6 +120,7 @@ class JobManager:
 
         Args:
             store: The job store holding the records.
+            files: The file store holding the results.
 
         Returns:
             The number of jobs removed.
@@ -126,7 +129,8 @@ class JobManager:
         # The download guard holds only while no await between reading the
         # guards and deleting the files and records lets a download start: true for the
         # in-memory store, whose methods never await. A networked JobStore must
-        # not go live before FileStore replaces the guard (ADR 010).
+        # not go live before a FileStore that issues grants replaces the guard
+        # and keeps results every instance can read (ADR 010).
         candidates = await store.expired_ids()
         with self._guard_lock:
             expired_ids = [job_id for job_id in candidates if job_id not in self._downloading]
@@ -135,7 +139,7 @@ class JobManager:
             # Files first: if one cannot be deleted, the record stays, so the
             # next pass finds the job again and retries
             try:
-                self._delete_result_files(job_id)
+                files.delete_results(job_id)
             except OSError as e:
                 logger.warning("Could not delete files of expired job %s: %s", job_id, e)
                 continue
@@ -146,12 +150,6 @@ class JobManager:
             logger.info("Cleaned up %d expired job(s)", removed)
 
         return removed
-
-    @staticmethod
-    def _delete_result_files(job_id: str) -> None:
-        """Delete a job's result WAV and any cached download-format conversions."""
-        for output_file in settings.processed_dir.glob(f"{job_id}_denoised.*"):
-            output_file.unlink(missing_ok=True)
 
     def _evict_stale_download_markers(self) -> None:
         """Drop download holds older than DOWNLOAD_TTL_SECONDS, left by disconnected clients."""

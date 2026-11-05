@@ -62,7 +62,7 @@ async def _cleanup_loop(app: FastAPI) -> None:
         await asyncio.sleep(settings.cleanup_interval_seconds)
         try:
             # Read on each pass, so the loop always uses the store the app has now
-            await job_manager.cleanup_expired(app.state.job_store)
+            await job_manager.cleanup_expired(app.state.job_store, app.state.file_store)
         except Exception:
             logger.exception("Error during job cleanup")
 

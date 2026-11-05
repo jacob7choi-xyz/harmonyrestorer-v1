@@ -77,6 +77,7 @@ backend/app/
 │   ├── admission.py       # Fail-fast inference admission (one at a time)
 │   ├── rate_limit.py      # RateLimiter contract, in-memory adapter, builder
 │   ├── job_store.py       # JobStore contract (job records, caps), in-memory adapter, builder
+│   ├── file_store.py      # FileStore contract (result files), local-disk adapter, builder
 │   ├── transcode.py       # Download format conversion, own admission slot
 │   ├── artifacts.py       # Atomic byte budget for the memory-backed filesystem
 │   └── jobs.py            # Runs the denoiser in a worker thread; download guard and cleanup

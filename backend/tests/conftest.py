@@ -6,6 +6,7 @@ import pytest
 from app.config import settings
 from app.main import app
 from app.services.artifacts import ArtifactBudget
+from app.services.file_store import LocalFileStore
 from app.services.job_store import build_job_store
 from app.services.jobs import job_manager
 from app.services.rate_limit import build_rate_limiter
@@ -21,7 +22,8 @@ def isolated_artifact_dirs(tmp_path_factory, monkeypatch) -> None:
     nothing removes the files. The artifact budget is replaced too, because the
     shared one captured the real folders when it was built at import, and the
     cached denoiser is cleared, because a built one keeps the folder it was
-    given.
+    given. The app's file store is rebuilt on the new folder, because the
+    composition root rooted it at the real one when the app was imported.
     """
     root = tmp_path_factory.mktemp("artifacts")
     uploads = root / "uploads"
@@ -36,6 +38,7 @@ def isolated_artifact_dirs(tmp_path_factory, monkeypatch) -> None:
     monkeypatch.setattr("app.routes.denoise.artifact_budget", budget)
     monkeypatch.setattr("app.services.transcode.artifact_budget", budget)
     monkeypatch.setattr(job_manager, "_denoiser", None)
+    monkeypatch.setattr(app.state, "file_store", LocalFileStore(processed))
 
 
 def _clear_rate_limiter(application: FastAPI) -> None:

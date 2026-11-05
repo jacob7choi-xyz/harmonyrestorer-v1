@@ -27,6 +27,7 @@ from app.services.audio_decode import (
     demuxer_for,
 )
 from app.services.engines import input_sample_rate, peak_output_bytes
+from app.services.file_store import FileStore
 from app.services.job_store import IPJobCapError, JobCapError, JobStore
 from app.services.jobs import job_manager
 from app.services.transcode import (
@@ -61,7 +62,7 @@ def _observe_inference_task(task: asyncio.Task[None]) -> None:
 
 
 async def _run_inference(
-    store: JobStore, job_id: str, input_path: Path, reservation_bytes: int
+    store: JobStore, files: FileStore, job_id: str, input_path: Path, reservation_bytes: int
 ) -> None:
     """Run one inference; release its slot and byte reservation on completion.
 
@@ -72,13 +73,13 @@ async def _run_inference(
     subsequent budget scans see the persisted truth.
     """
     try:
-        await _process_job(store, job_id, input_path)
+        await _process_job(store, files, job_id, input_path)
     finally:
         admission.release()
         artifact_budget.release(reservation_bytes)
 
 
-async def _process_job(store: JobStore, job_id: str, input_path: Path) -> None:
+async def _process_job(store: JobStore, files: FileStore, job_id: str, input_path: Path) -> None:
     """Take a job from QUEUED to COMPLETED or FAILED, denoising in a worker thread.
 
     Job status changes happen here, on the event loop; the worker thread
@@ -99,14 +100,16 @@ async def _process_job(store: JobStore, job_id: str, input_path: Path) -> None:
         input_path.unlink(missing_ok=True)
         return
     try:
-        processing_time = await run_in_threadpool(job_manager.run_denoiser, job_id, input_path)
+        processing_time = await run_in_threadpool(
+            job_manager.run_denoiser, job_id, input_path, files
+        )
     except Exception as e:
         logger.error("Job %s failed: %s", job_id, e, exc_info=True)
         await store.fail(job_id)
         return
     if not await store.complete(job_id, processing_time, f"{router.prefix}/download/{job_id}"):
         logger.error("Job %s left PROCESSING before it completed; removing its output", job_id)
-        (settings.processed_dir / f"{job_id}_denoised.wav").unlink(missing_ok=True)
+        files.delete_results(job_id)
         return
     logger.info("Completed job %s in %.1fs", job_id, processing_time)
 
@@ -363,8 +366,9 @@ async def denoise_audio(
             raise
 
         try:
+            files: FileStore = request.app.state.file_store
             task = asyncio.create_task(
-                _run_inference(store, job_id, input_path, upload_reservation)
+                _run_inference(store, files, job_id, input_path, upload_reservation)
             )
         except Exception as err:
             # Transaction rollback at the ownership-transfer boundary: the
@@ -437,7 +441,8 @@ async def download_audio(job_id: str, request: Request, format: str = Query("wav
     job_manager.mark_downloading(job_id)
 
     try:
-        output_path = settings.processed_dir / f"{job_id}_denoised.wav"
+        files: FileStore = request.app.state.file_store
+        output_path = files.result_path(job_id)
         if not output_path.exists():
             raise HTTPException(status_code=404, detail="File not found")
 
