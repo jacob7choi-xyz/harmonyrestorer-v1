@@ -2,11 +2,13 @@
 
 This runbook carries out ADR 009 (`docs/adr/009-pay-per-use-hosting.md`) in an AWS account, one step at a time, with the AWS CLI. Each step says why it exists, gives the commands, a read-only check, and how to undo it. Nothing here is automated: an operator runs each step and reads its output before the next.
 
-> **Note:** Several commands print ARNs, which contain the account ID. The commands below use `--query` to print only the fields needed, or send output to `/dev/null`. Keep the account ID out of anything committed or shared.
+> **Note:** Several commands print ARNs, which contain the account ID. The commands below use `--query` to print only the fields needed, or send output to `/dev/null`. That covers successful output only: an error message from the CLI or Docker can include an ARN or the registry host. Keep the account ID out of anything committed or shared.
 
 > **Note:** The function URL is created last (step 9), after the kill switch exists (step 8), and the kill switch is the first thing tested once the URL exists (step 10). Until step 9 the function has no public endpoint.
 
 ## 0. Before starting
+
+Run every step from the repository root, in one shell; steps 8 and 10 use paths relative to it. The steps use the AWS CLI (version 2; `aws login` needs 2.32.0 or later), `docker` with `buildx`, `jq`, `ffmpeg`, `zip`, `curl` and `uv`.
 
 ADR 009 precondition 0: the account's Lambda concurrency quota must be at least 101, because reserving 1 needs the unreserved count minus 100.
 
@@ -37,10 +39,13 @@ BUDGET=harmonyrestorer-monthly
 FRONTEND_ORIGIN=https://harmonyrestorer.online
 ALERT_EMAIL='<the address that receives budget and alarm email>'
 REGISTRY="$ACCOUNT_ID.dkr.ecr.$REGION.amazonaws.com"
+TOPIC_ARN="arn:aws:sns:$REGION:$ACCOUNT_ID:$TOPIC"
 WORK="$(mktemp -d)"
 ```
 
 `WORK` holds the JSON files the steps write. It is outside the repository.
+
+If a later step runs in a new shell, run this block again first. Values set by later steps (`COMMIT`, `DIGEST`, `VERSION`, `URL`) must be set again too; the steps that need them start with a check that stops when one is empty.
 
 ## 1. Budget
 
@@ -79,7 +84,7 @@ Undo: `"$AWS" budgets delete-budget --account-id "$ACCOUNT_ID" --budget-name "$B
 ADR 009 decision 13: alarms send email through SNS. AWS sends a confirmation email that must be accepted before any alarm email arrives.
 
 ```bash
-TOPIC_ARN="$("$AWS" sns create-topic --name "$TOPIC" --query TopicArn --output text)"
+"$AWS" sns create-topic --name "$TOPIC" > /dev/null
 "$AWS" sns subscribe --topic-arn "$TOPIC_ARN" --protocol email \
   --notification-endpoint "$ALERT_EMAIL" --query SubscriptionArn --output text
 ```
@@ -134,14 +139,15 @@ DIGEST='<the sha256 digest listed with Platform: linux/amd64>'
 ```
 
 ```bash
+: "${COMMIT:?set COMMIT first}" "${DIGEST:?set DIGEST first}"
 docker pull --platform linux/amd64 "ghcr.io/jacob7choi-xyz/harmonyrestorer-backend@$DIGEST"
 "$AWS" ecr get-login-password | docker login --username AWS --password-stdin "$REGISTRY"
 docker tag "ghcr.io/jacob7choi-xyz/harmonyrestorer-backend@$DIGEST" "$REGISTRY/$REPO:$COMMIT"
-docker push "$REGISTRY/$REPO:$COMMIT" | grep -o 'digest: sha256:[0-9a-f]\{64\}'
+docker push "$REGISTRY/$REPO:$COMMIT" 2>&1 | grep -o 'digest: sha256:[0-9a-f]\{64\}'
 docker logout "$REGISTRY" > /dev/null
 ```
 
-`docker push` and `docker logout` print the registry host, which contains the account ID, so only the digest line is shown. It must equal `DIGEST`. **To verify:** that pushing a single-platform image pulled by digest keeps the same digest; if it does not, stop and compare the manifests before going on.
+`docker push` and `docker logout` print the registry host, which contains the account ID, so only the digest line is shown. It must equal `DIGEST`. If nothing is printed, the push failed; the check below shows whether the image arrived. **To verify:** that pushing a single-platform image pulled by digest keeps the same digest; if it does not, stop and compare the manifests before going on.
 
 Check: `"$AWS" ecr describe-images --repository-name "$REPO" --query "imageDetails[].imageDigest"` lists `DIGEST`.
 
@@ -213,6 +219,7 @@ cat > "$WORK/function-env.json" <<'EOF'
 }}
 EOF
 
+: "${DIGEST:?set DIGEST first}"
 "$AWS" lambda create-function --function-name "$FUNCTION" --package-type Image \
   --code ImageUri="$REGISTRY/$REPO@$DIGEST" \
   --role "arn:aws:iam::$ACCOUNT_ID:role/$EXEC_ROLE" \
@@ -227,6 +234,8 @@ EOF
 **To verify:** that Lambda accepts an empty value for `CORS_ORIGINS`; the API reference states no minimum length. If it does not, `","` gives the app the same empty list (`backend/app/config.py:154-158` drops blank entries). Also to verify: that `ImageUri` accepts the `@sha256:` digest form; the reference says only "URI of a container image in the Amazon ECR registry". If it is refused, use `$REGISTRY/$REPO:$COMMIT`, whose tag is immutable in this repository (step 3).
 
 If `create-function` refuses 3,538 MB, the account's memory quota may be lower (ADR 009 precondition 6); stop and record the error.
+
+IAM changes may not be visible everywhere at once (AWS's IAM troubleshooting page: changes including "creating or updating users, groups, roles, or policies" are subject to eventual consistency). If `create-function` reports that the role cannot be assumed right after step 5, wait a short time and run it again. The same applies to the kill-switch function in step 8.
 
 Check: `"$AWS" lambda get-function-configuration --function-name "$FUNCTION" --query "[State,MemorySize,Timeout,EphemeralStorage.Size,Architectures[0]]"` and `"$AWS" lambda get-function-concurrency --function-name "$FUNCTION"`.
 
@@ -316,7 +325,15 @@ The throttle alarm only emails. Throttles are expected while one user's job hold
 
 Check: `"$AWS" cloudwatch describe-alarms --alarm-names "$ALARM" "$THROTTLE_ALARM" --query "MetricAlarms[].[AlarmName,StateValue,Threshold,Period]"`. The kill switch itself is tested in step 10, after the URL exists.
 
-Undo: `"$AWS" cloudwatch delete-alarms --alarm-names "$ALARM" "$THROTTLE_ALARM"`, `"$AWS" lambda delete-function --function-name "$KS_FUNCTION"`, then the role policy, the role and the log group as in step 5.
+Undo, in this order:
+
+```bash
+"$AWS" cloudwatch delete-alarms --alarm-names "$ALARM" "$THROTTLE_ALARM"
+"$AWS" lambda delete-function --function-name "$KS_FUNCTION"
+"$AWS" iam delete-role-policy --role-name "$KS_ROLE" --policy-name close-function-url
+"$AWS" iam delete-role --role-name "$KS_ROLE"
+"$AWS" logs delete-log-group --log-group-name "/aws/lambda/$KS_FUNCTION"
+```
 
 ## 9. Function URL
 
@@ -337,7 +354,8 @@ EOF
   --statement-id public-function-url-invoke --action lambda:InvokeFunction \
   --principal '*' --invoked-via-function-url > /dev/null
 
-URL='<the URL printed above, without a trailing slash>'
+URL="$("$AWS" lambda get-function-url-config --function-name "$FUNCTION" --qualifier "$ALIAS" --query FunctionUrl --output text)"
+URL="${URL%/}"
 ```
 
 Check: `curl -sS "$URL/health"` is expected to return 200 and `"status":"healthy"`, after a cold start on the first call.
@@ -351,9 +369,14 @@ ADR 009's preconditions 1 to 7. Record each result in the ADR. The frontend is n
 **7. Kill switch, first.** Put the alarm into `ALARM` by hand; AWS says the configured actions run when the state changes:
 
 ```bash
+: "${URL:?set URL first}"
 "$AWS" cloudwatch set-alarm-state --alarm-name "$ALARM" --state-value ALARM --state-reason "runbook test"
-sleep 30
-"$AWS" lambda get-function-url-config --function-name "$FUNCTION" --qualifier "$ALIAS" --query AuthType
+for _ in $(seq 1 24); do
+  auth="$("$AWS" lambda get-function-url-config --function-name "$FUNCTION" --qualifier "$ALIAS" --query AuthType --output text)"
+  [ "$auth" = AWS_IAM ] && break
+  sleep 5
+done
+echo "$auth"
 curl -sS -o /dev/null -w '%{http_code}\n' "$URL/health"
 ```
 
@@ -366,7 +389,21 @@ The forced state returns to the alarm's real state within seconds; the actions r
 curl -sS -o /dev/null -w '%{http_code}\n' "$URL/health"
 ```
 
-**1. Client identity.** Set `LOG_LEVEL=DEBUG` for the check by editing `function-env.json` and running `update-function-configuration --environment` with the whole file, since that call replaces every variable, then publish a version and point `live` at it. Upload once from two networks (for example a home connection and a phone hotspot), and once with forged headers:
+The alarm's actions run only when its state changes to `ALARM`. After a real trip, reopen the URL only once the hourly sum is back under the threshold and the alarm reads `OK` (`"$AWS" cloudwatch describe-alarms --alarm-names "$ALARM" --query "MetricAlarms[0].StateValue"`); while it stays in `ALARM`, it cannot close the URL again.
+
+**1. Client identity.** Set `LOG_LEVEL=DEBUG` for the check. `update-function-configuration --environment` replaces every variable, so it is given the whole file:
+
+```bash
+sed -i '' 's/"LOG_LEVEL": "INFO"/"LOG_LEVEL": "DEBUG"/' "$WORK/function-env.json"
+"$AWS" lambda update-function-configuration --function-name "$FUNCTION" \
+  --environment "file://$WORK/function-env.json" --query LastUpdateStatus --output text
+"$AWS" lambda wait function-updated-v2 --function-name "$FUNCTION"
+VERSION="$("$AWS" lambda publish-version --function-name "$FUNCTION" --query Version --output text)"
+"$AWS" lambda update-alias --function-name "$FUNCTION" --name "$ALIAS" \
+  --function-version "$VERSION" --query FunctionVersion --output text
+```
+
+(`sed -i ''` is the macOS form; on Linux it is `sed -i`.) Then upload once from two networks (for example a home connection and a phone hotspot), and once with forged headers:
 
 ```bash
 curl -sS -F "file=@frontend/public/sample-noisy.wav;type=audio/wav" \
@@ -376,7 +413,7 @@ curl -sS -F "file=@frontend/public/sample-noisy.wav;type=audio/wav" \
   --filter-pattern '"Rate-limit check"' --query "events[].message"
 ```
 
-Passing: the two networks log different addresses, and the forged request logs the real address, not `203.0.113.9`. Set `LOG_LEVEL` back to `INFO` the same way afterwards.
+Passing: the two networks log different addresses, and the forged request logs the real address, not `203.0.113.9`. Afterwards, set `LOG_LEVEL` back to `INFO` with the same commands, swapping `DEBUG` and `INFO` in the `sed` line.
 
 **2. Upload size.** Make a WAV of exactly 4 MiB and one byte larger, and upload both:
 
@@ -400,7 +437,7 @@ Passing: `exact.wav` gets 200 and `over.wav` 413. (`over.wav` is two bytes over,
 **3. Streaming.** Upload a 595 s file under 4 MiB, then download the WAV. It is a few seconds under the 600 s cap because uploads longer than the cap are refused (`backend/app/services/audio_decode.py:246`) and an MP3 encoder can add padding:
 
 ```bash
-ffmpeg -f lavfi -i anoisesrc=d=595:c=pink:r=16000 -ac 1 -b:a 48k long.mp3
+ffmpeg -y -f lavfi -i anoisesrc=d=595:c=pink:r=16000 -ac 1 -b:a 48k long.mp3
 JOB="$(curl -sS -F "file=@long.mp3;type=audio/mpeg" "$URL/api/v1/denoise" | jq -r .job_id)"
 curl -sS -o long-restored.wav -w '%{http_code} %{size_download}\n' "$URL/api/v1/download/$JOB"
 ```
