@@ -147,6 +147,12 @@ def main() -> int:
         print(f"ambiguous dependency identity: {e}", file=sys.stderr)
         return 1
 
+    # An empty list means the freeze that writes it failed or printed nothing; auditing
+    # nothing must not read as a clean audit
+    if not pinned:
+        print("no dependencies to audit, not a pass", file=sys.stderr)
+        return 1
+
     gaps = check_coverage(pinned, reported)
     if gaps:
         print("coverage gap, not a pass:", file=sys.stderr)

@@ -115,7 +115,10 @@ audit_dependencies() {
   normalise="s/^(${ADVISORY_VERSION_MAPPED_PACKAGES})==([^+]+)\\+[A-Za-z0-9._]+\$/\\1==\\2/"
 
   # Drop the local project, which exists on no index and can never be audited.
-  uv pip freeze | grep -vE '^(-e |harmonyrestorer([=<>@ ]|$))' | sed -E "$normalise" >"$req"
+  # run calls this function inside if, where errexit is off, so a failed stage of this
+  # pipeline must return explicitly. pipefail makes any stage's failure the pipeline's.
+  uv pip freeze | grep -vE '^(-e |harmonyrestorer([=<>@ ]|$))' | sed -E "$normalise" >"$req" \
+    || return 1
 
   # --disable-pip alongside --no-deps is what actually prevents resolution. --no-deps
   # by itself still let the pip-backed collector expand the dependency closure, which is

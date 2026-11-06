@@ -159,6 +159,18 @@ class TestMain:
         )
         assert audit.main() == 1
 
+    def test_nothing_to_audit_exits_one(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """An empty requirements list is a failed freeze, not a clean audit."""
+        requirements = write(tmp_path / "r.txt", "")
+        audit_report = report(tmp_path / "p.json", [])
+        monkeypatch.setattr(
+            "sys.argv",
+            ["x", "--requirements", str(requirements), "--report", str(audit_report)],
+        )
+        assert audit.main() == 1
+
     def test_coverage_gap_exits_one(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         requirements = write(tmp_path / "r.txt", "numpy==2.3.5\npackaging==26.1\n")
         audit_report = report(tmp_path / "p.json", [CLEAN_ENTRY])
