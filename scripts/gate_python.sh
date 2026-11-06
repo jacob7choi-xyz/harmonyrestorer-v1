@@ -53,10 +53,10 @@ UV_RUN=(uv run --frozen --no-sync)
 # Recorded now, asserted at the end, so a mutation nothing else noticed still fails.
 LOCK_DIGEST_BEFORE="$(shasum -a 256 uv.lock | cut -d" " -f1)"
 
-run "format (ruff)" "${UV_RUN[@]}" ruff format --check backend/ dataset/ benchmark/ scripts/
-run "lint (ruff)" "${UV_RUN[@]}" ruff check backend/ dataset/ benchmark/ scripts/
-run "types (mypy)" "${UV_RUN[@]}" mypy backend/app/
-run "security (bandit)" "${UV_RUN[@]}" bandit -r backend/app/ -q
+run "format (ruff)" "${UV_RUN[@]}" ruff format --check backend/ dataset/ benchmark/ scripts/ ops/
+run "lint (ruff)" "${UV_RUN[@]}" ruff check backend/ dataset/ benchmark/ scripts/ ops/
+run "types (mypy)" "${UV_RUN[@]}" mypy backend/app/ ops/
+run "security (bandit)" "${UV_RUN[@]}" bandit -r backend/app/ ops/ -x ops/kill_switch/tests -q
 
 # Dependency audit, with coverage asserted rather than assumed.
 #
@@ -142,6 +142,7 @@ run "backend tests" \
 run "dataset tests" "${UV_RUN[@]}" pytest dataset/tests/ -v --tb=short
 run "benchmark tests" "${UV_RUN[@]}" pytest benchmark/tests/ -v --tb=short
 run "gate policy tests" "${UV_RUN[@]}" pytest scripts/tests/ -v --tb=short
+run "ops tests" "${UV_RUN[@]}" pytest ops/kill_switch/tests/ -v --tb=short
 
 scan_secrets() {
   # Null-delimited so a tracked filename containing whitespace is scanned rather than

@@ -43,3 +43,4 @@ convention = "google"
 "dataset/tests/*" = ["D"]
 "benchmark/tests/*" = ["D"]
 "scripts/tests/*" = ["D"]
+"ops/kill_switch/tests/*" = ["D"]
