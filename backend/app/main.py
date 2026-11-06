@@ -111,6 +111,29 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     logger.info("HarmonyRestorer v1 shutting down")
 
 
+def _add_cors(app: FastAPI, origins: list[str]) -> None:
+    """Add CORS handling for the given origins, or none at all when the list is empty.
+
+    With no origins, CORSMiddleware still answers preflight requests with 400 and
+    some Access-Control headers. ADR 009 plans to set CORS_ORIGINS empty on Lambda,
+    where the function URL adds the CORS headers, so the app adds none of its own.
+
+    Args:
+        app: The application to add the middleware to.
+        origins: Origins allowed to read responses; empty disables CORS handling.
+    """
+    if not origins:
+        logger.info("CORS_ORIGINS is empty; the app adds no CORS headers")
+        return
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=False,
+        allow_methods=["GET", "POST"],
+        allow_headers=["Content-Type", "Accept"],
+    )
+
+
 app = FastAPI(
     title="HarmonyRestorer v1",
     description="AI-powered audio denoising",
@@ -132,13 +155,7 @@ install_adapters(app)
 # also carry CORS headers; otherwise the browser blocks the frontend from reading them.
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(RateLimitMiddleware)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.cors_origins,
-    allow_credentials=False,
-    allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type", "Accept"],
-)
+_add_cors(app, settings.cors_origins)
 
 # --- Exception handlers ---
 app.add_exception_handler(Exception, unhandled_exception_handler)

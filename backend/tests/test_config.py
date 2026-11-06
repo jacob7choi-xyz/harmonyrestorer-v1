@@ -258,3 +258,14 @@ def test_uvr_model_name_accepts_default(monkeypatch, tmp_path) -> None:
     _base_dirs(monkeypatch, tmp_path)
     monkeypatch.delenv("UVR_MODEL_NAME", raising=False)
     assert Settings().uvr_model_name == "UVR-DeNoise.pth"
+
+
+# --- CORS origins ---
+
+
+@pytest.mark.parametrize("raw", ["", " , "])
+def test_cors_origins_without_an_origin_parse_to_empty(monkeypatch, tmp_path, raw) -> None:
+    """An empty value, or only separators and spaces, lists no origins."""
+    _base_dirs(monkeypatch, tmp_path)
+    monkeypatch.setenv("CORS_ORIGINS", raw)
+    assert Settings().cors_origins == []

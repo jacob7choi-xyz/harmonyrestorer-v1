@@ -3,9 +3,11 @@
 from unittest.mock import patch
 
 from app.config import Settings, settings
-from app.main import app
+from app.main import _add_cors, app
 from app.services.rate_limit import InMemoryRateLimiter
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from httpx import Response
 
 from tests.conftest import _clear_job_store
 from tests.rate_limiter_contract import FakeClock
@@ -148,6 +150,56 @@ def test_rate_limited_upload_carries_cors_header(client, mock_denoiser, monkeypa
     )
     assert r.status_code == 429
     assert "Too many requests" in r.json()["detail"]
+    assert r.headers.get("access-control-allow-origin") == origin
+
+
+def _app_with_cors(origins: list[str]) -> TestClient:
+    """Build a one-route app with the CORS handling main.py uses."""
+    cors_app = FastAPI()
+
+    @cors_app.get("/ping")
+    def ping() -> dict[str, str]:
+        return {"status": "ok"}
+
+    _add_cors(cors_app, origins)
+    return TestClient(cors_app)
+
+
+def _cors_headers(response: Response) -> dict[str, str]:
+    return {k: v for k, v in response.headers.items() if k.startswith("access-control-")}
+
+
+def test_empty_cors_origins_adds_no_cors_headers_to_a_request() -> None:
+    """With no origins, a cross-origin GET gets no Access-Control headers.
+
+    ADR 009 plans to set CORS_ORIGINS empty on Lambda, where the function URL adds
+    the CORS headers.
+    """
+    r = _app_with_cors([]).get("/ping", headers={"Origin": "https://frontend.example"})
+    assert r.status_code == 200
+    assert _cors_headers(r) == {}
+
+
+def test_empty_cors_origins_leaves_preflight_unanswered() -> None:
+    """With no origins, the app does not answer a preflight with CORS headers.
+
+    CORSMiddleware with an empty origin list still answers a preflight with 400 and
+    Access-Control-Allow-Methods, -Allow-Headers and -Max-Age, so the app adds no
+    middleware at all instead. The OPTIONS request then reaches routing, which has no
+    OPTIONS route.
+    """
+    r = _app_with_cors([]).options(
+        "/ping",
+        headers={"Origin": "https://frontend.example", "Access-Control-Request-Method": "GET"},
+    )
+    assert r.status_code == 405
+    assert _cors_headers(r) == {}
+
+
+def test_listed_cors_origin_gets_allow_origin_header() -> None:
+    """A listed origin is allowed to read responses."""
+    origin = "https://frontend.example"
+    r = _app_with_cors([origin]).get("/ping", headers={"Origin": origin})
     assert r.headers.get("access-control-allow-origin") == origin
 
 
