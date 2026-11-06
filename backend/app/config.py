@@ -151,6 +151,19 @@ class Settings:
                 f"Invalid CLIENT_IDENTITY={identity!r}, "
                 f"must be one of {sorted(member.value for member in ClientIdentitySource)}"
             ) from e
+        # Lambda runtimes set AWS_LAMBDA_FUNCTION_NAME, a reserved variable. Behind the Lambda
+        # Web Adapter every request comes from the adapter's address, which uvicorn trusts for
+        # X-Forwarded-For (Dockerfile CMD), so connection mode could let callers choose their
+        # own identity. Only this direction is enforced: the docs read do not confirm the
+        # variable is set for a container image on a non-AWS base.
+        if (
+            os.getenv("AWS_LAMBDA_FUNCTION_NAME")
+            and self.client_identity_source is ClientIdentitySource.CONNECTION
+        ):
+            raise ValueError(
+                "CLIENT_IDENTITY=connection is not allowed on AWS Lambda; "
+                "set CLIENT_IDENTITY=lambda_request_context (docs/adr/009-pay-per-use-hosting.md)"
+            )
         self.cors_origins: list[str] = [
             o.strip()
             for o in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")

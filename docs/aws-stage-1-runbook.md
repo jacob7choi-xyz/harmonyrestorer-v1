@@ -231,7 +231,7 @@ EOF
   --reserved-concurrent-executions 1 --query ReservedConcurrentExecutions
 ```
 
-**To verify:** that Lambda accepts an empty value for `CORS_ORIGINS`; the API reference states no minimum length. If it does not, `","` gives the app the same empty list (`backend/app/config.py:154-158` drops blank entries). Also to verify: that `ImageUri` accepts the `@sha256:` digest form; the reference says only "URI of a container image in the Amazon ECR registry". If it is refused, use `$REGISTRY/$REPO:$COMMIT`, whose tag is immutable in this repository (step 3).
+**To verify:** that Lambda accepts an empty value for `CORS_ORIGINS`; the API reference states no minimum length. If it does not, `","` gives the app the same empty list (`backend/app/config.py:167-171` drops blank entries). Also to verify: that `ImageUri` accepts the `@sha256:` digest form; the reference says only "URI of a container image in the Amazon ECR registry". If it is refused, use `$REGISTRY/$REPO:$COMMIT`, whose tag is immutable in this repository (step 3).
 
 If `create-function` refuses 3,538 MB, the account's memory quota may be lower (ADR 009 precondition 6); stop and record the error.
 

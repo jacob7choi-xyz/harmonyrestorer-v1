@@ -249,6 +249,35 @@ def test_client_identity_accepts_lambda_request_context(monkeypatch, tmp_path) -
     assert Settings().client_identity_source is ClientIdentitySource.LAMBDA_REQUEST_CONTEXT
 
 
+@pytest.mark.parametrize("identity", [None, "connection"], ids=["unset", "explicit"])
+def test_connection_identity_is_refused_on_lambda(monkeypatch, tmp_path, identity) -> None:
+    """On Lambda the connection address is the adapter's, so connection mode is refused."""
+    _base_dirs(monkeypatch, tmp_path)
+    monkeypatch.setenv("AWS_LAMBDA_FUNCTION_NAME", "harmonyrestorer-backend")
+    if identity is None:
+        monkeypatch.delenv("CLIENT_IDENTITY", raising=False)
+    else:
+        monkeypatch.setenv("CLIENT_IDENTITY", identity)
+    with pytest.raises(ValueError, match="CLIENT_IDENTITY=connection is not allowed on AWS Lambda"):
+        Settings()
+
+
+def test_lambda_request_context_is_accepted_on_lambda(monkeypatch, tmp_path) -> None:
+    """On Lambda, the request context mode loads."""
+    _base_dirs(monkeypatch, tmp_path)
+    monkeypatch.setenv("AWS_LAMBDA_FUNCTION_NAME", "harmonyrestorer-backend")
+    monkeypatch.setenv("CLIENT_IDENTITY", "lambda_request_context")
+    assert Settings().client_identity_source is ClientIdentitySource.LAMBDA_REQUEST_CONTEXT
+
+
+def test_connection_identity_is_accepted_off_lambda(monkeypatch, tmp_path) -> None:
+    """Off Lambda, connection mode loads as before."""
+    _base_dirs(monkeypatch, tmp_path)
+    monkeypatch.delenv("AWS_LAMBDA_FUNCTION_NAME", raising=False)
+    monkeypatch.setenv("CLIENT_IDENTITY", "connection")
+    assert Settings().client_identity_source is ClientIdentitySource.CONNECTION
+
+
 # --- JOB_STORE ---
 
 
