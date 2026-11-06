@@ -26,6 +26,16 @@ class RateLimiterBackend(StrEnum):
     MEMORY = "memory"
 
 
+class ClientIdentitySource(StrEnum):
+    """Where the client address comes from, selected with CLIENT_IDENTITY."""
+
+    # The connection's address, which uvicorn's proxy-headers setting may take from a
+    # trusted proxy's X-Forwarded-For
+    CONNECTION = "connection"
+    # http.sourceIp in the x-amzn-request-context header the Lambda Web Adapter sets
+    LAMBDA_REQUEST_CONTEXT = "lambda_request_context"
+
+
 class JobStoreBackend(StrEnum):
     """Where job records are kept, selected with JOB_STORE."""
 
@@ -118,6 +128,15 @@ class Settings:
             raise ValueError(
                 f"Invalid RATE_LIMITER={limiter!r}, "
                 f"must be one of {sorted(member.value for member in RateLimiterBackend)}"
+            ) from e
+        identity = os.getenv("CLIENT_IDENTITY", ClientIdentitySource.CONNECTION)
+        try:
+            # Exact match on the value; case is not normalized
+            self.client_identity_source = ClientIdentitySource(identity)
+        except ValueError as e:
+            raise ValueError(
+                f"Invalid CLIENT_IDENTITY={identity!r}, "
+                f"must be one of {sorted(member.value for member in ClientIdentitySource)}"
             ) from e
         self.cors_origins: list[str] = [
             o.strip()

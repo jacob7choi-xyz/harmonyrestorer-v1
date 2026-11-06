@@ -2,6 +2,7 @@
 
 import pytest
 from app.config import (
+    ClientIdentitySource,
     DenoiserEngine,
     FileStoreBackend,
     JobStoreBackend,
@@ -199,6 +200,30 @@ def test_rate_limiter_defaults_to_memory(monkeypatch, tmp_path) -> None:
     _base_dirs(monkeypatch, tmp_path)
     monkeypatch.delenv("RATE_LIMITER", raising=False)
     assert Settings().rate_limiter is RateLimiterBackend.MEMORY
+
+
+# --- CLIENT_IDENTITY ---
+
+
+def test_client_identity_rejects_unknown_value(monkeypatch) -> None:
+    """A CLIENT_IDENTITY other than the listed sources raises ValueError when settings load."""
+    monkeypatch.setenv("CLIENT_IDENTITY", "x_forwarded_for")
+    with pytest.raises(ValueError, match="Invalid CLIENT_IDENTITY"):
+        Settings()
+
+
+def test_client_identity_defaults_to_connection(monkeypatch, tmp_path) -> None:
+    """With CLIENT_IDENTITY unset, the address comes from the connection."""
+    _base_dirs(monkeypatch, tmp_path)
+    monkeypatch.delenv("CLIENT_IDENTITY", raising=False)
+    assert Settings().client_identity_source is ClientIdentitySource.CONNECTION
+
+
+def test_client_identity_accepts_lambda_request_context(monkeypatch, tmp_path) -> None:
+    """CLIENT_IDENTITY=lambda_request_context selects the Lambda request context."""
+    _base_dirs(monkeypatch, tmp_path)
+    monkeypatch.setenv("CLIENT_IDENTITY", "lambda_request_context")
+    assert Settings().client_identity_source is ClientIdentitySource.LAMBDA_REQUEST_CONTEXT
 
 
 # --- JOB_STORE ---

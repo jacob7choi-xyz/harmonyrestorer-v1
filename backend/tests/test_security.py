@@ -1,8 +1,11 @@
 """Tests for security features: rate limiting, error sanitization, input validation."""
 
+import asyncio
+import json
 from unittest.mock import patch
 
-from app.config import Settings, settings
+from app.client_identity import LAMBDA_REQUEST_CONTEXT_HEADER
+from app.config import ClientIdentitySource, Settings, settings
 from app.main import _add_cors, app
 from app.services.rate_limit import InMemoryRateLimiter
 from fastapi import FastAPI
@@ -122,6 +125,68 @@ def test_rate_limiter_returns_429_after_limit(client, mock_denoiser, monkeypatch
     )
     assert r.status_code == 429
     assert "Too many requests" in r.json()["detail"]
+
+
+def _lambda_context_header(source_ip: str) -> dict[str, str]:
+    """The request context header the Lambda Web Adapter sets, for one source address."""
+    return {LAMBDA_REQUEST_CONTEXT_HEADER: json.dumps({"http": {"sourceIp": source_ip}})}
+
+
+def test_lambda_identity_keys_the_upload_limit_on_the_source_ip(
+    client, mock_denoiser, monkeypatch
+) -> None:
+    """With CLIENT_IDENTITY=lambda_request_context, each source address has its own bucket.
+
+    Every request here reaches the app from the same connection address, which is what
+    the mode is for: then only the request context can tell the callers apart.
+    """
+    from tests.conftest import _clear_rate_limiter
+
+    monkeypatch.setattr(
+        settings, "client_identity_source", ClientIdentitySource.LAMBDA_REQUEST_CONTEXT
+    )
+    monkeypatch.setattr(settings, "max_jobs_per_ip", 100)
+    _clear_rate_limiter(app)
+    _clear_job_store(app)
+
+    for i in range(settings.rate_limit_max_requests):
+        r = client.post(
+            "/api/v1/denoise",
+            headers=_lambda_context_header("198.51.100.1"),
+            files={"file": (f"a{i}.wav", SMALL_WAV, "audio/wav")},
+        )
+        assert r.status_code == 200, f"Request {i + 1} from address A should succeed"
+    r = client.post(
+        "/api/v1/denoise",
+        headers=_lambda_context_header("198.51.100.1"),
+        files={"file": ("a_over.wav", SMALL_WAV, "audio/wav")},
+    )
+    assert r.status_code == 429
+
+    r = client.post(
+        "/api/v1/denoise",
+        headers=_lambda_context_header("198.51.100.2"),
+        files={"file": ("b.wav", SMALL_WAV, "audio/wav")},
+    )
+    assert r.status_code == 200
+
+
+def test_lambda_identity_without_a_request_context_returns_503(
+    client, mock_denoiser, monkeypatch
+) -> None:
+    """With CLIENT_IDENTITY=lambda_request_context, an upload without the header fails closed."""
+    from tests.conftest import _clear_rate_limiter
+
+    monkeypatch.setattr(
+        settings, "client_identity_source", ClientIdentitySource.LAMBDA_REQUEST_CONTEXT
+    )
+    _clear_rate_limiter(app)
+    _clear_job_store(app)
+
+    r = client.post("/api/v1/denoise", files={"file": ("none.wav", SMALL_WAV, "audio/wav")})
+    assert r.status_code == 503
+    assert "proxy misconfiguration" in r.json()["detail"]
+    assert asyncio.run(app.state.job_store.counts()) == {}
 
 
 def test_rate_limited_upload_carries_cors_header(client, mock_denoiser, monkeypatch) -> None:
