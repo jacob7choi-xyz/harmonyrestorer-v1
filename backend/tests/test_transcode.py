@@ -188,6 +188,29 @@ class TestTranscodeAdmission:
         assert _TRANSCODE_SLOTS.acquire(blocking=False)
         _TRANSCODE_SLOTS.release()
 
+    def test_budget_scan_error_raises_and_releases_the_slot(self, wav_file, monkeypatch) -> None:
+        """An OSError from the budget's directory scan must not leave the slot held.
+
+        try_reserve walks the artifact directories and re-raises walk errors
+        (app/services/artifacts.py), so it can raise rather than return False.
+        """
+        from app.services import transcode as transcode_module
+
+        class ScanFailsBudget:
+            def try_reserve(self, requested: int) -> bool:
+                raise PermissionError("cannot list processed dir")
+
+            def release(self, reserved: int) -> None:
+                raise AssertionError("nothing was reserved, so nothing is released")
+
+        monkeypatch.setattr(transcode_module, "artifact_budget", ScanFailsBudget())
+
+        with pytest.raises(PermissionError):
+            transcode_output(wav_file, "mp3")
+
+        assert _TRANSCODE_SLOTS.acquire(blocking=False)
+        _TRANSCODE_SLOTS.release()
+
     def test_budget_reservation_released_after_subprocess_failure(
         self, wav_file, monkeypatch
     ) -> None:

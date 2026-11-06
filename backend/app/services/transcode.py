@@ -59,6 +59,7 @@ def transcode_output(wav_path: Path, fmt: str) -> Path:
     Raises:
         TranscodeError: If the format is unknown, ffmpeg fails, or times out.
         FileNotFoundError: If the source WAV no longer exists; nothing is held.
+        OSError: If the byte budget cannot scan its directories; the slot is released.
     """
     if fmt == "wav":
         return wav_path
@@ -76,9 +77,28 @@ def transcode_output(wav_path: Path, fmt: str) -> Path:
     if not _TRANSCODE_SLOTS.acquire(blocking=False):
         logger.warning("Conversion slot busy; rejecting %s to %s", wav_path.name, fmt)
         raise TranscodeBusyError("Another conversion is in progress")
-    if not artifact_budget.try_reserve(reservation):
+    # Everything after the acquire sits in this try, so the slot is released on every
+    # path, including an OSError from the budget's directory scan in try_reserve
+    try:
+        if not artifact_budget.try_reserve(reservation):
+            raise TranscodeBusyError("Storage capacity unavailable for conversion")
+        try:
+            _run_conversion(wav_path, fmt, target)
+        finally:
+            artifact_budget.release(reservation)
+    finally:
         _TRANSCODE_SLOTS.release()
-        raise TranscodeBusyError("Storage capacity unavailable for conversion")
+    return target
+
+
+def _run_conversion(wav_path: Path, fmt: str, target: Path) -> None:
+    """Convert *wav_path* to *fmt* with ffmpeg and atomically place it at *target*.
+
+    The caller holds the conversion slot and the byte reservation.
+
+    Raises:
+        TranscodeError: If ffmpeg fails or times out.
+    """
     tmp_path: Path | None = None
     try:
         tmp_fd, tmp_str = tempfile.mkstemp(suffix=f".{fmt}", dir=wav_path.parent)
@@ -124,6 +144,3 @@ def transcode_output(wav_path: Path, fmt: str) -> Path:
     finally:
         if tmp_path is not None:
             tmp_path.unlink(missing_ok=True)
-        artifact_budget.release(reservation)
-        _TRANSCODE_SLOTS.release()
-    return target
