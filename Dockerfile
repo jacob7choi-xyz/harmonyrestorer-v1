@@ -2,6 +2,13 @@
 # stays the one whose provenance attestation was checked.
 FROM ghcr.io/astral-sh/uv:0.12.23@sha256:61d393e44e249f2e4b526b6c7ddcecce245946826e608e11c93ad4f5bba55b21 AS uv
 
+# ADR 009 (docs/adr/009-pay-per-use-hosting.md) plans to run the app on AWS Lambda
+# through the Lambda Web Adapter.
+# 1.1.0's release notes add AWS_LWA_READINESS_CHECK_TIMEOUT_SECONDS, set below. The digest
+# is the multi-platform index. No GitHub provenance attestation was found for it, so the
+# digest fixes which bytes are used but does not show who built them.
+FROM public.ecr.aws/awsguru/aws-lambda-adapter:1.1.0@sha256:17cfd08eff1dfea3f6a9a1e9c65fdac80aa4919b6085e746615530f43f57d2f1 AS lambda-adapter
+
 # Stages: build installs the locked dependencies, compiling diffq; build-test adds the
 # test group; base holds the system packages used at run time (see below); test and
 # runtime start from base and copy in a finished .venv, so neither contains the compiler.
@@ -74,6 +81,17 @@ COPY --from=build /app/.venv /app/.venv
 # Application code
 COPY backend/app/ backend/app/
 COPY checkpoints/final.pt checkpoints/final.pt
+
+# The path is the one the adapter's README installs it to. Under Docker the CMD below
+# still serves on its own (scripts/check_runtime_image.sh). Readiness uses /, which runs
+# no checks (backend/app/routes/health.py); /health returns 503 when a check fails. The
+# 8 s timeout is under Lambda's 10 s init limit, and the README says the adapter fails
+# init when it expires.
+COPY --from=lambda-adapter /lambda-adapter /opt/extensions/lambda-adapter
+ENV AWS_LWA_PORT=8000 \
+    AWS_LWA_READINESS_CHECK_PATH=/ \
+    AWS_LWA_READINESS_CHECK_TIMEOUT_SECONDS=8 \
+    AWS_LWA_INVOKE_MODE=response_stream
 
 # Non-root user. Under /app it owns only the upload and processed directories, so the
 # process cannot rewrite the application code, the venv or the checkpoint.

@@ -11,6 +11,9 @@
 # The container runs on a read-only filesystem with only /tmp writable, as Lambda runs
 # images (docs/adr/009-pay-per-use-hosting.md), so a write anywhere else fails this check.
 #
+# The Lambda Web Adapter runs only on Lambda, so this checks that it is in the image and
+# configured as ADR 009 sets out, not that it serves.
+#
 # Usage: scripts/check_runtime_image.sh IMAGE
 # CI calls this after building the runtime stage; it needs Docker and python3.
 
@@ -66,6 +69,15 @@ done
 in_container cat /tmp/health.json 2>/dev/null && printf '\n'
 # An empty code means docker exec itself failed, usually because the container exited
 [ "$code" = "200" ] || fail "/health answered ${code:-nothing}, not 200"
+
+in_container test -x /opt/extensions/lambda-adapter \
+  || fail "the Lambda Web Adapter is missing from /opt/extensions or not executable"
+for setting in AWS_LWA_PORT=8000 AWS_LWA_READINESS_CHECK_PATH=/ \
+  AWS_LWA_READINESS_CHECK_TIMEOUT_SECONDS=8 AWS_LWA_INVOKE_MODE=response_stream; do
+  name="${setting%%=*}"
+  value="$(in_container printenv "$name")" || value=""
+  [ "$value" = "${setting#*=}" ] || fail "$name is '$value', not '${setting#*=}'"
+done
 
 # docker cp cannot write into a read-only container, so the file is piped in instead
 docker exec -i "$CONTAINER" sh -c 'cat > /tmp/sample.wav' < "$SAMPLE"
