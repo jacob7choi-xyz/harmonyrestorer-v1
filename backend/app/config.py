@@ -120,6 +120,19 @@ class Settings:
         self.rate_limit_window_seconds = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "60"))
         if self.rate_limit_window_seconds < 1:
             raise ValueError("RATE_LIMIT_WINDOW_SECONDS must be at least 1")
+        # Downloads are counted separately from uploads. With ADR 009's Lambda settings
+        # (MAX_JOBS_PER_IP=6, JOB_TTL_SECONDS=1200) one client can hold up to about 18 jobs
+        # an hour, and the default allows about three downloads for each.
+        self.download_rate_limit_max_requests = int(
+            os.getenv("DOWNLOAD_RATE_LIMIT_MAX_REQUESTS", "60")
+        )
+        if self.download_rate_limit_max_requests < 1:
+            raise ValueError("DOWNLOAD_RATE_LIMIT_MAX_REQUESTS must be at least 1")
+        self.download_rate_limit_window_seconds = int(
+            os.getenv("DOWNLOAD_RATE_LIMIT_WINDOW_SECONDS", "3600")
+        )
+        if self.download_rate_limit_window_seconds < 1:
+            raise ValueError("DOWNLOAD_RATE_LIMIT_WINDOW_SECONDS must be at least 1")
         limiter = os.getenv("RATE_LIMITER", RateLimiterBackend.MEMORY)
         try:
             # Exact match on the value; case is not normalized

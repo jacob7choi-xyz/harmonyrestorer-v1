@@ -7,7 +7,7 @@ from fastapi import FastAPI
 from app.config import settings
 from app.services.file_store import build_file_store
 from app.services.job_store import build_job_store
-from app.services.rate_limit import build_rate_limiter
+from app.services.rate_limit import build_download_rate_limiter, build_upload_rate_limiter
 
 
 def install_adapters(app: FastAPI) -> None:
@@ -16,6 +16,7 @@ def install_adapters(app: FastAPI) -> None:
     Args:
         app: The application whose requests will use the adapters.
     """
-    app.state.rate_limiter = build_rate_limiter(settings.rate_limiter)
+    app.state.rate_limiter = build_upload_rate_limiter()
+    app.state.download_rate_limiter = build_download_rate_limiter()
     app.state.job_store = build_job_store(settings.job_store)
     app.state.file_store = build_file_store(settings.file_store)

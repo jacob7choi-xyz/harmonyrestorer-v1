@@ -306,6 +306,96 @@ def test_rate_limit_window_expiry_allows_new_requests(client, mock_denoiser, mon
     assert r.status_code == 200, "Request after window expiry must succeed"
 
 
+# --- Download rate limiting ---
+
+
+def _upload_one(client, headers: dict[str, str] | None = None) -> str:
+    """Upload SMALL_WAV and return the job ID; the mocked denoiser completes it inline."""
+    r = client.post(
+        "/api/v1/denoise",
+        headers=headers or {},
+        files={"file": ("dl.wav", SMALL_WAV, "audio/wav")},
+    )
+    assert r.status_code == 200
+    return r.json()["job_id"]
+
+
+def test_download_over_the_limit_returns_429_for_that_client_only(
+    client, mock_denoiser, monkeypatch
+) -> None:
+    """With the default settings, the download after the limit is refused for one client.
+
+    Another client can still download the same job, so the limit is per client.
+    """
+    monkeypatch.setattr(
+        settings, "client_identity_source", ClientIdentitySource.LAMBDA_REQUEST_CONTEXT
+    )
+    _clear_job_store(app)
+    job_id = _upload_one(client, _lambda_context_header("198.51.100.1"))
+    url = f"/api/v1/download/{job_id}"
+
+    for i in range(settings.download_rate_limit_max_requests):
+        d = client.get(url, headers=_lambda_context_header("198.51.100.1"))
+        assert d.status_code == 200, f"Download {i + 1} should succeed"
+    d = client.get(url, headers=_lambda_context_header("198.51.100.1"))
+    assert d.status_code == 429
+    assert "Too many requests" in d.json()["detail"]
+
+    d = client.get(url, headers=_lambda_context_header("198.51.100.2"))
+    assert d.status_code == 200
+
+
+def test_uploads_and_downloads_are_limited_separately(client, mock_denoiser, monkeypatch) -> None:
+    """Using up the download limit leaves uploads allowed, and the reverse."""
+    monkeypatch.setattr(settings, "max_jobs_per_ip", 100)
+    _clear_job_store(app)
+    app.state.download_rate_limiter = InMemoryRateLimiter(1, 3600)
+    job_id = _upload_one(client)
+
+    assert client.get(f"/api/v1/download/{job_id}").status_code == 200
+    assert client.get(f"/api/v1/download/{job_id}").status_code == 429
+    # One upload is already counted; the rest of the upload limit is still available
+    for _ in range(settings.rate_limit_max_requests - 1):
+        _upload_one(client)
+
+    app.state.download_rate_limiter = InMemoryRateLimiter(1, 3600)
+    assert (
+        client.post(
+            "/api/v1/denoise", files={"file": ("over.wav", SMALL_WAV, "audio/wav")}
+        ).status_code
+        == 429
+    )
+    assert client.get(f"/api/v1/download/{job_id}").status_code == 200
+
+
+def test_download_limit_window_expiry_allows_new_downloads(client, mock_denoiser) -> None:
+    """After the download window passes, the client can download again."""
+    _clear_job_store(app)
+    clock = FakeClock()
+    app.state.download_rate_limiter = InMemoryRateLimiter(1, 3600, clock=clock)
+    job_id = _upload_one(client)
+
+    assert client.get(f"/api/v1/download/{job_id}").status_code == 200
+    assert client.get(f"/api/v1/download/{job_id}").status_code == 429
+    clock.advance(3601)
+    assert client.get(f"/api/v1/download/{job_id}").status_code == 200
+
+
+def test_download_without_a_client_identity_returns_503(client, mock_denoiser, monkeypatch) -> None:
+    """With CLIENT_IDENTITY=lambda_request_context, a download without the header fails closed."""
+    monkeypatch.setattr(
+        settings, "client_identity_source", ClientIdentitySource.LAMBDA_REQUEST_CONTEXT
+    )
+    _clear_job_store(app)
+    job_id = _upload_one(client, _lambda_context_header("198.51.100.1"))
+
+    d = client.get(f"/api/v1/download/{job_id}")
+
+    assert d.status_code == 503
+    assert "proxy misconfiguration" in d.json()["detail"]
+    assert d.headers["content-type"].startswith("application/json")
+
+
 # --- Docs gating ---
 
 

@@ -1,4 +1,4 @@
-"""The contract for counting uploads per client, and how the configured counter is built."""
+"""The contract for counting requests per client, and how the configured counters are built."""
 
 from __future__ import annotations
 
@@ -91,22 +91,38 @@ class InMemoryRateLimiter:
         }
 
 
-def build_rate_limiter(backend: RateLimiterBackend) -> RateLimiter:
-    """Build the rate limiter for *backend* from the current settings.
+def build_rate_limiter(
+    backend: RateLimiterBackend, max_requests: int, window_seconds: float
+) -> RateLimiter:
+    """Build a rate limiter for *backend* with the given limit.
 
     Args:
         backend: The configured rate limiter backend.
+        max_requests: Requests allowed per client within one window.
+        window_seconds: Length of the sliding window.
 
     Returns:
-        A rate limiter using settings.rate_limit_max_requests per
-        settings.rate_limit_window_seconds.
+        A rate limiter allowing *max_requests* per client per *window_seconds*.
     """
     # match with assert_never lets mypy report a backend that has no branch here
     match backend:
         case RateLimiterBackend.MEMORY:
-            return InMemoryRateLimiter(
-                max_requests=settings.rate_limit_max_requests,
-                window_seconds=settings.rate_limit_window_seconds,
-            )
+            return InMemoryRateLimiter(max_requests=max_requests, window_seconds=window_seconds)
         case _:
             assert_never(backend)
+
+
+def build_upload_rate_limiter() -> RateLimiter:
+    """Build the upload rate limiter from the current settings."""
+    return build_rate_limiter(
+        settings.rate_limiter, settings.rate_limit_max_requests, settings.rate_limit_window_seconds
+    )
+
+
+def build_download_rate_limiter() -> RateLimiter:
+    """Build the download rate limiter from the current settings."""
+    return build_rate_limiter(
+        settings.rate_limiter,
+        settings.download_rate_limit_max_requests,
+        settings.download_rate_limit_window_seconds,
+    )

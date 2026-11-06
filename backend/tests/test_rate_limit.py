@@ -2,8 +2,13 @@
 
 import pytest
 from app.composition import install_adapters
-from app.config import RateLimiterBackend
-from app.services.rate_limit import InMemoryRateLimiter, build_rate_limiter
+from app.config import RateLimiterBackend, settings
+from app.services.rate_limit import (
+    InMemoryRateLimiter,
+    build_download_rate_limiter,
+    build_rate_limiter,
+    build_upload_rate_limiter,
+)
 from fastapi import FastAPI
 
 from tests.rate_limiter_contract import FakeClock, MakeLimiter, RateLimiterContract
@@ -60,7 +65,8 @@ class TestInMemoryRateLimiter(RateLimiterContract):
 
 def test_build_rate_limiter_returns_the_in_memory_adapter_for_memory() -> None:
     """The memory backend builds an InMemoryRateLimiter."""
-    assert isinstance(build_rate_limiter(RateLimiterBackend.MEMORY), InMemoryRateLimiter)
+    limiter = build_rate_limiter(RateLimiterBackend.MEMORY, max_requests=3, window_seconds=60)
+    assert isinstance(limiter, InMemoryRateLimiter)
 
 
 def test_install_adapters_attaches_a_rate_limiter() -> None:
@@ -70,3 +76,29 @@ def test_install_adapters_attaches_a_rate_limiter() -> None:
     install_adapters(app)
 
     assert isinstance(app.state.rate_limiter, InMemoryRateLimiter)
+
+
+def test_install_adapters_attaches_a_separate_download_rate_limiter() -> None:
+    """Downloads get their own limiter, so they do not count against uploads."""
+    app = FastAPI()
+
+    install_adapters(app)
+
+    assert isinstance(app.state.download_rate_limiter, InMemoryRateLimiter)
+    assert app.state.download_rate_limiter is not app.state.rate_limiter
+
+
+def test_upload_and_download_limiters_use_their_own_settings(monkeypatch) -> None:
+    """Each limiter is built from its own limit and window settings."""
+    monkeypatch.setattr(settings, "rate_limit_max_requests", 2)
+    monkeypatch.setattr(settings, "rate_limit_window_seconds", 30)
+    monkeypatch.setattr(settings, "download_rate_limit_max_requests", 5)
+    monkeypatch.setattr(settings, "download_rate_limit_window_seconds", 900)
+
+    upload = build_upload_rate_limiter()
+    download = build_download_rate_limiter()
+
+    assert isinstance(upload, InMemoryRateLimiter)
+    assert isinstance(download, InMemoryRateLimiter)
+    assert (upload._max_requests, upload._window_seconds) == (2, 30)
+    assert (download._max_requests, download._window_seconds) == (5, 900)

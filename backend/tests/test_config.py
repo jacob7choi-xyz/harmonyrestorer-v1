@@ -27,6 +27,14 @@ def _base_dirs(monkeypatch, tmp_path) -> None:
         ("MAX_UPLOAD_BYTES", "MAX_UPLOAD_BYTES must be at least 1"),
         ("RATE_LIMIT_MAX_REQUESTS", "RATE_LIMIT_MAX_REQUESTS must be at least 1"),
         ("RATE_LIMIT_WINDOW_SECONDS", "RATE_LIMIT_WINDOW_SECONDS must be at least 1"),
+        (
+            "DOWNLOAD_RATE_LIMIT_MAX_REQUESTS",
+            "DOWNLOAD_RATE_LIMIT_MAX_REQUESTS must be at least 1",
+        ),
+        (
+            "DOWNLOAD_RATE_LIMIT_WINDOW_SECONDS",
+            "DOWNLOAD_RATE_LIMIT_WINDOW_SECONDS must be at least 1",
+        ),
         ("JOB_TTL_SECONDS", "JOB_TTL_SECONDS must be at least 1"),
         ("CLEANUP_INTERVAL_SECONDS", "CLEANUP_INTERVAL_SECONDS must be at least 1"),
         ("MAX_TOTAL_JOBS", "MAX_TOTAL_JOBS must be at least 1"),
@@ -54,6 +62,8 @@ def test_numeric_settings_reject_zero(monkeypatch, env_name, message) -> None:
         "MAX_UPLOAD_BYTES",
         "RATE_LIMIT_MAX_REQUESTS",
         "RATE_LIMIT_WINDOW_SECONDS",
+        "DOWNLOAD_RATE_LIMIT_MAX_REQUESTS",
+        "DOWNLOAD_RATE_LIMIT_WINDOW_SECONDS",
         "JOB_TTL_SECONDS",
         "CLEANUP_INTERVAL_SECONDS",
         "DECODE_TIMEOUT_SECONDS",
@@ -200,6 +210,19 @@ def test_rate_limiter_defaults_to_memory(monkeypatch, tmp_path) -> None:
     _base_dirs(monkeypatch, tmp_path)
     monkeypatch.delenv("RATE_LIMITER", raising=False)
     assert Settings().rate_limiter is RateLimiterBackend.MEMORY
+
+
+# --- Download rate limit ---
+
+
+def test_download_rate_limit_defaults_to_60_per_hour(monkeypatch, tmp_path) -> None:
+    """With the download limit settings unset, a client gets 60 downloads per 3,600 s."""
+    _base_dirs(monkeypatch, tmp_path)
+    monkeypatch.delenv("DOWNLOAD_RATE_LIMIT_MAX_REQUESTS", raising=False)
+    monkeypatch.delenv("DOWNLOAD_RATE_LIMIT_WINDOW_SECONDS", raising=False)
+    loaded = Settings()
+    assert loaded.download_rate_limit_max_requests == 60
+    assert loaded.download_rate_limit_window_seconds == 3600
 
 
 # --- CLIENT_IDENTITY ---

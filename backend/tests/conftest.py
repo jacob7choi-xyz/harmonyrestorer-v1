@@ -9,7 +9,7 @@ from app.services.artifacts import ArtifactBudget
 from app.services.file_store import LocalFileStore
 from app.services.job_store import build_job_store
 from app.services.jobs import job_manager
-from app.services.rate_limit import build_rate_limiter
+from app.services.rate_limit import build_download_rate_limiter, build_upload_rate_limiter
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -42,8 +42,9 @@ def isolated_artifact_dirs(tmp_path_factory, monkeypatch) -> None:
 
 
 def _clear_rate_limiter(application: FastAPI) -> None:
-    """Give the app a fresh rate limiter, so earlier requests do not count."""
-    application.state.rate_limiter = build_rate_limiter(settings.rate_limiter)
+    """Give the app fresh rate limiters, so earlier requests do not count."""
+    application.state.rate_limiter = build_upload_rate_limiter()
+    application.state.download_rate_limiter = build_download_rate_limiter()
 
 
 def _clear_job_store(application: FastAPI) -> None:
