@@ -154,6 +154,8 @@ export default function HarmonyRestorer(): React.JSX.Element {
   const [originalBlobUrl, setOriginalBlobUrl] = useState<string | null>(null);
   const [enhancedBlobUrl, setEnhancedBlobUrl] = useState<string | null>(null);
   const [enhancedPeaks, setEnhancedPeaks] = useState<Float32Array | null>(null);
+  // The job completed but its restored audio could not be fetched for playback
+  const [enhancedUnavailable, setEnhancedUnavailable] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   // Live object URLs owned by this component. The unmount cleanup reads this
   // ref, so it sees current values instead of the first render's closure.
@@ -247,6 +249,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
     setOriginalBlobUrl(null);
     setEnhancedBlobUrl(null);
     setEnhancedPeaks(null);
+    setEnhancedUnavailable(false);
   }, [revokeBlobUrl, previewBlobUrl, originalBlobUrl, enhancedBlobUrl]);
 
   const processAudio = useCallback(async (): Promise<void> => {
@@ -257,6 +260,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
     const controller = new AbortController();
     abortRef.current = controller;
     setStatus({ status: 'uploading', progress: 0, message: 'Uploading and restoring...' });
+    setEnhancedUnavailable(false);
 
     try {
       const { job_id } = await uploadAudio(file, controller.signal);
@@ -295,6 +299,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') throw err;
         console.warn('Failed to fetch enhanced audio for playback:', err);
+        setEnhancedUnavailable(true);
       }
 
       // Stop the original preview so it never overlaps the compare player
@@ -336,6 +341,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
     setOriginalBlobUrl(null);
     setEnhancedBlobUrl(null);
     setEnhancedPeaks(null);
+    setEnhancedUnavailable(false);
   }, [
     isProcessing,
     pauseDemoPlayback,
@@ -639,8 +645,16 @@ export default function HarmonyRestorer(): React.JSX.Element {
               <PlayButton
                 isPlaying={resultPlayback.state.isPlaying}
                 onClick={handleResultPlayPause}
-                disabled={!originalBlobUrl && !enhancedBlobUrl}
+                // The comparison player starts on the restored source by default
+                // (useCrossfadePlayback), so Play waits for both sources
+                disabled={!originalBlobUrl || !enhancedBlobUrl}
               />
+              {enhancedUnavailable && (
+                <p role="status" className="max-w-sm text-center text-sm text-ink-secondary">
+                  The restored audio couldn't be loaded for playback. The download below still
+                  works.
+                </p>
+              )}
               <NowHearing source={resultPlayback.state.activeSource} />
               <p className="max-w-sm text-center text-xs text-ink-muted">
                 Drag the line while it plays to compare your original with the restoration.

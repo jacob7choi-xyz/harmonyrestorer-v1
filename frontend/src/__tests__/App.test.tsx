@@ -74,6 +74,8 @@ describe('App (HarmonyRestorer)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
       blob: () => Promise.resolve(new Blob(['audio'])),
     });
   });
@@ -229,6 +231,66 @@ describe('App (HarmonyRestorer)', () => {
     expect(screen.getByText(/enhanced in 2\.5s/i)).toBeInTheDocument();
     const downloadLink = screen.getByRole('link', { name: /download/i });
     expect(downloadLink).toHaveAttribute('href', '/api/v1/download/test-123?format=wav');
+  });
+
+  function mockCompletedJob(jobId: string): void {
+    mockUpload.mockResolvedValue({ job_id: jobId, status: 'queued', message: 'Queued' });
+    mockPoll.mockImplementation(async (id, onUpdate) => {
+      const result = {
+        job_id: id,
+        status: 'completed' as const,
+        progress: 100,
+        message: 'Done',
+        completed_at: null,
+        download_url: `/api/v1/download/${id}`,
+        processing_time: 1.0,
+      };
+      onUpdate(result);
+      return result;
+    });
+  }
+
+  it('enables comparison playback when the restored audio loads', async () => {
+    mockCompletedJob('ok-1');
+    vi.useFakeTimers();
+    render(<App />);
+    await selectFileAndRestoreTimers();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /enhance/i }));
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: /download/i })).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole('button', { name: 'Play' })).toBeEnabled();
+    expect(screen.queryByText(/couldn't be loaded for playback/i)).not.toBeInTheDocument();
+  });
+
+  it('says so and disables playback when the restored audio cannot be fetched', async () => {
+    mockCompletedJob('busy-1');
+    mockFetch.mockResolvedValue({
+      ok: false,
+      status: 429,
+      blob: () => Promise.resolve(new Blob([])),
+    });
+    vi.useFakeTimers();
+    render(<App />);
+    await selectFileAndRestoreTimers();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /enhance/i }));
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: /download/i })).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent(/couldn't be loaded for playback/i);
+    expect(screen.getByRole('button', { name: 'Play' })).toBeDisabled();
+    expect(screen.getByRole('link', { name: /download/i })).toHaveAttribute(
+      'href',
+      '/api/v1/download/busy-1?format=wav',
+    );
   });
 
   it('switches the download link format from the picker', async () => {
