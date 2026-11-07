@@ -85,12 +85,15 @@ COPY checkpoints/final.pt checkpoints/final.pt
 # The path is the one the adapter's README installs it to. Under Docker the CMD below
 # still serves on its own (scripts/check_runtime_image.sh). Readiness uses /, which runs
 # no checks (backend/app/routes/health.py); /health returns 503 when a check fails. The
-# 8 s timeout is under Lambda's 10 s init limit, and the README says the adapter fails
-# init when it expires.
+# README says the adapter fails init when the readiness timeout expires. On Lambda on
+# 2026-11-07 the app was not ready within 8 s, and the adapter failed init. With a longer
+# timeout, the first start of the image was ready after about 78 s, inside the first
+# request (reported duration 78.6 s), so the 120 s function timeout appears to cover a
+# slow start and that request's own work. 100 s is a ceiling below 120 s, not a need.
 COPY --from=lambda-adapter /lambda-adapter /opt/extensions/lambda-adapter
 ENV AWS_LWA_PORT=8000 \
     AWS_LWA_READINESS_CHECK_PATH=/ \
-    AWS_LWA_READINESS_CHECK_TIMEOUT_SECONDS=8 \
+    AWS_LWA_READINESS_CHECK_TIMEOUT_SECONDS=100 \
     AWS_LWA_INVOKE_MODE=response_stream
 
 # Non-root user. Under /app it owns only the upload and processed directories, so the

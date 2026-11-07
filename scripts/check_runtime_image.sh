@@ -73,7 +73,7 @@ in_container cat /tmp/health.json 2>/dev/null && printf '\n'
 in_container test -x /opt/extensions/lambda-adapter \
   || fail "the Lambda Web Adapter is missing from /opt/extensions or not executable"
 for setting in AWS_LWA_PORT=8000 AWS_LWA_READINESS_CHECK_PATH=/ \
-  AWS_LWA_READINESS_CHECK_TIMEOUT_SECONDS=8 AWS_LWA_INVOKE_MODE=response_stream; do
+  AWS_LWA_READINESS_CHECK_TIMEOUT_SECONDS=100 AWS_LWA_INVOKE_MODE=response_stream; do
   name="${setting%%=*}"
   value="$(in_container printenv "$name")" || value=""
   [ "$value" = "${setting#*=}" ] || fail "$name is '$value', not '${setting#*=}'"
