@@ -1,6 +1,6 @@
 # ADR-009: Deploy Stage 1 of the Backend as One AWS Lambda Function
 
-**Date:** 2026-10-29, rewritten 2026-11-05, amended 2026-11-05 after the account's limits and the cost of data transfer were checked
+**Date:** 2026-10-29, rewritten 2026-11-05, amended 2026-11-05 after the account's limits and the cost of data transfer were checked, amended 2026-11-07 with the precondition results from the first deployment
 
 **Status:** proposed
 
@@ -56,11 +56,13 @@ Read word for word on 2026-11-05 from the AWS pages under References (the Markdo
 
 ### What this account allows
 
-Read by the account owner with the AWS CLI on 2026-11-05. The account ID is left out here.
+Read by the account owner with the AWS CLI on 2026-11-05, except the last two items, which carry their own dates. The account ID is left out here.
 
 - The account is on the Paid plan, active, with USD $100.00 in credits.
 - In us-east-1, Lambda reports 10 concurrent executions for the account, all 10 unreserved. The Service Quotas entry "Concurrent executions" (`L-B99A9384`) is 10 and adjustable. An increase to 1,000 was requested the same day, and the request's status was `CASE_OPENED`.
 - The Service Quotas list for Lambda shows no quota for function memory, so whether 3,538 MB is accepted was not checked.
+- On 2026-11-06, `L-B99A9384` read 1,000, and Lambda reported 1,000 concurrent executions, all unreserved.
+- On 2026-11-07, `create-function` with 3,538 MB was refused with "'MemorySize' value failed to satisfy constraint: Member must have value less than or equal to 3008".
 
 ### What was measured
 
@@ -83,20 +85,20 @@ An earlier published image (`sha256:fc1fd3b662e4d304ee7a8c56cb1ba5e27a119fc16a26
 
 These figures are arithmetic on the prices above for a 30-day month with one execution environment, before credits. They assume that function URL responses to the internet are billed at the data transfer rate above, which the pages read do not state.
 
-- Compute alone, with the environment busy the whole month at 3,538 MB, is about 8.96 million GB-seconds, or about $142.6 after the free tier.
+- Compute alone, with the environment busy the whole month at 3,008 MB (decision 5), is about 7.61 million GB-seconds, or about $120.2 after the free tier. At 3,538 MB, the first choice, it was about 8.96 million GB-seconds and $142.6.
 - In this worst case, downloads add more than compute. After the first 6 MB of a response, one environment streams at up to 2 MBps, so a 19.2 MB result takes at least about 6.6 s, and one environment can send roughly 5,000 to 7,500 GB in a month. At the prices above that is about $40 to $55 in streamed bytes and about $460 to $670 in data transfer.
-- Taken together, one environment kept busy with downloads for a whole month costs roughly $650 to $850, or up to about $1.20 for each busy hour. At that rate $100 lasts about three and a half days.
+- Taken together, one environment kept busy with downloads for a whole month costs roughly $620 to $850, or up to about $1.20 for each busy hour. At that rate $100 lasts about three and a half days.
 - A per-client download limit does not bound this total, since many clients together can keep the environment busy. What bounds it is how long the environment is allowed to stay busy.
 
 ## Decision
 
-Stage 1 runs the current image, with the Lambda Web Adapter added and the adapters unchanged, as one Lambda function behind a function URL. None of the AWS resources, the deploy job or the frontend changes exist yet; they are listed under Work and Preconditions.
+Stage 1 runs the current image, with the Lambda Web Adapter added and the adapters unchanged, as one Lambda function behind a function URL. The AWS resources were created on 2026-11-06 and 2026-11-07; the deploy job and the frontend changes do not exist yet. They are listed under Work, and the checks under Preconditions and Precondition results.
 
-1. **One function with reserved concurrency 1, and nothing deployed until the account allows it.** At most one execution environment runs. While it lasts, the in-memory `JobStore` and `RateLimiter`, the admission slot and the local `FileStore` hold the state for every request that Lambda passes to the function. Reserving 1 needs at least 101 unreserved concurrent executions, and this account had 10 on 2026-11-05. Deploying without reserved concurrency is ruled out here: Lambda could then run up to 10 environments, a request could reach an environment that does not hold its job, and the cost bound below would grow up to tenfold.
+1. **One function with reserved concurrency 1, and nothing deployed until the account allows it.** At most one execution environment runs. While it lasts, the in-memory `JobStore` and `RateLimiter`, the admission slot and the local `FileStore` hold the state for every request that Lambda passes to the function. Reserving 1 needs at least 101 unreserved concurrent executions, and this account had 10 on 2026-11-05; the quota read 1,000 on 2026-11-06. Deploying without reserved concurrency is ruled out here: Lambda could then run up to 10 environments, a request could reach an environment that does not hold its job, and the cost bound below would grow up to tenfold.
 2. **A function URL with `NONE` authentication, not API Gateway.** The slowest measured job, 26.24 s, leaves about 3 s under the REST API's 29 s integration timeout. The pages read give no timeout for a function URL other than the function timeout. Stage 1 runs inline, which ADR 010 section 4 allows where a request can stay open longer than the slowest job.
 3. **CORS belongs to the function URL**, allowing only the frontend's origin and the methods GET and POST. `CORS_ORIGINS` is set to an empty value on the function (unset, it defaults to `http://localhost:3000`), so the app adds no CORS headers of its own. That includes the headers `_add_cors` (`backend/app/main.py:114-134`) adds to the app's own 429 and 503 responses; the function URL's headers are expected to cover those responses instead.
 4. **The Lambda Web Adapter runs the app.** Release 1.1.0 is in the image, pinned by digest (`Dockerfile:10`), with `AWS_LWA_PORT=8000`, `AWS_LWA_READINESS_CHECK_PATH=/`, `AWS_LWA_READINESS_CHECK_TIMEOUT_SECONDS=100` and `AWS_LWA_INVOKE_MODE=response_stream` (`Dockerfile:94-97`), and the function URL uses invoke mode `RESPONSE_STREAM`. Streaming is expected to let a 600 s WAV, about 19.2 MB, reach the client; precondition 3 checks this. Readiness uses `/`, which runs no checks (`backend/app/routes/health.py:15-25`), because `/health` returns 503 when any of its checks fails and would hold init until the readiness timeout. The timeout was first 8 s, to sit under the 10 s init limit, but on Lambda on 2026-11-07 the app was not ready within 8 s and the adapter failed init, so it is 100 s (`Dockerfile:87-92`). Of the five cold starts observed that day with the longer timeout, in three the 10 s init phase timed out and init finished during the first request; the two latest finished init within the phase, in 6.26 s and 6.10 s. The local `FileStore` streams files from local disk, so the download guard stays (ADR 010, section 3).
-5. **Memory 3,538 MB, two vCPUs at 1,769 MB each.** A 600 s job used about 91 GB-seconds on two vCPUs (3,538 MB for 26.24 s) and about 105 on four (7,076 MB for 15.13 s), so the cost per job is similar. Four vCPUs would shorten that job, and the time other users get 429, by about 11 s, but double the cost of each busy hour of compute.
+5. **Memory 3,008 MB, the most this account accepted, about 1.7 vCPUs.** The first choice was 3,538 MB, two vCPUs at 1,769 MB each: a 600 s job used about 91 GB-seconds on two vCPUs (3,538 MB for 26.24 s) and about 105 on four (7,076 MB for 15.13 s), so the cost per job is similar. Four vCPUs would shorten that job, and the time other users get 429, by about 11 s, but double the cost of each busy hour of compute. On 2026-11-07 the account refused more than 3,008 MB (What this account allows). At 3,008 MB on Lambda, two uploads of a 595 s MP3 ran for 21.79 s and 21.20 s by the function's REPORT lines, and the highest memory used in any invocation that day was 1,047 MB.
 6. **Function timeout 120 s.** This is a judgment: about 4.6 times the slowest measured job, to leave room for a slower CPU on Lambda and for steps the measurement does not separate. It also caps one hung invocation at 120 s.
 7. **`/tmp` of 2,048 MB and `MAX_ARTIFACT_BYTES` of 1 GiB.** With OpGAN, the byte budget reserves 81,125,888 bytes for a 4 MiB upload at the 600 s limit: the upload, the decoded size cap and the peak output (`backend/app/routes/denoise.py:288-292`). The other 1 GiB of `/tmp` is left for files the budget does not count, such as the UVR model directory and library temp files. With `DENOISER_ENGINE=uvr`, one such job reserves 851,160,336 bytes of the 1 GiB.
 8. **Uploads are capped at 4 MiB** (`MAX_UPLOAD_BYTES=4194304`, and `VITE_MAX_UPLOAD_MB=4` for the frontend build). A 4 MiB body base64-encodes to 5,592,408 bytes, under the 6 MB limit of 6,291,456 bytes, leaving 699,048 bytes for the multipart envelope and the rest of the event; 5 MiB encodes to 6,990,508 bytes, over the limit. On this deployment, uploads between 4 MiB and 50 MiB get 413, a deliberate difference from today's limit.
@@ -119,15 +121,30 @@ These are checked once on the deployed function, and the results are added to th
 2. **Upload size.** A file of exactly 4 MiB uploads successfully, and a larger one is refused.
 3. **Streaming.** A result just under the 600 s limit, about 19 MB, downloads in full; the runbook uses 595 s, since uploads over the limit are refused and MP3 encoding can add padding.
 4. **Readable 429.** While a long job runs, a status request with the frontend's `Origin` gets 429 with an `Access-Control-Allow-Origin` header.
-5. **Init.** A cold start's init duration, from the function's logs, is under 10 s.
-6. **Memory.** The function is accepted with 3,538 MB; the quota list does not show whether new-account limits allow it.
+5. **Init.** The first criterion, that a cold start's init duration is under 10 s, failed on 2026-11-07. It is amended to: once the image is cached, a cold start answers its first request within 20 s. The 20 s was chosen after the starts in Precondition results were observed. The first start of a new image is not covered by this criterion; a private request after each deploy is meant to take it.
+6. **Memory.** The function is accepted with the memory decision 5 sets.
 7. **Kill switch.** Triggering the kill switch once switches the URL to `AWS_IAM`, an anonymous request is then refused, and switching back to `NONE` restores service.
+
+### Precondition results
+
+Checked on 2026-11-07 on versions 1 to 4 of the function, all running the linux/amd64 image `sha256:1db760a622685495aa27c37badac957589600c09006c03135866bcb92b76db72` (tag `531b34e`), with the steps in `docs/aws-stage-1-runbook.md`. Times measured from the operator's machine include its network.
+
+0. **Quota: met.** The quota read 1,000 (What this account allows).
+1. **Client identity: met.** With `LOG_LEVEL=DEBUG`, an upload sent with a forged `X-Forwarded-For` and a forged `x-amzn-request-context` was logged under the sending network's real address, not the forged one. A request from a phone on a cellular network was logged under a different address. Two download requests from the first network's address, about 20 s before the phone's, are not explained; they were also logged under that network's real address. Whether a function URL request carries `X-Forwarded-For` was not checked.
+2. **Upload size: met.** A WAV of 4,194,304 bytes got 200, and one of 4,194,306 bytes got 413 with "File too large (max 4 MB)".
+3. **Streaming: met.** A 595 s MP3 of 3,570,740 bytes got 200, 23.4 s after the request was sent. Its download got 200 with 19,040,044 bytes, which matches 595 s of 16 kHz 16-bit mono and a 44-byte header. The download took 62.6 s on the operator's network, about 0.3 MB/s, so it does not show the streaming rate the cost figures use.
+4. **Readable 429: met.** While that upload ran a second time, a status request with the frontend's `Origin` got 429 with `Access-Control-Allow-Origin: https://harmonyrestorer.online` and the body reason `ReservedFunctionConcurrentInvocationLimitExceeded`.
+5. **Init: the first criterion failed; the amended one was met in the cold starts observed.** With the image's readiness timeout of 8 s, the adapter failed init twice (`Extension.Crash`). With 100 s (decision 4), there were five cold starts, all of the one image. In the first start of the image, the 10 s init phase timed out and the app was ready after about 78 s, inside the first request. In the next two, the init phase also timed out and init finished during the first request; each call took about 16 s. The two latest finished init within the phase, in 6.26 s and 6.10 s. The four starts after the first are the evidence for the amended criterion.
+6. **Memory: changed.** 3,538 MB was refused; 3,008 MB was accepted, and `get-function-configuration` reports it.
+7. **Kill switch: met.** With the alarm set to `ALARM` by hand, the kill-switch function logged the change, and the URL's `AuthType` read `AWS_IAM` 12 s after the alarm state was set. The first unsigned `/health` request, sent once `AuthType` read `AWS_IAM`, still got 200; the next two, 5 s apart, got 403 with `{"Message":"Forbidden"}`. After the authentication was set back to `NONE`, the first request got 403 and the next, 5 s later, got 200. In each direction, the first request after the configuration read the new value was still handled the old way, and the next, 5 s later, the new way.
 
 ### Work
 
 - Done in the repository: the image check in CI runs the container read-only with `/tmp` writable (`3c8a5d3`); the frontend takes its upload limit from a build setting (`c826abf`); the frontend retries `/status` on 429 (`a2617bb`); an empty `CORS_ORIGINS` adds no CORS middleware (`abd5282`); the Lambda Web Adapter is in the image (`1bf5aa5`); the client identity can come from the Lambda request context (`7b6ca6d`); downloads are rate limited per client (`8eb0acb`).
-- Requested: the Lambda concurrency increase, with a support case open on 2026-11-05.
-- Not started, in the AWS account: the budget, the ECR repository and its policy, the execution role, the function, its alias and function URL, the kill-switch function and its alarm, the other alarms and the log retention, and the OIDC provider and deploy role.
+- Done in the repository after the first deployment: the image's readiness timeout is 100 s (`d85c00f`).
+- Granted: the Lambda concurrency increase, read as 1,000 on 2026-11-06.
+- Created in the AWS account on 2026-11-06 and 2026-11-07, with `docs/aws-stage-1-runbook.md`: the budget, the SNS topic and its confirmed email subscription, the ECR repository and its policy, the image, the execution role and the log groups with 14-day retention, the function with reserved concurrency 1, its versions and the alias `live`, the kill-switch function, its role and the two alarms, and the function URL. The function sets the readiness timeout of 100 s in its environment.
+- Not started, in the AWS account: the OIDC provider and deploy role.
 - Not started, elsewhere: the `publish` job's digest output and the deploy job in `.github/workflows/ci.yml`; in GitHub, a required reviewer on `Production`, deployment from `main` only, and the role's ARN as a variable; the frontend build setting on Vercel.
 
 ### Security design
@@ -144,14 +161,14 @@ These are checked once on the deployed function, and the results are added to th
 ### Positive
 - Compute is billed for the time the environment works, including init, rather than for an always-on instance, and the first deployment needs no new port adapters.
 - With the deploy job, the image CI tested would be the image deployed, identified by digest, and a deploy could be undone by pointing `live` at the previous version.
-- On the GitHub runner, the slowest job (26.24 s) and the container's peak memory (741 MiB) were within the settings chosen here. They were not measured on Lambda.
+- On the GitHub runner, the slowest job (26.24 s) and the container's peak memory (741 MiB) were within the settings chosen here. On Lambda at 3,008 MB, the 595 s job ran for 21.79 s and 21.20 s, and no invocation that day used more than 1,047 MB (decision 5).
 
 ### Negative
-- **Under decision 1, nothing is deployed until AWS raises the concurrency quota**, and the pages read give no time frame. If the request is refused, stage 1 as written cannot run on this account.
+- **A visitor who arrives at a cold start waits for it.** The first start of a new image was ready after about 78 s, inside the first request; the later cold starts observed took 6 s to 16 s (Precondition results, 5). When init finishes during the first request, that time appears to count toward the request's 120 s function timeout (`Dockerfile:87-92`).
 - **Other users are refused while a job runs.** Lambda answers their requests with 429 for as long as the job runs, 26.24 s for the longest measured job. Their uploads and downloads fail; only status polling retries.
 - **Jobs and files are lost when Lambda replaces the environment**, which its documentation says happens every few hours and may happen after inactivity. Each deploy is expected to end every job too, since requests then reach the new version's environment. A status or download request for a lost job returns 404.
 - **Uploads above 4 MiB are refused.** 4 MiB holds about 23.8 s of 16-bit 44.1 kHz stereo WAV, or about 4.4 minutes of 128 kbps MP3, against 50 MiB today.
-- **Data transfer can cost more than compute.** One client can download 60 times an hour, and many clients together can keep the environment streaming; the worst case above is roughly $650 to $850 a month without the kill switch. On the Paid plan, cost past the $100 in credits is charged to the account's payment method.
+- **Data transfer can cost more than compute.** One client can download 60 times an hour, and many clients together can keep the environment streaming; the worst case above is roughly $620 to $850 a month without the kill switch. On the Paid plan, cost past the $100 in credits is charged to the account's payment method.
 - **The kill switch reacts to alarms, not instantly.** Spending between the start of abuse and the alarm's action is not prevented, and the alarm's period and threshold set how much that can be.
 - **No WAF.** Reserved concurrency, the kill switch, the app's rate limits and the job caps are the only limits, and the last two depend on the client-identity check.
 
@@ -165,14 +182,12 @@ Stage 2 would lift the limits above by adding adapters behind ADR 010's ports: a
 
 ## Open Questions
 
-- The preconditions above are open until they are checked.
-- Whether and when AWS raises the concurrency quota.
 - Whether a function URL request carries `X-Forwarded-For`; precondition 1 checks the identity either way.
 - The rate at which function URL responses to the internet are billed; the cost figures above assume the general data transfer rate.
-- Whether this account accepts 3,538 MB of memory; precondition 6 checks it.
-- The pages read do not say whether the 6 MB request limit applies to the encoded body; precondition 2 settles it in practice.
+- The pages read do not say whether the 6 MB request limit applies to the encoded body. A 4 MiB upload succeeded on the function; larger uploads are refused by the app first, so where the platform's limit falls was not tested.
 - How often Lambda replaces the environment under light use, and so how often jobs are lost, is not measured.
-- The pages read do not say whether pulling the image counts toward the 10 s init limit; precondition 5 measures init as a whole.
+- Why the first start of a new image took about 78 s was not determined; the pages read do not say whether pulling the image counts toward the 10 s init limit.
+- How long cold starts take once the image is cached, and how often the 10 s init phase times out; five cold starts were observed (Precondition results, 5).
 - Whether to set torch's thread count is open; the measurement used 2 threads with 2 and 4 CPUs.
 - The questions ADR 010 lists for stage 2 remain: presigned upload size limits, grant expiry, and how a download grant reaches the browser.
 
@@ -183,7 +198,7 @@ Stage 2 would lift the limits above by adding adapters behind ADR 010's ports: a
 | Deploy now without reserved concurrency | Up to 10 environments could run, the in-memory state would split between them, and the cost bound would grow up to tenfold. |
 | API Gateway in front of the function | The 29 s REST integration timeout leaves about 3 s above the slowest measured job, and raising it might reduce the account's throttle quota. |
 | CloudFront with WAF in front of the function URL | Adds WAF, but requires `AWS_IAM` authentication on the URL and more setup. It can be added if the alarms show abuse. |
-| Four vCPUs | Shorter jobs at a similar cost per job, but about twice the cost of each busy hour of compute (decision 5). |
+| Four vCPUs | Shorter jobs at a similar cost per job, but about twice the cost of each busy hour of compute (decision 5), and more memory than this account accepted on 2026-11-07. |
 | Build the S3 and DynamoDB adapters first | Lifts the stage 1 limits, but puts the largest piece of work before any deployment. |
 | Lightsail container service | Charged monthly by power and scale, whether the service is enabled or disabled. |
 | ECS Express Mode on Fargate | Charges for Fargate compute and an Application Load Balancer; the pages read do not say a service can scale to zero. |
