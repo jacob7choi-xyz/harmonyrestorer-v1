@@ -51,6 +51,9 @@ export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAr
 
   const handleDrop = (e: React.DragEvent<HTMLDivElement>): void => {
     e.preventDefault();
+    // The page also handles drops; without this its handler would act on the file
+    // too, including one this check refuses
+    e.stopPropagation();
     setIsDragging(false);
     const files = e.dataTransfer.files;
     if (files.length > 0) {

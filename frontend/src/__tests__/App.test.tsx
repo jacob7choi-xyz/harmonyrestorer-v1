@@ -411,4 +411,152 @@ describe('App (HarmonyRestorer)', () => {
     expect(screen.getByText(/restore your audio/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /enhance/i })).not.toBeInTheDocument();
   });
+
+  // Drag and drop. A drop on any element bubbles to the page's drop handler.
+
+  describe('dropped files', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    /** An Audio stand-in whose metadata reports the given duration. */
+    function stubAudioDuration(seconds: number): void {
+      class FakeAudio {
+        duration = seconds;
+        private listeners = new Map<string, () => void>();
+        addEventListener(type: string, listener: () => void): void {
+          this.listeners.set(type, listener);
+        }
+        set src(_url: string) {
+          setTimeout(() => this.listeners.get('loadedmetadata')?.(), 0);
+        }
+        pause(): void {}
+        removeAttribute(): void {}
+      }
+      vi.stubGlobal('Audio', FakeAudio);
+    }
+
+    async function dropOn(target: Element, file: File): Promise<void> {
+      await act(async () => {
+        fireEvent.drop(target, { dataTransfer: { files: [file] } });
+        await vi.advanceTimersByTimeAsync(5100);
+      });
+    }
+
+    it('keeps the running job when a file is dropped while it processes', async () => {
+      let pollSignal: AbortSignal | undefined;
+      mockUpload.mockResolvedValue({ job_id: 'busy-1', status: 'queued', message: 'Queued' });
+      mockPoll.mockImplementation((_id, _onUpdate, signal) => {
+        pollSignal = signal;
+        return new Promise(() => {});
+      });
+
+      vi.useFakeTimers();
+      render(<App />);
+      await selectFileWithFakeTimers();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /enhance/i }));
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByRole('heading', { name: /restoring your recording/i })).toBeInTheDocument();
+
+      await dropOn(screen.getByRole('heading', { name: /restoring your recording/i }), createAudioFile('other.wav'));
+
+      expect(pollSignal?.aborted).toBe(false);
+      expect(screen.getByRole('heading', { name: /restoring your recording/i })).toBeInTheDocument();
+    });
+
+    it('says why when a dropped file is not audio, and selects nothing', async () => {
+      vi.useFakeTimers();
+      render(<App />);
+
+      await dropOn(screen.getByRole('heading', { name: /hear it the way it was/i }),
+        new File(['hello'], 'readme.txt', { type: 'text/plain' }));
+
+      expect(screen.getByRole('alert')).toHaveTextContent(/please select an audio file/i);
+      expect(screen.queryByRole('button', { name: /enhance/i })).not.toBeInTheDocument();
+    });
+
+    it('says why when a dropped file is too long, and selects nothing', async () => {
+      stubAudioDuration(700);
+      vi.useFakeTimers();
+      render(<App />);
+
+      await dropOn(screen.getByRole('heading', { name: /hear it the way it was/i }), createAudioFile('long.wav'));
+
+      expect(screen.getByRole('alert')).toHaveTextContent(/audio too long/i);
+      expect(screen.queryByRole('button', { name: /enhance/i })).not.toBeInTheDocument();
+    });
+
+    it('selects a valid file dropped anywhere and clears an earlier message', async () => {
+      vi.useFakeTimers();
+      render(<App />);
+      const heading = screen.getByRole('heading', { name: /hear it the way it was/i });
+      await dropOn(heading, new File(['hello'], 'readme.txt', { type: 'text/plain' }));
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+
+      await dropOn(heading, createAudioFile('dropped.wav'));
+
+      expect(screen.getByText('dropped.wav')).toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    it('drops a pending check of a dropped file when an upload starts', async () => {
+      let pollSignal: AbortSignal | undefined;
+      mockUpload.mockResolvedValue({ job_id: 'busy-2', status: 'queued', message: 'Queued' });
+      mockPoll.mockImplementation((_id, _onUpdate, signal) => {
+        pollSignal = signal;
+        return new Promise(() => {});
+      });
+
+      vi.useFakeTimers();
+      render(<App />);
+      await selectFileWithFakeTimers();
+      // jsdom never loads the metadata, so this check waits out its 5 s timeout
+      await act(async () => {
+        fireEvent.drop(screen.getByRole('heading', { name: /hear it the way it was/i }), {
+          dataTransfer: { files: [createAudioFile('late.wav')] },
+        });
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /enhance/i }));
+        await vi.advanceTimersByTimeAsync(5100);
+      });
+
+      expect(pollSignal?.aborted).toBe(false);
+      expect(screen.getByRole('heading', { name: /restoring your recording/i })).toBeInTheDocument();
+    });
+
+    it('clears a refused-drop message when "New file" is clicked', async () => {
+      mockCompletedJob('done-1');
+      vi.useFakeTimers();
+      render(<App />);
+      await selectFileWithFakeTimers();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /enhance/i }));
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      await dropOn(screen.getByRole('button', { name: /new file/i }),
+        new File(['hello'], 'readme.txt', { type: 'text/plain' }));
+      expect(screen.getByRole('alert')).toBeInTheDocument();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /new file/i }));
+      });
+
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    });
+
+    it('does not select a too-long file dropped on the upload pill', async () => {
+      stubAudioDuration(700);
+      vi.useFakeTimers();
+      render(<App />);
+
+      await dropOn(screen.getByRole('button', { name: /upload audio file/i }), createAudioFile('long.wav'));
+
+      expect(screen.getByText(/audio too long/i)).toBeInTheDocument();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /enhance/i })).not.toBeInTheDocument();
+    });
+  });
 });

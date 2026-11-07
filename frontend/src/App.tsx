@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { Download, Play, Pause, RotateCcw, Music, Github, Linkedin, Instagram, Youtube } from 'lucide-react';
 import { uploadAudio, pollUntilDone, getDownloadUrl } from './api/client';
 import { UploadArea } from './components/UploadArea';
-import { MAX_UPLOAD_BYTES } from './config';
+import { validateAudioFile } from './fileValidation';
 import { TapeStrip, type TapeStripPalette } from './components/TapeStrip';
 import { Analytics } from '@vercel/analytics/react';
 import { useAudioDecoder, decodeBlobToWaveform } from './hooks/useAudioDecoder';
@@ -156,6 +156,10 @@ export default function HarmonyRestorer(): React.JSX.Element {
   const [enhancedPeaks, setEnhancedPeaks] = useState<Float32Array | null>(null);
   // The job completed but its restored audio could not be fetched for playback
   const [enhancedUnavailable, setEnhancedUnavailable] = useState(false);
+  // Why the last file dropped on the page was not selected
+  const [dropError, setDropError] = useState<string | null>(null);
+  // The check of a dropped file in flight; a selection, an upload or unmounting aborts it
+  const dropCheckRef = useRef<AbortController | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   // Live object URLs owned by this component. The unmount cleanup reads this
   // ref, so it sees current values instead of the first render's closure.
@@ -250,6 +254,8 @@ export default function HarmonyRestorer(): React.JSX.Element {
     setEnhancedBlobUrl(null);
     setEnhancedPeaks(null);
     setEnhancedUnavailable(false);
+    dropCheckRef.current?.abort();
+    setDropError(null);
   }, [revokeBlobUrl, previewBlobUrl, originalBlobUrl, enhancedBlobUrl]);
 
   const processAudio = useCallback(async (): Promise<void> => {
@@ -259,6 +265,8 @@ export default function HarmonyRestorer(): React.JSX.Element {
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    // A dropped file still being checked must not replace the file being uploaded
+    dropCheckRef.current?.abort();
     setStatus({ status: 'uploading', progress: 0, message: 'Uploading and restoring...' });
     setEnhancedUnavailable(false);
 
@@ -342,6 +350,8 @@ export default function HarmonyRestorer(): React.JSX.Element {
     setEnhancedBlobUrl(null);
     setEnhancedPeaks(null);
     setEnhancedUnavailable(false);
+    dropCheckRef.current?.abort();
+    setDropError(null);
   }, [
     isProcessing,
     pauseDemoPlayback,
@@ -370,18 +380,32 @@ export default function HarmonyRestorer(): React.JSX.Element {
     }
   }, [handleFileSelect]);
 
-  // Global drop zone
+  // Global drop zone. A drop while a job runs is ignored: selecting a file would
+  // cancel the job on the page, and the server may still run it, since a cancelled
+  // request does not interrupt inference (backend/app/routes/denoise.py).
   const handleGlobalDrop = useCallback((e: React.DragEvent<HTMLDivElement>): void => {
     e.preventDefault();
-    const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      const dropped = files[0];
-      if (dropped.type.startsWith('audio/')) {
-        if (dropped.size > MAX_UPLOAD_BYTES) return;
-        handleFileSelect(dropped);
+    const dropped = e.dataTransfer.files[0];
+    if (isProcessing || !dropped) return;
+    dropCheckRef.current?.abort();
+    const controller = new AbortController();
+    dropCheckRef.current = controller;
+    void (async (): Promise<void> => {
+      const message = await validateAudioFile(dropped, controller.signal);
+      if (controller.signal.aborted) return;
+      if (message) {
+        setDropError(message);
+        return;
       }
-    }
-  }, [handleFileSelect]);
+      handleFileSelect(dropped);
+    })();
+  }, [isProcessing, handleFileSelect]);
+
+  useEffect(() => {
+    return () => {
+      dropCheckRef.current?.abort();
+    };
+  }, []);
 
   const handleGlobalDragOver = useCallback((e: React.DragEvent<HTMLDivElement>): void => {
     e.preventDefault();
@@ -462,6 +486,15 @@ export default function HarmonyRestorer(): React.JSX.Element {
         <p className="mb-16 text-center text-xs font-semibold uppercase tracking-[0.35em] text-ink-muted">
           HarmonyRestorer
         </p>
+
+        {dropError && (
+          <div
+            role="alert"
+            className="mb-10 rounded-md border border-destructive/20 bg-destructive-bg p-4 text-center"
+          >
+            <p className="text-sm text-destructive">{dropError}</p>
+          </div>
+        )}
 
         {/* Step 1: Upload */}
         {step === 'upload' && (
