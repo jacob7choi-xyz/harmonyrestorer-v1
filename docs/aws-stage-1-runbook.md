@@ -120,7 +120,7 @@ EOF
   --policy-text "file://$WORK/ecr-policy.json" > /dev/null
 ```
 
-The policy follows AWS's minimum example, with a condition added that limits it to function ARNs starting with this function's name, which covers its versions and aliases (and any other function whose name starts the same way); AWS's only `aws:sourceArn` example for Lambda image pulls uses `function:*`. **To verify:** that the condition matches Lambda's pulls in the same account. If step 6's `create-function` reports that it cannot pull the image, replace the policy with AWS's minimum example, without the condition.
+The policy follows AWS's minimum example, with a condition added that limits it to function ARNs starting with this function's name, which covers its versions and aliases (and any other function whose name starts the same way); AWS's only `aws:sourceArn` example for Lambda image pulls uses `function:*`. On 2026-11-07, step 6 created the function after this policy, with the condition, was set. If `create-function` reports that it cannot pull the image, replace the policy with AWS's minimum example, without the condition.
 
 The ECR API marks the repository's `imageScanningConfiguration` as being deprecated in favour of a registry-level scanning setting; the option still works, and the check below shows whether scan on push is on.
 
@@ -147,7 +147,7 @@ docker push "$REGISTRY/$REPO:$COMMIT" 2>&1 | grep -o 'digest: sha256:[0-9a-f]\{6
 docker logout "$REGISTRY" > /dev/null
 ```
 
-`docker push` and `docker logout` print the registry host, which contains the account ID, so only the digest line is shown. It must equal `DIGEST`. If nothing is printed, the push failed; the check below shows whether the image arrived. **To verify:** that pushing a single-platform image pulled by digest keeps the same digest; if it does not, stop and compare the manifests before going on.
+`docker push` and `docker logout` print the registry host, which contains the account ID, so only the digest line is shown. It must equal `DIGEST`. If nothing is printed, the push failed; the check below shows whether the image arrived. On 2026-11-06 the pushed digest equalled `DIGEST`; if it ever does not, stop and compare the manifests before going on.
 
 Check: `"$AWS" ecr describe-images --repository-name "$REPO" --query "imageDetails[].imageDigest"` lists `DIGEST`.
 
@@ -215,7 +215,8 @@ cat > "$WORK/function-env.json" <<'EOF'
   "DOWNLOAD_RATE_LIMIT_WINDOW_SECONDS": "3600",
   "ENABLE_DOCS": "false",
   "LOG_FORMAT": "json",
-  "LOG_LEVEL": "INFO"
+  "LOG_LEVEL": "INFO",
+  "AWS_LWA_READINESS_CHECK_TIMEOUT_SECONDS": "100"
 }}
 EOF
 
@@ -223,7 +224,7 @@ EOF
 "$AWS" lambda create-function --function-name "$FUNCTION" --package-type Image \
   --code ImageUri="$REGISTRY/$REPO@$DIGEST" \
   --role "arn:aws:iam::$ACCOUNT_ID:role/$EXEC_ROLE" \
-  --architectures x86_64 --memory-size 3538 --timeout 120 --ephemeral-storage Size=2048 \
+  --architectures x86_64 --memory-size 3008 --timeout 120 --ephemeral-storage Size=2048 \
   --environment "file://$WORK/function-env.json" \
   --query "[FunctionName,State]" --output text
 "$AWS" lambda wait function-active-v2 --function-name "$FUNCTION"
@@ -231,9 +232,11 @@ EOF
   --reserved-concurrent-executions 1 --query ReservedConcurrentExecutions
 ```
 
-**To verify:** that Lambda accepts an empty value for `CORS_ORIGINS`; the API reference states no minimum length. If it does not, `","` gives the app the same empty list (`backend/app/config.py:167-171` drops blank entries). Also to verify: that `ImageUri` accepts the `@sha256:` digest form; the reference says only "URI of a container image in the Amazon ECR registry". If it is refused, use `$REGISTRY/$REPO:$COMMIT`, whose tag is immutable in this repository (step 3).
+On 2026-11-07 Lambda accepted the empty `CORS_ORIGINS` and the `@sha256:` form of `ImageUri`. If either is refused, `","` gives the app the same empty list (`backend/app/config.py:167-171` drops blank entries), and `$REGISTRY/$REPO:$COMMIT` names the same image by a tag that is immutable in this repository (step 3).
 
-If `create-function` refuses 3,538 MB, the account's memory quota may be lower (ADR 009 precondition 6); stop and record the error.
+The memory is 3,008 MB because this account refused more during the first setup (ADR 009 decision 5). If `create-function` refuses it, stop and record the error.
+
+`AWS_LWA_READINESS_CHECK_TIMEOUT_SECONDS` repeats the image's value of 100 (`Dockerfile:94-97`). An image published from an earlier commit sets 8, or nothing before `1bf5aa5`, and the function's value overrides it. With 8, the adapter failed init on 2026-11-07 (ADR 009 decision 4).
 
 IAM changes may not be visible everywhere at once (AWS's IAM troubleshooting page: changes including "creating or updating users, groups, roles, or policies" are subject to eventual consistency). If `create-function` reports that the role cannot be assumed right after step 5, wait a short time and run it again. The same applies to the kill-switch function in step 8.
 
@@ -252,6 +255,34 @@ VERSION="$("$AWS" lambda publish-version --function-name "$FUNCTION" --query Ver
 ```
 
 Check: `"$AWS" lambda get-alias --function-name "$FUNCTION" --name "$ALIAS" --query FunctionVersion`
+
+Then warm the version through the alias with a signed call, so that its first start falls on this call rather than on a visitor's request; a later cold start can still fall on a visitor. On 2026-11-07 the first start of the image deployed then was ready after about 78 s (ADR 009, Precondition results). The event has the shape the function URL sends; the call needs IAM credentials, so it works before the URL exists. Repeat it after every `update-alias` in this runbook.
+
+```bash
+cat > "$WORK/health-event.json" <<'EOF'
+{
+  "version": "2.0",
+  "rawPath": "/health",
+  "rawQueryString": "",
+  "headers": {"host": "warm-up"},
+  "requestContext": {
+    "http": {"method": "GET", "path": "/health", "protocol": "HTTP/1.1", "sourceIp": "198.51.100.7", "userAgent": "warm-up"},
+    "requestId": "warm-up",
+    "routeKey": "$default",
+    "stage": "$default",
+    "timeEpoch": 0
+  },
+  "isBase64Encoded": false
+}
+EOF
+"$AWS" lambda invoke --function-name "$FUNCTION" --qualifier "$ALIAS" \
+  --cli-binary-format raw-in-base64-out --cli-read-timeout 150 \
+  --payload "file://$WORK/health-event.json" "$WORK/warm-up.out" \
+  --query "[StatusCode,FunctionError]" --output text
+tr -d '\000' < "$WORK/warm-up.out"; echo
+```
+
+Passing: `200` and `None`, and the output contains `"status":"healthy"`. The CLI used on 2026-11-07 (2.39.5) had no command for a streamed invoke, so this uses a plain invoke, which returned the response in full that day.
 
 Undo: `"$AWS" lambda delete-alias --function-name "$FUNCTION" --name "$ALIAS"`
 
@@ -321,7 +352,7 @@ EOF
 
 The throttle alarm only emails. Throttles are expected while one user's job holds the environment (ADR 009, Consequences), so its threshold of more than 100 an hour is a judgment, to be adjusted from what the metric shows.
 
-**To verify:** which resource ARN IAM checks when `lambda:UpdateFunctionUrlConfig` names an alias; the pages read do not say, so the policy lists the function's ARN and the alias's ARN. Precondition 7 (step 10) shows whether the kill switch can make the change.
+**To verify:** which resource ARN IAM checks when `lambda:UpdateFunctionUrlConfig` names an alias; the pages read do not say, so the policy lists the function's ARN and the alias's ARN. On 2026-11-07 the kill switch made the change with this policy (precondition 7), which does not show which of the two ARNs IAM matched.
 
 Check: `"$AWS" cloudwatch describe-alarms --alarm-names "$ALARM" "$THROTTLE_ALARM" --query "MetricAlarms[].[AlarmName,StateValue,Threshold,Period]"`. The kill switch itself is tested in step 10, after the URL exists.
 
@@ -380,14 +411,18 @@ echo "$auth"
 curl -sS -o /dev/null -w '%{http_code}\n' "$URL/health"
 ```
 
-The forced state returns to the alarm's real state within seconds; the actions run on the change to `ALARM`. Passing: `AuthType` is `AWS_IAM` and the request is refused. The pages read do not give the status code for an unsigned request to an `AWS_IAM` URL, so record the code that comes back. Then reopen the URL and confirm service is back:
+The actions run on the change to `ALARM`. Passing: `AuthType` is `AWS_IAM` and the request is refused. On 2026-11-07 the refusal was `403` with `{"Message":"Forbidden"}`, but the first request after `AuthType` read `AWS_IAM` still got 200 and the next, 5 s later, got 403; if the code above prints 200, run the `curl` line again after a few seconds. Then reopen the URL and confirm service is back:
 
 ```bash
 "$AWS" lambda update-function-url-config --function-name "$FUNCTION" --qualifier "$ALIAS" \
   --auth-type NONE --query AuthType --output text
 "$AWS" cloudwatch set-alarm-state --alarm-name "$ALARM" --state-value OK --state-reason "runbook test done"
 curl -sS -o /dev/null -w '%{http_code}\n' "$URL/health"
+"$AWS" lambda get-function-url-config --function-name "$FUNCTION" --qualifier "$ALIAS" \
+  --query "[AuthType,InvokeMode,Cors.AllowOrigins[0]]" --output text
 ```
+
+On 2026-11-07 the first request after reopening got 403 and the next, 5 s later, got 200; if the code above prints 403, run the `curl` line again after a few seconds. The last command checks that changing only the authentication, as the kill switch and the reopen both do, kept the invoke mode and the CORS origin. A read of the same fields after the test on 2026-11-07 showed `NONE`, `RESPONSE_STREAM`, and the frontend's origin with the methods GET and POST.
 
 The alarm's actions run only when its state changes to `ALARM`. After a real trip, reopen the URL only once the hourly sum is back under the threshold and the alarm reads `OK` (`"$AWS" cloudwatch describe-alarms --alarm-names "$ALARM" --query "MetricAlarms[0].StateValue"`); while it stays in `ALARM`, it cannot close the URL again.
 
@@ -403,7 +438,7 @@ VERSION="$("$AWS" lambda publish-version --function-name "$FUNCTION" --query Ver
   --function-version "$VERSION" --query FunctionVersion --output text
 ```
 
-(`sed -i ''` is the macOS form; on Linux it is `sed -i`.) Then upload once from two networks (for example a home connection and a phone hotspot), and once with forged headers:
+(`sed -i ''` is the macOS form; on Linux it is `sed -i`.) Warm the new version as in step 7. Then upload once with forged headers, and make one request from a second network. A phone on its cellular network, with Wi-Fi off, can open `$URL/api/v1/download/00000000-0000-4000-8000-000000000000` in a browser; the job does not exist, so it gets 404, but the request still passes the rate-limit check that logs the address.
 
 ```bash
 curl -sS -F "file=@frontend/public/sample-noisy.wav;type=audio/wav" \
@@ -413,7 +448,7 @@ curl -sS -F "file=@frontend/public/sample-noisy.wav;type=audio/wav" \
   --filter-pattern '"Rate-limit check"' --query "events[].message"
 ```
 
-Passing: the two networks log different addresses, and the forged request logs the real address, not `203.0.113.9`. Afterwards, set `LOG_LEVEL` back to `INFO` with the same commands, swapping `DEBUG` and `INFO` in the `sed` line.
+Passing: the two networks log different addresses, and the forged request logs the real address, not `203.0.113.9`. Afterwards, set `LOG_LEVEL` back to `INFO` with the same commands, swapping `DEBUG` and `INFO` in the `sed` line, and warm the new version.
 
 **2. Upload size.** Make a WAV of exactly 4 MiB and one byte larger, and upload both:
 
@@ -456,9 +491,9 @@ wait
 
 Passing: the status request gets 429 with an `access-control-allow-origin` header naming the frontend's origin. AWS says the URL adds its CORS headers "to all responses through the function URL" and does not mention throttled responses by name, so this check is the evidence.
 
-**5. Init.** `"$AWS" logs filter-log-events --log-group-name "/aws/lambda/$FUNCTION" --filter-pattern '"Init Duration"' --query "events[].message"`. `Init Duration` appears on the REPORT line of cold starts only. Passing: every init duration found is under 10,000 ms.
+**5. Init.** `"$AWS" logs filter-log-events --log-group-name "/aws/lambda/$FUNCTION" --filter-pattern '"Init Duration"' --query "events[].message"`. In the logs read on 2026-11-07, `Init Duration` appeared on the REPORT line of a cold start whose init finished within the init phase, and an `INIT_REPORT` line with `Status: timeout` marked one that did not; init then finished during the first request. Passing, as amended on 2026-11-07: once the image is cached, a cold start answers its first request within 20 s. To see it, publish a new version and point `live` at it (the commands in precondition 1, with any change), so that the next call needs a new environment, and time the warm-up call from step 7. The first start of a new image is not covered by this; the warm-up takes it. The 20 s was chosen after four such starts, on one image, were observed (ADR 009, Precondition results).
 
-**6. Memory.** Passing: step 6's `create-function` accepted 3,538 MB, and `get-function-configuration` reports it.
+**6. Memory.** Passing: step 6's `create-function` accepted the memory it sets, and `get-function-configuration` reports it.
 
 ## 11. Taking it down
 
