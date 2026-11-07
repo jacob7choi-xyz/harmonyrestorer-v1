@@ -1,9 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Upload, FileAudio } from 'lucide-react';
-import { MAX_UPLOAD_BYTES, MAX_UPLOAD_MB } from '../config';
-
-const MAX_DURATION_MINUTES = 10;
-const MAX_DURATION_SECONDS = MAX_DURATION_MINUTES * 60;
+import { MAX_UPLOAD_MB } from '../config';
+import { validateAudioFile } from '../fileValidation';
 
 interface UploadAreaProps {
   onFileSelect: (file: File) => void;
@@ -15,89 +13,26 @@ export function UploadArea({ onFileSelect, isProcessing, currentFile }: UploadAr
   const [isDragging, setIsDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const durationCheckCleanupRef = useRef<(() => void) | null>(null);
+  // The check in flight; a newer selection or unmounting aborts it
+  const validationRef = useRef<AbortController | null>(null);
 
-  // Clean up any pending duration check on unmount
   useEffect(() => {
     return () => {
-      durationCheckCleanupRef.current?.();
+      validationRef.current?.abort();
     };
   }, []);
 
-  const checkDuration = (file: File): Promise<boolean> => {
-    // Clean up any previous pending check
-    durationCheckCleanupRef.current?.();
-
-    return new Promise((resolve) => {
-      const audio = new Audio();
-      const url = URL.createObjectURL(file);
-      audio.src = url;
-      let settled = false;
-
-      const cleanup = (): void => {
-        if (durationCheckCleanupRef.current === onUnmount) {
-          durationCheckCleanupRef.current = null;
-        }
-        audio.pause();
-        audio.removeAttribute('src');
-        URL.revokeObjectURL(url);
-        clearTimeout(timeoutId);
-      };
-
-      const onUnmount = (): void => {
-        if (!settled) {
-          settled = true;
-          cleanup();
-          resolve(false);
-        }
-      };
-
-      durationCheckCleanupRef.current = onUnmount;
-
-      // Timeout after 5s if audio metadata never loads
-      const timeoutId = setTimeout(() => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        resolve(true); // Let backend validate
-      }, 5000);
-
-      audio.addEventListener('loadedmetadata', () => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        if (audio.duration > MAX_DURATION_SECONDS) {
-          setError(
-            `Audio too long (${Math.ceil(audio.duration / 60)} min). Max ${MAX_DURATION_MINUTES} minutes.`
-          );
-          resolve(false);
-        } else {
-          resolve(true);
-        }
-      });
-
-      audio.addEventListener('error', () => {
-        if (settled) return;
-        settled = true;
-        cleanup();
-        // Can't read duration; let the backend validate
-        resolve(true);
-      });
-    });
-  };
-
   const validateAndSelect = async (file: File): Promise<void> => {
+    validationRef.current?.abort();
+    const controller = new AbortController();
+    validationRef.current = controller;
     setError(null);
-    if (!file.type.startsWith('audio/')) {
-      setError('Please select an audio file (WAV, MP3, FLAC, OGG, M4A, AAC)');
+    const message = await validateAudioFile(file, controller.signal);
+    if (controller.signal.aborted) return;
+    if (message) {
+      setError(message);
       return;
     }
-    if (file.size > MAX_UPLOAD_BYTES) {
-      setError(`File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Max ${MAX_UPLOAD_MB} MB.`);
-      return;
-    }
-    const durationOk = await checkDuration(file);
-    if (!durationOk) return;
     onFileSelect(file);
   };
 

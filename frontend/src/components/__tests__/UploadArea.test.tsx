@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import { UploadArea } from '../UploadArea'
 import { MAX_UPLOAD_BYTES } from '../../config'
 
@@ -96,5 +96,40 @@ describe('UploadArea', () => {
     await vi.advanceTimersByTimeAsync(5100)
 
     expect(onFileSelect).toHaveBeenCalledWith(audioFile)
+  })
+
+  it('does not select an earlier file once a newer pick is refused', async () => {
+    vi.useFakeTimers()
+    const onFileSelect = vi.fn()
+    render(<UploadArea onFileSelect={onFileSelect} isProcessing={false} currentFile={null} />)
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    const earlier = new File(['audio'], 'earlier.wav', { type: 'audio/wav' })
+
+    // jsdom never loads the metadata, so the earlier check waits out its 5 s timeout
+    fireEvent.change(input, { target: { files: [earlier] } })
+    fireEvent.drop(screen.getByRole('button'), {
+      dataTransfer: { files: [new File(['x'], 'notes.txt', { type: 'text/plain' })] },
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5100)
+    })
+
+    expect(screen.getByText(/please select an audio file/i)).toBeInTheDocument()
+    expect(onFileSelect).not.toHaveBeenCalled()
+  })
+
+  it('does not select a file whose check is still pending when it unmounts', async () => {
+    vi.useFakeTimers()
+    const onFileSelect = vi.fn()
+    const { unmount } = render(
+      <UploadArea onFileSelect={onFileSelect} isProcessing={false} currentFile={null} />,
+    )
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    fireEvent.change(input, { target: { files: [new File(['audio'], 'a.wav', { type: 'audio/wav' })] } })
+
+    unmount()
+    await vi.advanceTimersByTimeAsync(5100)
+
+    expect(onFileSelect).not.toHaveBeenCalled()
   })
 })
