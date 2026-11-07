@@ -527,6 +527,58 @@ describe('App (HarmonyRestorer)', () => {
       expect(screen.getByRole('heading', { name: /restoring your recording/i })).toBeInTheDocument();
     });
 
+    it('keeps the running job when a sample fetch started earlier finishes', async () => {
+      mockUpload.mockResolvedValue({ job_id: 'busy-3', status: 'queued', message: 'Queued' });
+      mockPoll.mockImplementation(() => new Promise(() => {}));
+
+      vi.useFakeTimers();
+      render(<App />);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      let pollSignal: AbortSignal | undefined;
+      mockPoll.mockImplementation((_id, _onUpdate, signal) => {
+        pollSignal = signal;
+        return new Promise(() => {});
+      });
+      // Set after the page's own fetches on load, so only the sample click gets it
+      let resolveSample: (response: unknown) => void = () => {};
+      mockFetch.mockImplementationOnce(() => new Promise((resolve) => { resolveSample = resolve; }));
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /try a sample/i }));
+      });
+      await dropOn(screen.getByRole('heading', { name: /hear it the way it was/i }), createAudioFile('mine.wav'));
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /enhance/i }));
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByRole('heading', { name: /restoring your recording/i })).toBeInTheDocument();
+
+      await act(async () => {
+        resolveSample({ ok: true, blob: () => Promise.resolve(new Blob(['audio'], { type: 'audio/wav' })) });
+        await vi.advanceTimersByTimeAsync(0);
+      });
+
+      expect(pollSignal?.aborted).toBe(false);
+      expect(screen.getByRole('heading', { name: /restoring your recording/i })).toBeInTheDocument();
+    });
+
+    it('selects a dropped file after a job has failed', async () => {
+      mockUpload.mockRejectedValue(new Error('Server unavailable'));
+      vi.useFakeTimers();
+      render(<App />);
+      await selectFileWithFakeTimers();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /enhance/i }));
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(screen.getByText('Server unavailable')).toBeInTheDocument();
+
+      await dropOn(screen.getByRole('heading', { name: /hear it the way it was/i }), createAudioFile('retry.wav'));
+
+      expect(screen.getByText('retry.wav')).toBeInTheDocument();
+    });
+
     it('clears a refused-drop message when "New file" is clicked', async () => {
       mockCompletedJob('done-1');
       vi.useFakeTimers();

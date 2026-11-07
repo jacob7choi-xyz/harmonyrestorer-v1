@@ -147,6 +147,10 @@ export default function HarmonyRestorer(): React.JSX.Element {
   const [file, setFile] = useState<File | null>(null);
   const [status, setStatus] = useState<ProcessingStatus>(INITIAL_STATUS);
   const [isProcessing, setIsProcessing] = useState(false);
+  // Mirrors isProcessing for callbacks created before a render and run after it, such as
+  // the sample fetch. It is written beside each setIsProcessing call, so it holds the
+  // new value as soon as the state is set.
+  const isProcessingRef = useRef(false);
   const [isSampleLoading, setIsSampleLoading] = useState(false);
   const [downloadFormat, setDownloadFormat] = useState<DownloadFormat>('wav');
   const [demo, setDemo] = useState<DemoAssets | null>(null);
@@ -248,6 +252,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
     revokeBlobUrl(enhancedBlobUrl);
     setFile(null);
     setStatus(INITIAL_STATUS);
+    isProcessingRef.current = false;
     setIsProcessing(false);
     setPreviewBlobUrl(null);
     setOriginalBlobUrl(null);
@@ -261,6 +266,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
   const processAudio = useCallback(async (): Promise<void> => {
     if (!file) return;
 
+    isProcessingRef.current = true;
     setIsProcessing(true);
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -328,15 +334,15 @@ export default function HarmonyRestorer(): React.JSX.Element {
         message: err instanceof Error ? err.message : 'Processing failed',
       });
     } finally {
+      isProcessingRef.current = false;
       setIsProcessing(false);
     }
   }, [file, pausePreviewPlayback, trackBlobUrl]);
 
   const handleFileSelect = useCallback((selectedFile: File): void => {
-    if (isProcessing) {
-      abortRef.current?.abort();
-      setIsProcessing(false);
-    }
+    // No file is selected while a job runs: the page would go back to the upload step
+    // without cancelling the job's requests
+    if (isProcessingRef.current) return;
     // The demo strip unmounts on selection; its looping audio must stop too
     pauseDemoPlayback();
     revokeBlobUrl(previewBlobUrl);
@@ -353,7 +359,6 @@ export default function HarmonyRestorer(): React.JSX.Element {
     dropCheckRef.current?.abort();
     setDropError(null);
   }, [
-    isProcessing,
     pauseDemoPlayback,
     revokeBlobUrl,
     trackBlobUrl,
