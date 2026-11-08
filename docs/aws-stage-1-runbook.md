@@ -495,6 +495,126 @@ Passing: the status request gets 429 with an `access-control-allow-origin` heade
 
 **6. Memory.** Passing: step 6's `create-function` accepted the memory it sets, and `get-function-configuration` reports it.
 
-## 11. Taking it down
+## 11. Deploys from GitHub
 
-In reverse order: the function URL and its two permission statements (step 9), the alarms, the kill-switch function, its role and log group (step 8), the alias (step 7), the function (step 6), the execution role and log group (step 5), the images and repository (steps 3 and 4), the SNS topic (step 2) and the budget (step 1). Each step's undo command is given above. Removing the function URL alone (step 9's undo) removes the public endpoint and keeps everything else.
+ADR 009 decisions 11 and 12: after CI passes on `main`, the `deploy` job in `.github/workflows/ci.yml` is set up to run `scripts/deploy_lambda.sh` once a reviewer approves it. It signs in with GitHub's OIDC token, so no AWS key is stored in this repository's secrets for it. This step sets up the AWS side and the GitHub environment it runs in. The environment is `aws-backend`, not `Production`: the repository's `Production` environment has the frontend deployments that `vercel[bot]` records, and the rules below are kept off it.
+
+This part creates the OIDC provider and a rule that keeps the 5 most recent images in the ECR repository. AWS's CLI reference says the thumbprint is optional: "If it is not included, IAM will retrieve and use the top intermediate certificate authority (CA) thumbprint".
+
+```bash
+"$AWS" iam create-open-id-connect-provider --url https://token.actions.githubusercontent.com \
+  --client-id-list sts.amazonaws.com --query OpenIDConnectProviderArn --output text > /dev/null
+
+cat > "$WORK/ecr-lifecycle.json" <<'EOF'
+{"rules": [{
+  "rulePriority": 1,
+  "description": "Keep the 5 most recent images",
+  "selection": {"tagStatus": "any", "countType": "imageCountMoreThan", "countNumber": 5},
+  "action": {"type": "expire"}
+}]}
+EOF
+"$AWS" ecr put-lifecycle-policy --repository-name "$REPO" \
+  --lifecycle-policy-text "file://$WORK/ecr-lifecycle.json" --query repositoryName --output text
+```
+
+> **Note:** The rule deletes images older than the 5 most recent. Whether Lambda can still start a version whose image was deleted was not checked, so moving `live` back to such a version, by the script or by hand, may fail.
+
+The deploy role trusts only a token for this repository's `aws-backend` environment. Its permissions name the one ECR repository and the one function, apart from `ecr:GetAuthorizationToken`, which AWS's example grants on `*`. The ECR actions are the ones AWS lists for pushing an image, with `GetDownloadUrlForLayer` and `GetRepositoryPolicy`, which Lambda's container image page lists for the identity that creates a function, and `DescribeImages` for the script's check. `InvokeFunction` covers every version and alias of the function, so the script can warm a new version before the alias moves to it. It cannot change the function's configuration, its reserved concurrency, its URL or the kill switch.
+
+```bash
+DEPLOY_ROLE=harmonyrestorer-backend-deploy
+cat > "$WORK/deploy-trust.json" <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Principal": {"Federated": "arn:aws:iam::$ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"},
+    "Action": "sts:AssumeRoleWithWebIdentity",
+    "Condition": {"StringEquals": {
+      "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
+      "token.actions.githubusercontent.com:sub": "repo:jacob7choi-xyz/harmonyrestorer-v1:environment:aws-backend"
+    }}
+  }]
+}
+EOF
+cat > "$WORK/deploy-policy.json" <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {"Sid": "EcrLogin", "Effect": "Allow", "Action": "ecr:GetAuthorizationToken", "Resource": "*"},
+    {
+      "Sid": "EcrPushAndRead",
+      "Effect": "Allow",
+      "Action": [
+        "ecr:BatchCheckLayerAvailability", "ecr:InitiateLayerUpload", "ecr:UploadLayerPart",
+        "ecr:CompleteLayerUpload", "ecr:PutImage", "ecr:BatchGetImage",
+        "ecr:GetDownloadUrlForLayer", "ecr:DescribeImages", "ecr:GetRepositoryPolicy"
+      ],
+      "Resource": "arn:aws:ecr:$REGION:$ACCOUNT_ID:repository/$REPO"
+    },
+    {
+      "Sid": "LambdaDeploy",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:UpdateFunctionCode", "lambda:GetFunction", "lambda:GetFunctionConfiguration",
+        "lambda:PublishVersion", "lambda:GetAlias", "lambda:UpdateAlias"
+      ],
+      "Resource": [
+        "arn:aws:lambda:$REGION:$ACCOUNT_ID:function:$FUNCTION",
+        "arn:aws:lambda:$REGION:$ACCOUNT_ID:function:$FUNCTION:$ALIAS"
+      ]
+    },
+    {
+      "Sid": "WarmUpVersions",
+      "Effect": "Allow",
+      "Action": "lambda:InvokeFunction",
+      "Resource": "arn:aws:lambda:$REGION:$ACCOUNT_ID:function:$FUNCTION:*"
+    }
+  ]
+}
+EOF
+"$AWS" iam create-role --role-name "$DEPLOY_ROLE" \
+  --assume-role-policy-document "file://$WORK/deploy-trust.json" --query Role.RoleName --output text
+"$AWS" iam put-role-policy --role-name "$DEPLOY_ROLE" --policy-name deploy-backend \
+  --policy-document "file://$WORK/deploy-policy.json"
+```
+
+This part sets up the GitHub environment, with the repository owner as its required reviewer, deployments from `main` only, and the role's ARN as a variable. The ARN goes to `gh` without being printed. `gh api user` names the signed-in GitHub account, which is expected to be `jacob7choi-xyz`.
+
+```bash
+GH_REPO=jacob7choi-xyz/harmonyrestorer-v1
+REVIEWER_ID="$(gh api user --jq .id)"
+gh api -X PUT "repos/$GH_REPO/environments/aws-backend" --input - > /dev/null <<EOF
+{"reviewers": [{"type": "User", "id": $REVIEWER_ID}], "prevent_self_review": false,
+ "deployment_branch_policy": {"protected_branches": false, "custom_branch_policies": true}}
+EOF
+gh api -X POST "repos/$GH_REPO/environments/aws-backend/deployment-branch-policies" \
+  -f name=main -f type=branch > /dev/null
+gh variable set AWS_DEPLOY_ROLE_ARN --env aws-backend --repo "$GH_REPO" \
+  --body "arn:aws:iam::$ACCOUNT_ID:role/$DEPLOY_ROLE"
+```
+
+`prevent_self_review` is false because the reviewer is also the person who pushes to `main`.
+
+Check: `"$AWS" iam get-role --role-name "$DEPLOY_ROLE" --query "Role.AssumeRolePolicyDocument.Statement[0].Condition"`, and `gh api "repos/$GH_REPO/environments/aws-backend" --jq '[.protection_rules[].type]'`.
+
+**Approving a deploy.** After a push to `main`, the run's `deploy` job waits. In the run's page on GitHub, "Review deployments" approves or rejects it. A push that changes only documentation still runs the image and publish jobs and offers a deploy, which can be rejected. When the job's smoke test fails, the job moves `live` back to the version it was on and fails; the job's log says which version that is.
+
+**When the digest check fails.** The push has then left the commit's tag on another digest, and tags in this repository cannot be overwritten, so a re-run fails until that tag is deleted. The script stops before it updates the function's code, so that deploy did not point any version at the image under the tag. Check which digest the tag names with `"$AWS" ecr describe-images --repository-name "$REPO" --image-ids imageTag=<commit> --query "imageDetails[0].imageDigest"`, then delete it with `"$AWS" ecr batch-delete-image --repository-name "$REPO" --image-ids imageTag=<commit>`.
+
+**Moving `live` by hand.** `"$AWS" lambda update-alias --function-name "$FUNCTION" --name "$ALIAS" --function-version <version>`, then warm it as in step 7.
+
+Undo, in this order. Deleting the environment also deletes its variable.
+
+```bash
+gh api -X DELETE "repos/$GH_REPO/environments/aws-backend"
+"$AWS" iam delete-role-policy --role-name "$DEPLOY_ROLE" --policy-name deploy-backend
+"$AWS" iam delete-role --role-name "$DEPLOY_ROLE"
+"$AWS" ecr delete-lifecycle-policy --repository-name "$REPO" > /dev/null
+"$AWS" iam delete-open-id-connect-provider \
+  --open-id-connect-provider-arn "arn:aws:iam::$ACCOUNT_ID:oidc-provider/token.actions.githubusercontent.com"
+```
+
+## 12. Taking it down
+
+In reverse order: the GitHub environment, the deploy role, the ECR rule and the OIDC provider (step 11), the function URL and its two permission statements (step 9), the alarms, the kill-switch function, its role and log group (step 8), the alias (step 7), the function (step 6), the execution role and log group (step 5), the images and repository (steps 3 and 4), the SNS topic (step 2) and the budget (step 1). Each step's undo command is given above. Removing the function URL alone (step 9's undo) removes the public endpoint and keeps everything else.
