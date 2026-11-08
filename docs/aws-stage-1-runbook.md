@@ -8,7 +8,7 @@ This runbook carries out ADR 009 (`docs/adr/009-pay-per-use-hosting.md`) in an A
 
 ## 0. Before starting
 
-Run every step from the repository root, in one shell; steps 8 and 10 use paths relative to it. The steps use the AWS CLI (version 2; `aws login` needs 2.32.0 or later), `docker` with `buildx`, `jq`, `ffmpeg`, `zip`, `curl` and `uv`.
+Run every step from the repository root, in one shell; steps 8 and 10 use paths relative to it. The steps use the AWS CLI (version 2; the setup in November 2026 used 2.39.5, which has `aws login`), `docker` with `buildx`, `jq`, `ffmpeg`, `zip`, `curl` and `uv`.
 
 ADR 009 precondition 0: the account's Lambda concurrency quota must be at least 101, because reserving 1 needs the unreserved count minus 100.
 
@@ -89,7 +89,7 @@ ADR 009 decision 13: alarms send email through SNS. AWS sends a confirmation ema
   --notification-endpoint "$ALERT_EMAIL" --query SubscriptionArn --output text
 ```
 
-The second command prints `pending confirmation`. Accept the email, then check that one subscription is confirmed. An unconfirmed subscription's ARN reads `PendingConfirmation` in the list, per an example in the SNS developer guide:
+The second command prints `pending confirmation`. Accept the email, then check that one subscription is confirmed. The query counts subscriptions whose ARN is not `PendingConfirmation`; on 2026-11-06 (US Eastern) it returned 1 once the email was confirmed:
 
 `"$AWS" sns list-subscriptions-by-topic --topic-arn "$TOPIC_ARN" --query "length(Subscriptions[?SubscriptionArn!='PendingConfirmation'])"`
 
@@ -122,7 +122,7 @@ EOF
 
 The policy follows AWS's minimum example, with a condition added that limits it to function ARNs starting with this function's name, which covers its versions and aliases (and any other function whose name starts the same way); AWS's only `aws:sourceArn` example for Lambda image pulls uses `function:*`. On 2026-11-07, step 6 created the function after this policy, with the condition, was set. If `create-function` reports that it cannot pull the image, replace the policy with AWS's minimum example, without the condition.
 
-The ECR API marks the repository's `imageScanningConfiguration` as being deprecated in favour of a registry-level scanning setting; the option still works, and the check below shows whether scan on push is on.
+The CLI's help for `ecr create-repository` says the `imageScanningConfiguration` parameter "is being deprecated, in favor of specifying the image scanning configuration at the registry level"; the option still works, and the check below shows whether scan on push is on.
 
 Check: `"$AWS" ecr describe-repositories --repository-names "$REPO" --query "repositories[0].[imageTagMutability,imageScanningConfiguration.scanOnPush]"`
 
@@ -151,13 +151,13 @@ docker logout "$REGISTRY" > /dev/null
 
 Check: `"$AWS" ecr describe-images --repository-name "$REPO" --query "imageDetails[].imageDigest"` lists `DIGEST`.
 
-Tags in this repository are immutable, so pushing the same `COMMIT` tag a second time fails with `ImageTagAlreadyExistsException`.
+Tags in this repository are immutable, so pushing the same `COMMIT` tag a second time is expected to fail; this was not tried. `scripts/deploy_lambda.sh` skips the push when ECR already holds the digest.
 
 Undo: `"$AWS" ecr batch-delete-image --repository-name "$REPO" --image-ids imageDigest="$DIGEST"`
 
 ## 5. Logs and execution role
 
-ADR 009 decision 13 and the security design: the function's log group keeps 14 days, and the execution role may use that log group only. Lambda's logging page lists `logs:CreateLogGroup`, `logs:CreateLogStream` and `logs:PutLogEvents` for the execution role, so all three are granted, limited to this one log group. The log group is created here first so that its retention is set before the function writes to it.
+ADR 009 decision 13 and the security design: the function's log group keeps 14 days, and the execution role may use that log group only. AWS's managed policy `AWSLambdaBasicExecutionRole` (version v1, read on 2026-11-08) grants `logs:CreateLogGroup`, `logs:CreateLogStream` and `logs:PutLogEvents`, so all three are granted here, limited to this one log group. The log group is created here first so that its retention is set before the function writes to it.
 
 ```bash
 "$AWS" logs create-log-group --log-group-name "/aws/lambda/$FUNCTION"
@@ -288,7 +288,7 @@ Undo: `"$AWS" lambda delete-alias --function-name "$FUNCTION" --name "$ALIAS"`
 
 ## 8. Kill switch
 
-ADR 009 decision 14: an alarm on the function's summed `Duration` invokes `ops/kill_switch/handler.py`, which sets the function URL's authentication to `AWS_IAM`. The threshold is more than 900,000 ms (15 minutes) of `Duration` in one hour. CloudWatch evaluates an alarm with a period of one minute or longer "every minute", over a sliding window of the period, so this alarm can act within about a minute of the hourly sum passing the threshold, once the metric data has arrived; how long that takes was not measured. At ADR 009's worst case of up to about $1.15 per busy hour, 15 busy minutes cost about $0.29. `Duration` counts every version and alias of the function under the `FunctionName` dimension, and does not include cold start time.
+ADR 009 decision 14: an alarm on the function's summed `Duration` invokes `ops/kill_switch/handler.py`, which sets the function URL's authentication to `AWS_IAM`. The threshold is more than 900,000 ms (15 minutes) of `Duration` in one hour. CloudWatch evaluates an alarm with a period of one minute or longer "every minute", over a sliding window of the period, so this alarm can act within about a minute of the hourly sum passing the threshold, once the metric data has arrived; how long that takes was not measured. At ADR 009's worst case of up to about $1.15 per busy hour, 15 busy minutes cost about $0.29. On 2026-11-07, invocations of version 1 and of `$LATEST` both appeared in `Duration` under the `FunctionName` dimension. AWS's metrics page says `Duration` does not include cold start time, but when init ran during the first request, after the 10 s init phase timed out, that time was counted: the datapoint for 05:15 UTC that day was 78,604 ms, the same as the request's `REPORT` line.
 
 The kill-switch function may update the URL configuration of this one function, named by its ARN and its alias's ARN, and write its own logs.
 
@@ -453,17 +453,17 @@ Passing: the two networks log different addresses, and the forged request logs t
 **2. Upload size.** Make a WAV of exactly 4 MiB and one byte larger, and upload both:
 
 ```bash
-uv run --frozen python -I - <<'EOF'
-import struct
+uv run --frozen python -I - "$WORK" <<'EOF'
+import os, struct, sys
 for name, size in (("exact.wav", 4194304), ("over.wav", 4194306)):
     data = size - 44
     header = (b"RIFF" + struct.pack("<I", 36 + data) + b"WAVEfmt " +
               struct.pack("<IHHIIHH", 16, 1, 1, 16000, 32000, 2, 16) +
               b"data" + struct.pack("<I", data))
-    open(name, "wb").write(header + b"\0" * data)
+    open(os.path.join(sys.argv[1], name), "wb").write(header + b"\0" * data)
 EOF
 for f in exact.wav over.wav; do
-  curl -sS -o /dev/null -w "$f %{http_code}\n" -F "file=@$f;type=audio/wav" "$URL/api/v1/denoise"
+  curl -sS -o /dev/null -w "$f %{http_code}\n" -F "file=@$WORK/$f;type=audio/wav" "$URL/api/v1/denoise"
 done
 ```
 
@@ -472,9 +472,9 @@ Passing: `exact.wav` gets 200 and `over.wav` 413. (`over.wav` is two bytes over,
 **3. Streaming.** Upload a 595 s file under 4 MiB, then download the WAV. It is a few seconds under the 600 s cap because uploads longer than the cap are refused (`backend/app/services/audio_decode.py:246`) and an MP3 encoder can add padding:
 
 ```bash
-ffmpeg -y -f lavfi -i anoisesrc=d=595:c=pink:r=16000 -ac 1 -b:a 48k long.mp3
-JOB="$(curl -sS -F "file=@long.mp3;type=audio/mpeg" "$URL/api/v1/denoise" | jq -r .job_id)"
-curl -sS -o long-restored.wav -w '%{http_code} %{size_download}\n' "$URL/api/v1/download/$JOB"
+ffmpeg -y -f lavfi -i anoisesrc=d=595:c=pink:r=16000 -ac 1 -b:a 48k "$WORK/long.mp3"
+JOB="$(curl -sS -F "file=@$WORK/long.mp3;type=audio/mpeg" "$URL/api/v1/denoise" | jq -r .job_id)"
+curl -sS -o "$WORK/long-restored.wav" -w '%{http_code} %{size_download}\n' "$URL/api/v1/download/$JOB"
 ```
 
 Passing: 200 and about 19.0 MB (595 s at 16 kHz, 16-bit mono, plus a 44-byte header), more than the 6 MB a buffered response allows.
@@ -482,7 +482,7 @@ Passing: 200 and about 19.0 MB (595 s at 16 kHz, 16-bit mono, plus a 44-byte hea
 **4. Readable 429.** While a long upload runs, ask for a status with the frontend's origin:
 
 ```bash
-curl -sS -F "file=@long.mp3;type=audio/mpeg" "$URL/api/v1/denoise" > /dev/null &
+curl -sS -F "file=@$WORK/long.mp3;type=audio/mpeg" "$URL/api/v1/denoise" > /dev/null &
 sleep 3
 curl -sS -D - -o /dev/null -H "Origin: $FRONTEND_ORIGIN" \
   "$URL/api/v1/status/00000000-0000-4000-8000-000000000000"
