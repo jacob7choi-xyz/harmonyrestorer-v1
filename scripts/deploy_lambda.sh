@@ -49,7 +49,7 @@ copy_image() {
   docker logout "$registry" > /dev/null
   if [ "$pushed" != "$DIGEST" ]; then
     echo "Tags in this repository cannot be overwritten; delete tag $COMMIT before a re-run" \
-      "(docs/aws-stage-1-runbook.md, step 4)" >&2
+      "(docs/aws-stage-1-runbook.md, step 11)" >&2
     fail "ECR stored '${pushed:-nothing}' under tag $COMMIT for $DIGEST"
   fi
 }
