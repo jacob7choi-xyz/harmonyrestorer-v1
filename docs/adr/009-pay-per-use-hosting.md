@@ -1,8 +1,8 @@
 # ADR-009: Deploy Stage 1 of the Backend as One AWS Lambda Function
 
-**Date:** 2026-10-29, rewritten 2026-11-05, amended 2026-11-05 after the account's limits and the cost of data transfer were checked, amended 2026-11-07 with the precondition results from the first deployment
+**Date:** 2026-10-29, rewritten 2026-11-05, amended 2026-11-05 after the account's limits and the cost of data transfer were checked, amended 2026-11-07 with the precondition results from the first deployment, amended 2026-11-08 with the CI deploy, the startup measurements and corrections, accepted 2026-11-08
 
-**Status:** proposed
+**Status:** accepted
 
 ---
 
