@@ -34,6 +34,8 @@ KS_FUNCTION=harmonyrestorer-kill-switch
 KS_ROLE=harmonyrestorer-kill-switch-exec
 ALARM=harmonyrestorer-backend-busy
 THROTTLE_ALARM=harmonyrestorer-backend-throttles
+ERRORS_ALARM=harmonyrestorer-backend-errors
+LOG_ALARM=harmonyrestorer-backend-error-logs
 TOPIC=harmonyrestorer-alarms
 BUDGET=harmonyrestorer-monthly
 FRONTEND_ORIGIN=https://harmonyrestorer.online
@@ -352,14 +354,43 @@ EOF
 
 The throttle alarm only emails. Throttles are expected while one user's job holds the environment (ADR 009, Consequences), so its threshold of more than 100 an hour is a judgment, to be adjusted from what the metric shows.
 
+Two more alarms email when something fails, added on 2026-11-08. Lambda's `Errors` metric counted the function's startup crash on 2026-11-07 (a sum of 1 at 05:14 UTC); whether it also counts timeouts and out-of-memory failures, as expected, was not tested here. When the app returns an error response, the adapter is expected to hand it back as a normal response, which `Errors` would then not count; that was not tested. The second alarm therefore counts the app's own ERROR log lines. An audit of `backend/app` on 2026-11-08 found 17 places that log at ERROR, for failures such as ffmpeg missing, a checkpoint mismatch, a failed job, a failed download conversion or an unexpected exception. Uploads that are too long or not decodable are logged at INFO and get 400, and an upload in the wrong format gets 400 with no log line, so none of these trigger it; an upload whose decode times out (60 s by default) does log at ERROR. The filter matches the JSON lines the app writes with `LOG_FORMAT=json` (`backend/app/main.py:25-38`), not uvicorn's plain-text lines.
+
+```bash
+"$AWS" logs test-metric-filter --filter-pattern '{ $.level = "ERROR" }' --log-event-messages \
+  '{"timestamp": "t", "level": "ERROR", "logger": "app.main", "message": "m"}' \
+  '{"timestamp": "t", "level": "INFO", "logger": "app.main", "message": "m"}' \
+  'ERROR:    Exception in ASGI application' --query "matches[].eventNumber" --output text
+
+"$AWS" cloudwatch put-metric-alarm --alarm-name "$ERRORS_ALARM" \
+  --namespace AWS/Lambda --metric-name Errors \
+  --dimensions Name=FunctionName,Value="$FUNCTION" \
+  --statistic Sum --period 300 --evaluation-periods 1 \
+  --threshold 1 --comparison-operator GreaterThanOrEqualToThreshold \
+  --treat-missing-data notBreaching --alarm-actions "$TOPIC_ARN"
+
+"$AWS" logs put-metric-filter --log-group-name "/aws/lambda/$FUNCTION" \
+  --filter-name app-error-logs --filter-pattern '{ $.level = "ERROR" }' \
+  --metric-transformations metricName=AppErrorLogs,metricNamespace=HarmonyRestorer,metricValue=1
+
+"$AWS" cloudwatch put-metric-alarm --alarm-name "$LOG_ALARM" \
+  --namespace HarmonyRestorer --metric-name AppErrorLogs \
+  --statistic Sum --period 300 --evaluation-periods 1 \
+  --threshold 1 --comparison-operator GreaterThanOrEqualToThreshold \
+  --treat-missing-data notBreaching --alarm-actions "$TOPIC_ARN"
+```
+
+The filter test prints `1`: only the JSON ERROR line matches. To test the email, set each alarm to `ALARM` with `set-alarm-state`, as in precondition 7, then back to `OK`. On 2026-11-08 both emails arrived, in Gmail's Updates tab; a Gmail filter on the sender can keep them in the inbox.
+
 **To verify:** which resource ARN IAM checks when `lambda:UpdateFunctionUrlConfig` names an alias; the pages read do not say, so the policy lists the function's ARN and the alias's ARN. On 2026-11-07 the kill switch made the change with this policy (precondition 7), which does not show which of the two ARNs IAM matched.
 
-Check: `"$AWS" cloudwatch describe-alarms --alarm-names "$ALARM" "$THROTTLE_ALARM" --query "MetricAlarms[].[AlarmName,StateValue,Threshold,Period]"`. The kill switch itself is tested in step 10, after the URL exists.
+Check: `"$AWS" cloudwatch describe-alarms --alarm-names "$ALARM" "$THROTTLE_ALARM" "$ERRORS_ALARM" "$LOG_ALARM" --query "MetricAlarms[].[AlarmName,StateValue,Threshold,Period]"`. The kill switch itself is tested in step 10, after the URL exists.
 
 Undo, in this order:
 
 ```bash
-"$AWS" cloudwatch delete-alarms --alarm-names "$ALARM" "$THROTTLE_ALARM"
+"$AWS" cloudwatch delete-alarms --alarm-names "$ALARM" "$THROTTLE_ALARM" "$ERRORS_ALARM" "$LOG_ALARM"
+"$AWS" logs delete-metric-filter --log-group-name "/aws/lambda/$FUNCTION" --filter-name app-error-logs
 "$AWS" lambda delete-function --function-name "$KS_FUNCTION"
 "$AWS" iam delete-role-policy --role-name "$KS_ROLE" --policy-name close-function-url
 "$AWS" iam delete-role --role-name "$KS_ROLE"
