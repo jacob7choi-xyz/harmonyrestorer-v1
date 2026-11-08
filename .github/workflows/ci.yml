@@ -133,7 +133,7 @@ jobs:
   # only when all three jobs succeeded; the results are checked by name so a job skipped
   # later by its own condition cannot count as a pass. It is the only job that can write
   # packages, and it checks out no code and runs none of the project's. A deploy should
-  # use its amd64-digest output, not the tag. Nothing deploys the image yet.
+  # use its amd64-digest output, not the tag, as the deploy job below does.
   publish:
     needs: [backend, image, frontend]
     if: >-
@@ -203,6 +203,52 @@ jobs:
       - name: Log out of the registry
         if: always()
         run: docker logout ghcr.io
+
+  # Deploys the published image to the Lambda function once a reviewer approves the run in
+  # the aws-backend environment (docs/adr/009-pay-per-use-hosting.md, decisions 11 and 12).
+  # It signs in to AWS with GitHub's OIDC token, so no AWS key is stored. The role trusts
+  # only this repository's aws-backend environment. It can get an ECR sign-in token (granted
+  # on *, as in AWS's example), push to the one ECR repository, and deploy, warm and alias
+  # the one function (docs/aws-stage-1-runbook.md). Runs of this job share a concurrency
+  # group, so two of them do not deploy at the same time; how the group treats a run still
+  # waiting for approval was not checked. Changes made outside this job, by hand or by the
+  # kill switch, are not part of the group.
+  deploy:
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: aws-backend
+    concurrency:
+      group: deploy-aws-backend
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      GHCR_IMAGE: ghcr.io/jacob7choi-xyz/harmonyrestorer-backend
+      DIGEST: ${{ needs.publish.outputs.amd64-digest }}
+      COMMIT: ${{ github.sha }}
+      FUNCTION: harmonyrestorer-backend
+      REPO: harmonyrestorer-backend
+      ALIAS: live
+      BACKEND_URL: https://wn4ntjcy4njzvwene2eawrpgzq0eafxs.lambda-url.us-east-1.on.aws
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The account ID is in the role ARN and the registry host; masking keeps it out of
+      # the log, since the action does not mask it by default
+      - name: Sign in to AWS
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+          mask-aws-account-id: true
+
+      - name: Deploy, warm, smoke test
+        run: scripts/deploy_lambda.sh
 
   frontend:
     runs-on: ubuntu-latest
