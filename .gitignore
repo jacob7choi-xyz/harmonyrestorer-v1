@@ -87,8 +87,13 @@ checkpoints/
 weights/
 /models/
 
-# Benchmark artifacts
-samples/
+# Benchmark artifacts. The README links the clips in samples/opgan and samples/uvr, so
+# those two folders are tracked; the rest of samples/ stays out.
+samples/*
+!samples/opgan/
+!samples/uvr/
+!samples/opgan/*.wav
+!samples/uvr/*.wav
 metrics/
 
 # Training data (downloaded/generated audio)

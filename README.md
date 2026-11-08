@@ -213,7 +213,7 @@ A replacement is in progress, and its protocol was frozen before any evaluation 
 
 ## Samples
 
-Three before/after/restored triplets for each model. Click to listen in the browser.
+Three noisy, restored and clean triplets for each model. Each link opens the WAV file.
 
 **OpGAN** (custom-trained, in-distribution):
 
