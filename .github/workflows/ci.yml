@@ -133,7 +133,7 @@ jobs:
   # only when all three jobs succeeded; the results are checked by name so a job skipped
   # later by its own condition cannot count as a pass. It is the only job that can write
   # packages, and it checks out no code and runs none of the project's. A deploy should
-  # use the digest it reports, not the tag. Nothing deploys the image yet.
+  # use its amd64-digest output, not the tag. Nothing deploys the image yet.
   publish:
     needs: [backend, image, frontend]
     if: >-
@@ -144,6 +144,8 @@ jobs:
     timeout-minutes: 60
     permissions:
       packages: write
+    outputs:
+      amd64-digest: ${{ steps.push.outputs.amd64-digest }}
     env:
       IMAGE: ghcr.io/jacob7choi-xyz/harmonyrestorer-backend
 
@@ -164,8 +166,15 @@ jobs:
           fi
 
       # The token goes to docker on stdin, never on the command line. The digest is read
-      # from the push output, and the step fails if none is found.
+      # from the push output, and the step fails if none is found. For 531b34e that digest
+      # named an index holding the linux/amd64 image and an attestation. ADR 009 has
+      # deploys use the linux/amd64 image's digest, not the index's (decision 11), and
+      # records that a Lambda container image must target one architecture; whether
+      # Lambda refuses an index digest was not tested. So the step also reports the
+      # linux/amd64 manifest's digest. From an index it fails unless exactly one is found;
+      # a single manifest's digest is passed on as it is, without a platform check.
       - name: Push to the GitHub Container Registry
+        id: push
         env:
           REGISTRY_TOKEN: ${{ github.token }}
           REGISTRY_USER: ${{ github.repository_owner }}
@@ -181,6 +190,15 @@ jobs:
             exit 1
           fi
           echo "Pushed $IMAGE@$digest (tag $COMMIT)" | tee -a "$GITHUB_STEP_SUMMARY"
+          amd64="$(docker buildx imagetools inspect --raw "$IMAGE@$digest" | jq -r --arg d "$digest" \
+            'if .manifests then [.manifests[] | select(.platform.os == "linux" and .platform.architecture == "amd64")]
+             | if length == 1 then .[0].digest else empty end else $d end')"
+          if [ -z "$amd64" ]; then
+            echo "no single linux/amd64 manifest in $IMAGE@$digest"
+            exit 1
+          fi
+          echo "linux/amd64 image: $IMAGE@$amd64" | tee -a "$GITHUB_STEP_SUMMARY"
+          echo "amd64-digest=$amd64" >> "$GITHUB_OUTPUT"
 
       - name: Log out of the registry
         if: always()
