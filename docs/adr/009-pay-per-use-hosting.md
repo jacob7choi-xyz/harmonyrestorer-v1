@@ -8,7 +8,7 @@
 
 ## Context
 
-The backend is not serving. Billing is disabled on the Google Cloud project, so the Cloud Run deployment in `scripts/deploy_backend.sh` cannot run, and an AWS account is available. The aim is to pay for compute while requests run rather than for an always-on instance. ADR 010 (accepted) put job records, result files and the rate limit behind ports and deferred dispatch. Stage 1 runs the current adapters on Lambda without changing them. Stage 2 replaces the adapters that work only inside one process.
+When this was written (2026-11-05), the backend was not serving. Billing is disabled on the Google Cloud project, so the Cloud Run deployment in `scripts/deploy_backend.sh` cannot run, and an AWS account is available. The aim is to pay for compute while requests run rather than for an always-on instance. ADR 010 (accepted) put job records, result files and the rate limit behind ports and deferred dispatch. Stage 1 runs the current adapters on Lambda without changing them. Stage 2 replaces the adapters that work only inside one process.
 
 ### What the backend does today
 
@@ -20,7 +20,7 @@ Read at commit `8eb0acb`.
 - The upload request waits for inference to finish before it replies (`backend/app/routes/denoise.py:391`).
 - Uploads and results are written under `UPLOAD_DIR` and `PROCESSED_DIR`, which default to `backend/uploads` and `backend/processed` (`backend/app/config.py:77-78`).
 - A cleanup loop started in the app's lifespan removes COMPLETED and FAILED jobs past `JOB_TTL_SECONDS`, with their files (`backend/app/main.py:59-67`, `:107`). It runs only while the process runs.
-- The per-IP job cap counts COMPLETED jobs until they expire (`backend/app/services/job_store.py:22-24`). With the defaults, `MAX_JOBS_PER_IP=3` and `JOB_TTL_SECONDS=3600` (`backend/app/config.py:181`, `:190`), one client identity can start three uploads an hour. `MAX_TOTAL_JOBS` defaults to 100 (`:187`).
+- The per-IP job cap counts COMPLETED jobs until they expire (`backend/app/services/job_store.py:22-24`). With the defaults, `MAX_JOBS_PER_IP=3` and `JOB_TTL_SECONDS=3600` (`backend/app/config.py:168`, `:177`), one client identity can start three uploads an hour. `MAX_TOTAL_JOBS` defaults to 100 (`:174`).
 - Uploads are limited to 10 per 60 s per client (`backend/app/config.py:117`) and downloads, counted separately, to 60 per 3,600 s (`:126-135`), both counted in the process's memory (`backend/app/services/rate_limit.py`, routes at `backend/app/middleware.py:19-20`). Status requests are not limited.
 - The client identity is the connection's address by default. With `CLIENT_IDENTITY=lambda_request_context` it is `http.sourceIp` from the `x-amzn-request-context` header, and an upload or download without a usable value gets 503 (`backend/app/client_identity.py:18-46`, `backend/app/config.py:145`).
 - With `CORS_ORIGINS` empty, the app adds no CORS middleware (`backend/app/main.py:114-134`).

@@ -8,7 +8,7 @@
 
 ## Context
 
-The runtime image copies `checkpoints/final.pt` when it is built (`Dockerfile:76`). The file is not in the repository: `.gitignore:71` (`*.pt`) and `.gitignore:86` (`checkpoints/`) exclude it, and it has never been committed. Before this decision, CI built only the test stage (`.github/workflows/ci.yml:80`), and ADR 007 lists as a negative consequence that CI cannot run the digest check against the real checkpoint.
+The runtime image copies `checkpoints/final.pt` when it is built (`Dockerfile:83`). The file is not in the repository: `.gitignore:71` (`*.pt`) and `.gitignore:86` (`checkpoints/`) exclude it, and it has never been committed. Before this decision, CI built only the test stage (`.github/workflows/ci.yml:80`), and ADR 007 lists as a negative consequence that CI cannot run the digest check against the real checkpoint.
 
 The image that is deployed is built elsewhere. `scripts/deploy_backend.sh:81` builds the default target from the local working tree and pushes it, and `scripts/deploy_backend.sh:89` deploys it by tag. Lines 83-85 look up the pushed digest only to print it, and print "unknown" if the lookup fails. Before this decision, no CI workflow built the runtime stage.
 
@@ -38,6 +38,8 @@ The training recordings come from the Internet Archive item `MusopenCollectionAs
 
 ### Neutral
 - The deployed image is still built by `scripts/deploy_backend.sh` from the local working tree, so it is not yet the image CI builds. The backend test suite still runs in the test stage, not the runtime stage.
+
+> **Note:** Since 2026-11-08 the deployed backend is the image CI builds: after a reviewer approves, the deploy job copies it to Amazon ECR by its linux/amd64 digest and deploys it to AWS Lambda (`docs/adr/009-pay-per-use-hosting.md`, decision 11; `scripts/deploy_lambda.sh`). `scripts/deploy_backend.sh`, the Cloud Run deploy this consequence describes, is deferred.
 - The checkpoint also holds the discriminator and optimizer state, which the backend does not read. Publishing only the generator would change the file's digest and the benchmark manifest, so it is left out.
 
 ## Remaining Work
