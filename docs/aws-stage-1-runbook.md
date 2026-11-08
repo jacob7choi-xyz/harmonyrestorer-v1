@@ -579,7 +579,7 @@ EOF
   --policy-document "file://$WORK/deploy-policy.json"
 ```
 
-This part sets up the GitHub environment, with the repository owner as its required reviewer, deployments from `main` only, and the role's ARN as a variable. The ARN goes to `gh` without being printed. `gh api user` names the signed-in GitHub account, which is expected to be `jacob7choi-xyz`.
+This part sets up the GitHub environment, with the repository owner as its required reviewer, deployments from `main` only, and the role's ARN as a secret. It is a secret rather than a variable because the log lists a step's inputs at the start of the step: the first deploy read it from a variable, and that line showed the account ID unmasked. GitHub's documentation says secrets are masked in logs. The ARN goes to `gh` without being printed. `gh api user` names the signed-in GitHub account, which is expected to be `jacob7choi-xyz`.
 
 ```bash
 GH_REPO=jacob7choi-xyz/harmonyrestorer-v1
@@ -590,7 +590,7 @@ gh api -X PUT "repos/$GH_REPO/environments/aws-backend" --input - > /dev/null <<
 EOF
 gh api -X POST "repos/$GH_REPO/environments/aws-backend/deployment-branch-policies" \
   -f name=main -f type=branch > /dev/null
-gh variable set AWS_DEPLOY_ROLE_ARN --env aws-backend --repo "$GH_REPO" \
+gh secret set AWS_DEPLOY_ROLE_ARN --env aws-backend --repo "$GH_REPO" \
   --body "arn:aws:iam::$ACCOUNT_ID:role/$DEPLOY_ROLE"
 ```
 
@@ -604,7 +604,7 @@ Check: `"$AWS" iam get-role --role-name "$DEPLOY_ROLE" --query "Role.AssumeRoleP
 
 **Moving `live` by hand.** `"$AWS" lambda update-alias --function-name "$FUNCTION" --name "$ALIAS" --function-version <version>`, then warm it as in step 7.
 
-Undo, in this order. Deleting the environment also deletes its variable.
+Undo, in this order. Deleting the environment also deletes its secret.
 
 ```bash
 gh api -X DELETE "repos/$GH_REPO/environments/aws-backend"

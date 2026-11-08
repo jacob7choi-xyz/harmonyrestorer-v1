@@ -238,12 +238,15 @@ jobs:
         with:
           persist-credentials: false
 
-      # The account ID is in the role ARN and the registry host; masking keeps it out of
-      # the log, since the action does not mask it by default
+      # The account ID is in the role ARN and the registry host. The ARN is an environment
+      # secret because the log lists a step's inputs at the start of the step, and the first
+      # deploy (run 42508482434) read it from a variable, which that line showed unmasked.
+      # GitHub's documentation says secrets are masked in logs. The action masks the ID in
+      # its own output only when told to, since it does not by default.
       - name: Sign in to AWS
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
-          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
           aws-region: us-east-1
           mask-aws-account-id: true
 
