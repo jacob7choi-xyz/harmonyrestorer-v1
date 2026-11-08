@@ -288,7 +288,7 @@ Undo: `"$AWS" lambda delete-alias --function-name "$FUNCTION" --name "$ALIAS"`
 
 ## 8. Kill switch
 
-ADR 009 decision 14: an alarm on the function's summed `Duration` invokes `ops/kill_switch/handler.py`, which sets the function URL's authentication to `AWS_IAM`. The threshold is more than 900,000 ms (15 minutes) of `Duration` in one hour. CloudWatch evaluates an alarm with a period of one minute or longer "every minute", over a sliding window of the period, so this alarm can act within about a minute of the hourly sum passing the threshold, once the metric data has arrived; how long that takes was not measured. At ADR 009's worst case of up to about $1.20 per busy hour, 15 busy minutes cost about $0.30. `Duration` counts every version and alias of the function under the `FunctionName` dimension, and does not include cold start time.
+ADR 009 decision 14: an alarm on the function's summed `Duration` invokes `ops/kill_switch/handler.py`, which sets the function URL's authentication to `AWS_IAM`. The threshold is more than 900,000 ms (15 minutes) of `Duration` in one hour. CloudWatch evaluates an alarm with a period of one minute or longer "every minute", over a sliding window of the period, so this alarm can act within about a minute of the hourly sum passing the threshold, once the metric data has arrived; how long that takes was not measured. At ADR 009's worst case of up to about $1.15 per busy hour, 15 busy minutes cost about $0.29. `Duration` counts every version and alias of the function under the `FunctionName` dimension, and does not include cold start time.
 
 The kill-switch function may update the URL configuration of this one function, named by its ARN and its alias's ARN, and write its own logs.
 
