@@ -138,6 +138,17 @@ Checked on 2026-11-07 on versions 1 to 4 of the function, all running the linux/
 6. **Memory: changed.** 3,538 MB was refused; 3,008 MB was accepted, and `get-function-configuration` reports it.
 7. **Kill switch: met.** With the alarm set to `ALARM` by hand, the kill-switch function logged the change, and the URL's `AuthType` read `AWS_IAM` 12 s after the alarm state was set. The first unsigned `/health` request, sent once `AuthType` read `AWS_IAM`, still got 200; the next two, 5 s apart, got 403 with `{"Message":"Forbidden"}`. After the authentication was set back to `NONE`, the first request got 403 and the next, 5 s later, got 200. In each direction, the first request after the configuration read the new value was still handled the old way, and the next, 5 s later, the new way.
 
+### Startup measurements
+
+Measured on 2026-11-07 and 2026-11-08 (UTC) from the function's CloudWatch logs: the adapter's readiness messages, the app's log lines, and the platform's `INIT_REPORT` and `REPORT` lines. On 2026-11-08, `PYTHONPROFILEIMPORTTIME=1` was also set on `$LATEST` for two forced cold starts each time, then removed, and `$LATEST`'s environment was compared with a snapshot taken before. Unless stated otherwise, times in an attempt are counted from the adapter's start of polling, taken as its "not ready after 2000ms" line less 2 s.
+
+- In 9 of the first 11 log streams read, the first attempt ended before the app logged anything. In 8 of them the 10 s init phase timed out and init ran again during the first request. In the other, under the earlier 8 s readiness timeout, the adapter failed init.
+- In the attempts that succeeded, the app's first log line came 4.0 to 8.7 s in, 0.3 to 1.4 s passed between it and the ffmpeg check's line, and 0.08 to 0.24 s between that and the checkpoint check's line. One start is left out of these ranges: at 05:15 UTC on 2026-11-07, the first with the 100 s readiness timeout, the first log line came 49.0 s in, followed by 25.3 s and 4.2 s.
+- Before `588eac3`, the app imported the UVR wrapper with every engine (`backend/app/services/__init__.py:1`, `backend/app/services/engines.py:10`), and the wrapper imported audio-separator at module level. In two profiled starts, `app.services.denoiser` took 3.74 s and 2.44 s cumulative, of which `audio_separator.separator` took 3.60 s and 2.32 s, including torch (1.94 s and 1.16 s), which was first imported inside it. The start that finished inside the init phase had an init duration of 5.50 s.
+- In the one discarded attempt profiled, counted from its first import line, torch finished 8.86 s in and the last import lines, `scipy.stats` modules, came at 9.95 s; `audio_separator.separator` had not finished importing. The imports compared took longer there than in the retry: fastapi 4.27 s against 0.24 s, numpy 0.83 s against 0.11 s, and torch 1.67 s against 1.16 s.
+- After `588eac3`, with `$LATEST` running that commit's image (the image of version 9), two starts finished init inside the init phase, in 4.27 s and 4.20 s, with `app.services.denoiser` at 0.19 s and 0.17 s. Their first requests used 433 MB of memory, against 557 MB in the two profiled starts before. The deploy warm-up of version 9 still timed out the 10 s init phase, and its first request, which includes the retried init, took 4.17 s; for the warm-ups of versions 5 to 8, each a new image, it took 8.0 to 10.4 s.
+- Cold starts after a quiet period, as a visitor meets them, were not measured on their own.
+
 ### Work
 
 - Done in the repository: the image check in CI runs the container read-only with `/tmp` writable (`3c8a5d3`); the frontend takes its upload limit from a build setting (`c826abf`); the frontend retries `/status` on 429 (`a2617bb`); an empty `CORS_ORIGINS` adds no CORS middleware (`abd5282`); the Lambda Web Adapter is in the image (`1bf5aa5`); the client identity can come from the Lambda request context (`7b6ca6d`); downloads are rate limited per client (`8eb0acb`).
@@ -146,6 +157,7 @@ Checked on 2026-11-07 on versions 1 to 4 of the function, all running the linux/
 - Created in the AWS account on 2026-11-06 and 2026-11-07, with `docs/aws-stage-1-runbook.md`: the budget, the SNS topic and its confirmed email subscription, the ECR repository and its policy, the image, the execution role and the log groups with 14-day retention, the function with reserved concurrency 1, its versions and the alias `live`, the kill-switch function, its role and the two alarms, and the function URL. The function sets the readiness timeout of 100 s in its environment.
 - Created on 2026-11-07 (UTC), with `docs/aws-stage-1-runbook.md` step 11: the OIDC provider, the deploy role, a rule keeping the 5 most recent images in the ECR repository, and the GitHub environment `aws-backend` with a required reviewer, deployments from `main` only, and the role's ARN, first as a variable and since 2026-11-08 as a secret.
 - Done in the repository for deploys: the `publish` job reports the linux/amd64 digest (`9c2c2f9`), and a `deploy` job runs `scripts/deploy_lambda.sh` after approval (`c3eda74`). Its first run, on 2026-11-08 (UTC, CI run 42508482434), published version 5, moved `live` to it, and passed the smoke test.
+- Done in the repository for startup: audio-separator is imported only when a UVR model is built (`588eac3`; Startup measurements).
 - Set on Vercel on 2026-11-07 (US Eastern): `VITE_API_URL` to the function URL followed by `/api/v1`, and `VITE_MAX_UPLOAD_MB=4`. The site's bundle built after that contained the function URL and the call `Ov("4")`, which from the surrounding code is the minified upload-limit parser.
 
 ### Security design
@@ -187,8 +199,8 @@ Stage 2 would lift the limits above by adding adapters behind ADR 010's ports: a
 - The rate at which function URL responses to the internet are billed; the cost figures above assume the general data transfer rate.
 - The pages read do not say whether the 6 MB request limit applies to the encoded body. A 4 MiB upload succeeded on the function; larger uploads are refused by the app first, so where the platform's limit falls was not tested.
 - How often Lambda replaces the environment under light use, and so how often jobs are lost, is not measured.
-- Why the first start of a new image took about 78 s was not determined; the pages read do not say whether pulling the image counts toward the 10 s init limit.
-- How long cold starts take once the image is cached, and how often the 10 s init phase times out; five cold starts were observed (Precondition results, 5).
+- Why the first start of a new image took about 78 s was not determined; the pages read do not say whether pulling the image counts toward the 10 s init limit. In the one discarded attempt profiled, the imports compared were slower than in the retry; why was not determined.
+- How long cold starts take once the image is cached, and how often the 10 s init phase times out; the starts observed are in Precondition results, 5, and Startup measurements.
 - Whether to set torch's thread count is open; the measurement used 2 threads with 2 and 4 CPUs.
 - The questions ADR 010 lists for stage 2 remain: presigned upload size limits, grant expiry, and how a download grant reaches the browser.
 
