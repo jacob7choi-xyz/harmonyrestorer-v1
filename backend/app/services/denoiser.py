@@ -1,14 +1,19 @@
 """Audio denoising service using UVR (Ultimate Vocal Remover)."""
 
+from __future__ import annotations
+
 import logging
 import shutil
 import threading
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import soundfile as sf
-from audio_separator.separator import Separator
 
 from app.services.wav_io import load_mono, read_duration_seconds, write_wav_atomic
+
+if TYPE_CHECKING:
+    from audio_separator.separator import Separator
 
 logger = logging.getLogger(__name__)
 
@@ -45,8 +50,14 @@ class DenoiserService:
         self._lock = threading.Lock()
 
     def _get_separator(self) -> Separator:
-        """Lazy-load the UVR separator model."""
+        """Lazy-load the UVR separator model. The caller holds self._lock."""
         if self._separator is None:
+            # Imported here rather than at module level: the app imports this module with
+            # every engine, and on two Lambda cold starts measured on 2026-11-08 with the
+            # default OpGAN engine, audio-separator's import took about 1.2 and 1.7 s beyond
+            # torch, an upper bound on what deferring it saves at startup
+            from audio_separator.separator import Separator
+
             logger.info("Loading UVR denoising model...")
             # The soundfile writer writes each stem with sf.write. The default pydub writer
             # stages two temp files per stem in the system temp directory for ffmpeg and

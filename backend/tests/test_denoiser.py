@@ -83,7 +83,7 @@ class TestDenoiserInit:
 class TestGetSeparator:
     """Tests for lazy model loading."""
 
-    @patch("app.services.denoiser.Separator")
+    @patch("audio_separator.separator.Separator")
     def test_loads_model_on_first_call(self, mock_sep_cls: MagicMock, tmp_path: Path) -> None:
         """Model is loaded on the first call to _get_separator."""
         service = DenoiserService(output_dir=tmp_path)
@@ -96,7 +96,7 @@ class TestGetSeparator:
         )
         sep.load_model.assert_called_once_with("UVR-DeNoise.pth")
 
-    @patch("app.services.denoiser.Separator")
+    @patch("audio_separator.separator.Separator")
     def test_returns_same_instance_on_subsequent_calls(
         self, mock_sep_cls: MagicMock, tmp_path: Path
     ) -> None:
@@ -108,7 +108,7 @@ class TestGetSeparator:
         assert first is second
         mock_sep_cls.assert_called_once()
 
-    @patch("app.services.denoiser.Separator")
+    @patch("audio_separator.separator.Separator")
     def test_load_model_failure_allows_retry(self, mock_sep_cls: MagicMock, tmp_path: Path) -> None:
         """If load_model fails, _separator stays None so next call retries."""
         mock_separator = mock_sep_cls.return_value
@@ -130,7 +130,7 @@ class TestGetSeparator:
 class TestDenoise:
     """Tests for the denoise method."""
 
-    @patch("app.services.denoiser.Separator")
+    @patch("audio_separator.separator.Separator")
     def test_returns_converted_output_path(self, mock_sep_cls: MagicMock, tmp_path: Path) -> None:
         """Returns the converted file named after the input, inside output_dir."""
         output_dir = tmp_path / "output"
@@ -144,7 +144,7 @@ class TestDenoise:
         assert result == (output_dir / "track_uvr.wav").resolve()
         assert _left_behind(output_dir) == ["track_uvr.wav"]
 
-    @patch("app.services.denoiser.Separator")
+    @patch("audio_separator.separator.Separator")
     def test_output_is_16k_mono_16_bit(self, mock_sep_cls: MagicMock, tmp_path: Path) -> None:
         """A 44.1 kHz stereo stem is returned as a 16 kHz mono 16-bit WAV."""
         service = DenoiserService(output_dir=tmp_path / "output")
@@ -155,7 +155,7 @@ class TestDenoise:
         info = sf.info(str(service.denoise(input_path)))
         assert (info.samplerate, info.channels, info.subtype) == (16_000, 1, "PCM_16")
 
-    @patch("app.services.denoiser.Separator")
+    @patch("audio_separator.separator.Separator")
     def test_calls_separate_with_string_path(self, mock_sep_cls: MagicMock, tmp_path: Path) -> None:
         """Separator.separate receives a string path, not a Path object."""
         service = DenoiserService(output_dir=tmp_path / "output")
@@ -166,7 +166,7 @@ class TestDenoise:
         service.denoise(input_path)
         mock_sep_cls.return_value.separate.assert_called_once_with(str(input_path))
 
-    @patch("app.services.denoiser.Separator")
+    @patch("audio_separator.separator.Separator")
     def test_selects_correct_output_among_multiple(
         self, mock_sep_cls: MagicMock, tmp_path: Path
     ) -> None:
@@ -187,7 +187,7 @@ class TestDenoise:
         assert audio[len(audio) // 2] == pytest.approx(0.5, abs=1e-2)
         assert _left_behind(output_dir) == ["track_uvr.wav"]
 
-    @patch("app.services.denoiser.Separator")
+    @patch("audio_separator.separator.Separator")
     def test_path_traversal_neutralized(self, mock_sep_cls: MagicMock, tmp_path: Path) -> None:
         """A returned name with traversal resolves inside the staging directory."""
         output_dir = tmp_path / "output"
@@ -205,7 +205,7 @@ class TestDenoise:
         assert result.is_relative_to(output_dir.resolve())
         assert _left_behind(output_dir) == ["track_uvr.wav"]
 
-    @patch("app.services.denoiser.Separator")
+    @patch("audio_separator.separator.Separator")
     def test_raises_when_no_denoised_output(self, mock_sep_cls: MagicMock, tmp_path: Path) -> None:
         """A run with no denoised stem raises and leaves no file behind."""
         output_dir = tmp_path / "output"
@@ -218,7 +218,7 @@ class TestDenoise:
             service.denoise(input_path)
         assert _left_behind(output_dir) == []
 
-    @patch("app.services.denoiser.Separator")
+    @patch("audio_separator.separator.Separator")
     def test_stems_from_a_separation_that_returned_early_are_removed(
         self, mock_sep_cls: MagicMock, tmp_path: Path
     ) -> None:
@@ -234,7 +234,7 @@ class TestDenoise:
             service.denoise(input_path)
         assert _left_behind(output_dir) == []
 
-    @patch("app.services.denoiser.Separator")
+    @patch("audio_separator.separator.Separator")
     def test_files_left_in_staging_by_an_earlier_run_are_removed(
         self, mock_sep_cls: MagicMock, tmp_path: Path
     ) -> None:
@@ -252,7 +252,7 @@ class TestDenoise:
         service.denoise(input_path)
         assert _left_behind(output_dir) == ["track_uvr.wav"]
 
-    @patch("app.services.denoiser.Separator")
+    @patch("audio_separator.separator.Separator")
     def test_symlink_in_staging_is_removed_without_touching_its_target(
         self, mock_sep_cls: MagicMock, tmp_path: Path
     ) -> None:
@@ -275,7 +275,7 @@ class TestDenoise:
         assert list(staging.iterdir()) == []
         assert (outside / "keep.wav").read_bytes() == b"x" * 10
 
-    @patch("app.services.denoiser.Separator")
+    @patch("audio_separator.separator.Separator")
     def test_staging_directory_that_is_a_symlink_is_refused(
         self, mock_sep_cls: MagicMock, tmp_path: Path
     ) -> None:
@@ -294,7 +294,7 @@ class TestDenoise:
         assert (elsewhere / "keep.wav").read_bytes() == b"x" * 10
         mock_sep_cls.return_value.separate.assert_not_called()
 
-    @patch("app.services.denoiser.Separator")
+    @patch("audio_separator.separator.Separator")
     def test_failed_write_raises_and_leaves_no_output(
         self, mock_sep_cls: MagicMock, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
@@ -322,7 +322,7 @@ class TestDenoise:
             1.25,  # longer than the input
         ],
     )
-    @patch("app.services.denoiser.Separator")
+    @patch("audio_separator.separator.Separator")
     def test_stem_length_mismatch_raises_and_leaves_no_output(
         self, mock_sep_cls: MagicMock, tmp_path: Path, stem_seconds: float
     ) -> None:
@@ -338,7 +338,7 @@ class TestDenoise:
             service.denoise(input_path)
         assert _left_behind(output_dir) == []
 
-    @patch("app.services.denoiser.Separator")
+    @patch("audio_separator.separator.Separator")
     def test_stem_within_tolerance_is_accepted(
         self, mock_sep_cls: MagicMock, tmp_path: Path
     ) -> None:
@@ -350,7 +350,7 @@ class TestDenoise:
 
         assert service.denoise(input_path).is_file()
 
-    @patch("app.services.denoiser.Separator")
+    @patch("audio_separator.separator.Separator")
     def test_missing_denoised_stem_raises_and_leaves_no_output(
         self, mock_sep_cls: MagicMock, tmp_path: Path
     ) -> None:
@@ -366,7 +366,7 @@ class TestDenoise:
             service.denoise(input_path)
         assert _left_behind(output_dir) == []
 
-    @patch("app.services.denoiser.Separator")
+    @patch("audio_separator.separator.Separator")
     def test_raises_when_separate_fails(self, mock_sep_cls: MagicMock, tmp_path: Path) -> None:
         """An exception from separator.separate propagates to the caller."""
         output_dir = tmp_path / "output"
@@ -379,7 +379,7 @@ class TestDenoise:
             service.denoise(input_path)
         assert _left_behind(output_dir) == []
 
-    @patch("app.services.denoiser.Separator")
+    @patch("audio_separator.separator.Separator")
     def test_concurrent_calls_do_not_overlap(self, mock_sep_cls: MagicMock, tmp_path: Path) -> None:
         """Two denoise calls on one service run their separations one at a time, so
         one call never clears stems the other is still using."""
@@ -415,7 +415,7 @@ class TestDenoise:
         assert (tmp_path / "output" / "a_uvr.wav").is_file()
         assert (tmp_path / "output" / "b_uvr.wav").is_file()
 
-    @patch("app.services.denoiser.Separator")
+    @patch("audio_separator.separator.Separator")
     def test_failed_clear_after_success_is_logged_as_error(
         self,
         mock_sep_cls: MagicMock,
