@@ -20,7 +20,7 @@ for metadata that passed, per v4's `metadata_validation`.
 two independent sets. A subtype is judged only inside a container some pair admits, so a
 WAV file records `UNSUPPORTED_CONTAINER` alone. v4 does not say whether a subtype under an
 unadmitted container is also "established" as unsupported; this module takes the reading
-that it is not evaluated, and the question is recorded for the next protocol amendment.
+that it is not evaluated, and protocol v5 states that reading as the rule.
 
 **A sample count of "unknown" is believed, and excludes the file.** FLAC permits a header
 whose total sample count is zero, meaning unknown. With libsndfile 1.2.2 from the locked
@@ -29,8 +29,8 @@ and the test that pins this report also passed on the Linux CI runner. Under
 `decoder_reported` authority that is the file's length, so it fails the duration and
 decoded-size bounds and is excluded before samples are requested, which fails closed. The
 published reason then says the source is too long when it may be short; the observed
-metadata carries the sentinel value, so the record shows why. Whether v4 should name this
-case is recorded for the next protocol amendment rather than decided here.
+metadata carries the sentinel value, so the record shows why. Protocol v5 states this
+exclusion as the rule.
 """
 
 from __future__ import annotations

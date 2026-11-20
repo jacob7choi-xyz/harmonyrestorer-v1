@@ -20,7 +20,7 @@ cd "$(dirname "$0")/.."
 # is one of these names and whose value is 64 lowercase hex characters. It does not
 # verify that the value is a digest, so it is a trusted-field-name exemption rather than
 # content verification. A high-entropy string under any other key still fails.
-DIGEST_FIELDS='(sha256|checkpoint_sha256|corpus_sha256|document_sha256|protocol_sha256)'
+DIGEST_FIELDS='(sha256|canonical_sha256|checkpoint_sha256|corpus_sha256|document_sha256|protocol_sha256)'
 DIGEST_EXEMPTION="\"${DIGEST_FIELDS}\": \"[0-9a-f]{64}\""
 
 failed=()

@@ -66,6 +66,12 @@ SUPERSEDED_ARTIFACTS = {
     "docs/benchmark-protocol-v3.md": (
         "49fcdee5636519f0871159da03ab6e595c961ede861e2fe4c388f1796324ce35"  # pragma: allowlist secret
     ),
+    "benchmark/protocols/v4.json": (
+        "f721b9727e8e3abaca5f0b0d6a3820642d07e7df4e5f3e46ec244b66b2b7694e"  # pragma: allowlist secret
+    ),
+    "docs/benchmark-protocol-v4.md": (
+        "2e1437721489347d28866ed7c30ba355ef11dc48d560f7a8ac607fdea783391f"  # pragma: allowlist secret
+    ),
 }
 
 
@@ -92,7 +98,7 @@ class TestRealProtocol:
     """The checked-in config must load and describe itself accurately."""
 
     def test_it_loads(self) -> None:
-        assert load_protocol().protocol_version == 4
+        assert load_protocol().protocol_version == 5
 
     def test_digest_is_of_the_exact_file_bytes(self) -> None:
         """The provenance claim is 'these bytes governed this run', so the digest
@@ -214,8 +220,8 @@ class TestVersionCommitments:
     """Protocol promises are enforced at load, so weakening one requires a version bump."""
 
     def test_unsupported_version(self, tmp_path: Path) -> None:
-        path = variant(tmp_path, lambda d: d.update({"protocol_version": 5}))
-        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 5"):
+        path = variant(tmp_path, lambda d: d.update({"protocol_version": 6}))
+        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 6"):
             _load_from_path(path)
 
     def test_composite_score_cannot_be_enabled(self, tmp_path: Path) -> None:
@@ -497,7 +503,7 @@ class TestOnlyOneApprovedConfiguration:
             d["aggregation"]["bootstrap"]["iterations"] = 50_000
 
         parsed = _load_from_path(variant(tmp_path, alternate))
-        assert parsed.protocol_version == 4
+        assert parsed.protocol_version == 5
         assert parsed.selection.seed == 999
 
         approved = load_protocol()
@@ -512,9 +518,9 @@ class TestAmendmentChain:
 
     def test_chain_names_the_immediately_superseded_artifacts(self) -> None:
         amends = load_protocol().amends
-        assert amends.protocol_version == 3
-        assert amends.protocol_path == "benchmark/protocols/v3.json"
-        assert amends.document_path == "docs/benchmark-protocol-v3.md"
+        assert amends.protocol_version == 4
+        assert amends.protocol_path == "benchmark/protocols/v4.json"
+        assert amends.document_path == "docs/benchmark-protocol-v4.md"
 
     def test_recorded_digests_match_the_archived_files(self) -> None:
         amends = load_protocol().amends
@@ -554,14 +560,14 @@ class TestAmendmentChain:
 
     def test_the_predecessor_must_be_the_immediately_previous_version(self, tmp_path: Path) -> None:
         path = variant(tmp_path, lambda d: d["amends"].update({"protocol_version": 0}))
-        with pytest.raises(ProtocolValueError, match=r"amends\.protocol_version must be 3"):
+        with pytest.raises(ProtocolValueError, match=r"amends\.protocol_version must be 4"):
             _load_from_path(path)
 
     def test_the_superseded_config_is_not_loadable_as_current(self) -> None:
         """Proof the version bump is real rather than cosmetic: the archived v1 file
         still parses, and the current validator refuses it."""
-        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 3"):
-            _load_from_path(REPO_ROOT / "benchmark" / "protocols" / "v3.json")
+        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 4"):
+            _load_from_path(REPO_ROOT / "benchmark" / "protocols" / "v4.json")
 
 
 class TestFrozenTransform:
@@ -1942,6 +1948,96 @@ class TestResamplerCacheIsRefused:
         monkeypatch.delenv("LIBROSA_CACHE_DIR", raising=False)
 
         load_protocol()
+
+
+class TestGoldenFixtures:
+    """v5 freezes the fixtures v4 required but never defined, and where each is binding."""
+
+    def test_the_real_fixtures(self) -> None:
+        """An analytic fixture binding everywhere and a resampler fixture binding on the
+        reference platform, whose digests differed between macOS arm64 and Linux x86_64."""
+        golden = load_protocol().golden_fixtures
+        scopes = {fixture.name: fixture.verified_on for fixture in golden.fixtures}
+        assert scopes == {"analytic": "every_platform", "resampler": "reference_platform"}
+        assert golden.reference_platform == "darwin_arm64"
+
+    @pytest.mark.parametrize(
+        ("field", "value", "message"),
+        [
+            pytest.param("generator", "pcg32", "generator must be", id="generator"),
+            pytest.param(
+                "reference_platform", "linux_x86_64", "reference_platform must be", id="platform"
+            ),
+        ],
+    )
+    def test_section_tokens_are_pinned(
+        self, tmp_path: Path, field: str, value: str, message: str
+    ) -> None:
+        """Another generator or platform would describe digests nobody measured."""
+        path = variant(tmp_path, lambda d: d["golden_fixtures"].update({field: value}))
+        with pytest.raises(ProtocolValueError, match=message):
+            _load_from_path(path)
+
+    def test_duplicate_names_are_rejected(self, tmp_path: Path) -> None:
+        """Two fixtures under one name could not be reported apart."""
+
+        def duplicate(d: dict[str, Any]) -> None:
+            d["golden_fixtures"]["fixtures"][1]["name"] = "analytic"
+
+        with pytest.raises(ProtocolValueError, match="unique names"):
+            _load_from_path(variant(tmp_path, duplicate))
+
+    def test_an_every_platform_fixture_is_required(self, tmp_path: Path) -> None:
+        """Otherwise a decoder fault off the reference platform reaches a candidate first."""
+
+        def only_reference(d: dict[str, Any]) -> None:
+            d["golden_fixtures"]["fixtures"][0]["verified_on"] = "reference_platform"
+
+        with pytest.raises(ProtocolValueError, match="must include an every_platform fixture"):
+            _load_from_path(variant(tmp_path, only_reference))
+
+    def test_an_unknown_scope_is_rejected(self, tmp_path: Path) -> None:
+        """Changed on the resampler fixture, so the analytic one still binds everywhere."""
+
+        def unknown(d: dict[str, Any]) -> None:
+            d["golden_fixtures"]["fixtures"][1]["verified_on"] = "sometimes"
+
+        with pytest.raises(ProtocolValueError, match="verified_on must be one of"):
+            _load_from_path(variant(tmp_path, unknown))
+
+    @pytest.mark.parametrize(
+        ("changes", "message"),
+        [
+            pytest.param({"subtype": "PCM_32"}, "subtype must be one of", id="unwritable"),
+            pytest.param({"container": "WAV"}, "admitted source format", id="container"),
+            pytest.param({"channels": 3}, "within the downmix range", id="channels"),
+            pytest.param({"sample_rate": 15999}, "minimum source rate", id="rate"),
+            pytest.param({"frames": 1}, "at least 2", id="too-short"),
+            pytest.param({"frames": 3600 * 16000 + 1}, "within the duration bound", id="too-long"),
+            pytest.param({"canonical_sha256": "ABC"}, "64 lowercase hex", id="digest"),
+        ],
+    )
+    def test_each_fixture_must_be_generable_and_admissible(
+        self, tmp_path: Path, changes: dict[str, Any], message: str
+    ) -> None:
+        """A fixture the source checks would refuse could never pass the precondition."""
+        path = variant(tmp_path, lambda d: d["golden_fixtures"]["fixtures"][0].update(changes))
+        with pytest.raises(ProtocolValueError, match=message):
+            _load_from_path(path)
+
+
+class TestRulesV4LeftOpen:
+    """The frame identifier and the RMS reduction, which eligibility needs."""
+
+    def test_frame_identifier_is_pinned(self, tmp_path: Path) -> None:
+        path = variant(tmp_path, lambda d: d["framing"].update({"frame_identifier": "index"}))
+        with pytest.raises(ProtocolValueError, match=r"framing\.frame_identifier must be"):
+            _load_from_path(path)
+
+    def test_rms_reduction_is_pinned(self, tmp_path: Path) -> None:
+        path = variant(tmp_path, lambda d: d["eligibility"].update({"rms_reduction": "np_dot"}))
+        with pytest.raises(ProtocolValueError, match=r"eligibility\.rms_reduction must be"):
+            _load_from_path(path)
 
 
 class TestAmendmentChainIsNotRedirectable:
