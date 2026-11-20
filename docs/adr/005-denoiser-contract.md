@@ -40,6 +40,8 @@ UVR did not meet those assumptions. The evidence, gathered on 2026-10-16 and 202
 - Accepting a model name or path outside an allowlist. The `UVR_MODEL_NAME` allowlist in `config.py` is unchanged.
 - Changing `benchmark/`. Protocol v4 is frozen and names the two systems (`opgan_minus_uvr` in `benchmark/protocol.py` and `v4.json`), and `docs/benchmark-protocol.md:167-169` says a model changed in response to the test results needs a fresh partition.
 
+> **Note:** Added 2026-11-20. Protocol v5 superseded v4 on 2026-11-20 (`c2ec5ae`), and v4 is archived at `docs/benchmark-protocol-v4.md`. v5 still names the two systems (`opgan_minus_uvr` in `benchmark/protocols/v5.json`), and the fresh-partition rule is unchanged, now at `docs/benchmark-protocol.md:168-170`.
+
 ## Consequences
 
 ### Positive
