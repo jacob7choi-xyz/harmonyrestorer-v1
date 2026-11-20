@@ -1,6 +1,6 @@
 """Immutable, validated access to the frozen benchmark protocol.
 
-Two things share the authority here, with different jobs. `benchmark/protocols/v5.json`
+Two things share the authority here, with different jobs. `benchmark/protocols/v6.json`
 holds the frozen values a run executes against; its digest is what establishes *which*
 values those are. This module defines what counts as a *well-formed* protocol, which is
 why the gate set, the supported version, the transform vocabulary, and the
@@ -64,9 +64,9 @@ logger = logging.getLogger(__name__)
 # Private so that production code has no supported affordance for reading the file
 # itself. `load_protocol` is the way in.
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_PROTOCOL_PATH = _REPO_ROOT / "benchmark" / "protocols" / "v5.json"
+_PROTOCOL_PATH = _REPO_ROOT / "benchmark" / "protocols" / "v6.json"
 
-SUPPORTED_PROTOCOL_VERSION = 5
+SUPPORTED_PROTOCOL_VERSION = 6
 
 # Which protocol v2 supersedes, and the artifacts it supersedes, as historical facts
 # rather than as arithmetic. `SUPPORTED_PROTOCOL_VERSION - 1` would encode a universal
@@ -74,9 +74,9 @@ SUPPORTED_PROTOCOL_VERSION = 5
 # governance model promises. The paths are frozen here so the config cannot redirect
 # the amendment chain at another file whose digest it also records, and so a relative
 # path out of the tree is not reachable at all.
-_PREDECESSOR_VERSION = 4
-_PREDECESSOR_PROTOCOL_PATH = "benchmark/protocols/v4.json"
-_PREDECESSOR_DOCUMENT_PATH = "docs/benchmark-protocol-v4.md"
+_PREDECESSOR_VERSION = 5
+_PREDECESSOR_PROTOCOL_PATH = "benchmark/protocols/v5.json"
+_PREDECESSOR_DOCUMENT_PATH = "docs/benchmark-protocol-v5.md"
 
 # Closed vocabularies for the frozen LSD transform. Each admits exactly one value. The
 # fields exist so an independent implementer reads each convention from the
@@ -379,6 +379,30 @@ _ELIGIBILITY_COMPUTED_FROM = "canonical_waveform"
 _RMS_COMPARATOR = "greater_than"
 _BIN_REDUCTION = "rms"
 _FRAME_REDUCTION = "arithmetic_mean"
+_COLLECTION_IDENTIFIER = "MusopenCollectionAsFlac"
+_SOURCE_IDENTIFIER = "archive_item_identifier_slash_file_path_in_item"
+_SELECTION_ORDERING = "code_point_sort_then_pcg64_permutation"
+_PERMANENT_UNAVAILABILITY_CODE = "CANDIDATE_PERMANENTLY_UNAVAILABLE"
+# Each in precedence order: the first failure in list order is primary.
+_RECORDING_INELIGIBLE_REASONS = (
+    "RECORDING_BELOW_MIN_DURATION",
+    "RECORDING_BELOW_RMS_FLOOR",
+    "RECORDING_WITHOUT_ELIGIBLE_FRAMES",
+)
+_FRAME_INELIGIBLE_REASONS = ("FRAME_BELOW_RMS_FLOOR", "FRAME_NOT_SCOREABLE_BY_PRIMARY_METRIC")
+_ELIGIBILITY_REASON_SELECTION = "first_failure_in_list_order_primary_floors_always_both_evaluated"
+_METRIC_APPLICABILITY = (
+    "clean_reference_before_systems_run_inapplicable_to_any_primary_ineligible_for_all"
+)
+_DECODED_PCM_HASH = "decoded_float64_little_endian_before_downmix_and_resample"
+_COVERAGE = "per_system_valid_outputs_over_eligible_frames"
+_SYSTEM_FAILURE = "failure_inside_one_system_call_fails_that_frame_for_that_system"
+_HARNESS_FAILURE = "failure_outside_a_system_call_aborts_the_run"
+_WITHIN_RECORDING = "arithmetic_mean_of_eligible_frames"
+_MACRO_MEAN = "unweighted_arithmetic_mean_over_recordings"
+_MEDIAN_EVEN_COUNT = "mean_of_middle_two"
+_BOOTSTRAP_DRAW = "pcg64_integers_with_replacement_one_index_array_per_iteration"
+_BOOTSTRAP_INTERVAL = "numpy_percentile_linear"
 
 # A positive paired effect must favour OpGAN for every metric, so the effect
 # expression follows from the metric's direction instead of being chosen per metric.
@@ -420,6 +444,7 @@ _ROOT_KEYS = frozenset(
         "duplicate_detection",
         "conditioning",
         "metrics",
+        "scoring",
         "reporting",
         "aggregation",
         "publication_gates",
@@ -696,6 +721,13 @@ class Selection:
     partitions: Mapping[str, int]
     acquisition_retries: int
     permanent_failure_codes: tuple[int, ...]
+    collection_identifier: str
+    collection_note: str
+    source_identifier: str
+    source_identifier_note: str
+    ordering: str
+    ordering_note: str
+    permanent_unavailability_code: str
 
 
 @dataclass(frozen=True)
@@ -715,6 +747,12 @@ class Eligibility:
     denominator_note: str
     rms_reduction: str
     rms_reduction_note: str
+    recording_ineligible_reasons: tuple[str, ...]
+    frame_ineligible_reasons: tuple[str, ...]
+    reason_selection: str
+    reason_selection_note: str
+    metric_applicability: str
+    metric_applicability_note: str
 
 
 @dataclass(frozen=True)
@@ -753,6 +791,8 @@ class DuplicateDetection:
     action_on_uncertain: str
     mfcc: MfccConfig
     calibration: MfccCalibration
+    decoded_pcm_hash: str
+    decoded_pcm_hash_note: str
 
 
 @dataclass(frozen=True)
@@ -897,6 +937,18 @@ class Metrics:
 
 
 @dataclass(frozen=True)
+class Scoring:
+    """How system outcomes become coverage, and which failures are whose."""
+
+    note: str
+    coverage: str
+    coverage_required: float
+    system_failure: str
+    harness_failure: str
+    failure_note: str
+
+
+@dataclass(frozen=True)
 class Bootstrap:
     """Resampling contract for the paired comparison."""
 
@@ -906,14 +958,19 @@ class Bootstrap:
     confidence: float
     seed: int
     paired: bool
+    draw: str
+    interval: str
+    draw_note: str
 
 
 @dataclass(frozen=True)
 class Aggregation:
     """How frame metrics become recording metrics and then intervals."""
 
-    within_track: str
-    across_tracks: tuple[str, ...]
+    within_recording: str
+    across_recordings: tuple[str, ...]
+    macro_mean: str
+    median_even_count: str
     bootstrap: Bootstrap
 
 
@@ -972,6 +1029,7 @@ class Protocol:
     duplicate_detection: DuplicateDetection
     conditioning: Conditioning
     metrics: Metrics
+    scoring: Scoring
     reporting: Reporting
     aggregation: Aggregation
     publication_gates: PublicationGates
@@ -1143,7 +1201,7 @@ def _parse_aggregation(data: Mapping[str, Any]) -> Aggregation:
         Aggregation,
         data,
         "aggregation",
-        across_tracks=tuple(data["across_tracks"]),
+        across_recordings=tuple(data["across_recordings"]),
         bootstrap=_build(Bootstrap, data["bootstrap"], "aggregation.bootstrap"),
     )
 
@@ -1162,10 +1220,17 @@ def _parse(data: Mapping[str, Any], digest: str, source: Path) -> Protocol:
         golden_fixtures=_parse_golden_fixtures(data["golden_fixtures"]),
         environment=_build(Environment, data["environment"], "environment"),
         selection=_parse_selection(data["selection"]),
-        eligibility=_build(Eligibility, data["eligibility"], "eligibility"),
+        eligibility=_build(
+            Eligibility,
+            data["eligibility"],
+            "eligibility",
+            recording_ineligible_reasons=tuple(data["eligibility"]["recording_ineligible_reasons"]),
+            frame_ineligible_reasons=tuple(data["eligibility"]["frame_ineligible_reasons"]),
+        ),
         duplicate_detection=_parse_duplicate_detection(data["duplicate_detection"]),
         conditioning=_build(Conditioning, data["conditioning"], "conditioning"),
         metrics=_parse_metrics(data["metrics"]),
+        scoring=_build(Scoring, data["scoring"], "scoring"),
         reporting=_build(Reporting, data["reporting"], "reporting"),
         aggregation=_parse_aggregation(data["aggregation"]),
         publication_gates=_build(
@@ -1606,6 +1671,62 @@ def _validate_selection(sel: Selection) -> None:
         raise ProtocolValueError("selection.permanent_failure_codes must not be empty")
 
 
+def _validate_selection_rules(sel: Selection) -> None:
+    """The collection, the identifier, and the ordering are closed tokens.
+
+    A seed selects one walk only together with the collection it walks, the identifiers it
+    orders, and the ordering applied to them. Leaving any of the three open lets the same
+    seed produce a different test set.
+    """
+    for name, stated, frozen in (
+        ("collection_identifier", sel.collection_identifier, _COLLECTION_IDENTIFIER),
+        ("source_identifier", sel.source_identifier, _SOURCE_IDENTIFIER),
+        ("ordering", sel.ordering, _SELECTION_ORDERING),
+        (
+            "permanent_unavailability_code",
+            sel.permanent_unavailability_code,
+            _PERMANENT_UNAVAILABILITY_CODE,
+        ),
+    ):
+        if stated != frozen:
+            raise ProtocolValueError(
+                f"selection.{name} must be {frozen!r}, got {stated!r}; the seed selects a "
+                "walk only together with the collection, the identifiers, and their ordering"
+            )
+
+
+def _validate_eligibility_outcomes(el: Eligibility) -> None:
+    """Eligibility codes, their precedence, and the single scored population are closed.
+
+    Each code list is compared with its order, because the order is the precedence: the
+    same codes in another order make a different reason primary for a recording or frame
+    that fails two checks.
+    """
+    for name, stated, frozen in (
+        (
+            "recording_ineligible_reasons",
+            el.recording_ineligible_reasons,
+            _RECORDING_INELIGIBLE_REASONS,
+        ),
+        ("frame_ineligible_reasons", el.frame_ineligible_reasons, _FRAME_INELIGIBLE_REASONS),
+    ):
+        if stated != frozen:
+            raise ProtocolValueError(
+                f"eligibility.{name} must be {list(frozen)} in this order; the order is the "
+                f"precedence, got {list(stated)}"
+            )
+    if el.reason_selection != _ELIGIBILITY_REASON_SELECTION:
+        raise ProtocolValueError(
+            f"eligibility.reason_selection must be {_ELIGIBILITY_REASON_SELECTION!r}; stopping "
+            "at the first failure would hide the verdicts after it"
+        )
+    if el.metric_applicability != _METRIC_APPLICABILITY:
+        raise ProtocolValueError(
+            f"eligibility.metric_applicability must be {_METRIC_APPLICABILITY!r}; a metric "
+            "that drops frames at scoring time shrinks the population the other metrics use"
+        )
+
+
 def _validate_eligibility(el: Eligibility) -> None:
     """Loudness floors are dBFS below full scale, so they cannot be positive."""
     if el.rms_reduction != _RMS_REDUCTION:
@@ -1699,6 +1820,11 @@ def _validate_duplicate_detection(dd: DuplicateDetection) -> None:
             raise ProtocolValueError(f"duplicate_detection.mfcc.{name} must be positive")
     if mfcc.alignment_search_s < 0:
         raise ProtocolValueError("duplicate_detection.mfcc.alignment_search_s must be >= 0")
+    if dd.decoded_pcm_hash != _DECODED_PCM_HASH:
+        raise ProtocolValueError(
+            f"duplicate_detection.decoded_pcm_hash must be {_DECODED_PCM_HASH!r}; hashing "
+            "another representation changes which re-encodes the third exclusion rule catches"
+        )
     _validate_calibration(dd)
 
 
@@ -1862,9 +1988,11 @@ def _validate_metrics(metrics: Metrics) -> None:
         raise ProtocolValueError(f"metrics.primary contains duplicates: {list(metrics.primary)}")
     if not metrics.primary:
         raise ProtocolValueError("metrics.primary must not be empty")
-    overlap = set(metrics.primary) & set(metrics.legacy)
-    if overlap:
-        raise ProtocolValueError(f"metrics.legacy overlaps metrics.primary: {sorted(overlap)}")
+    if metrics.legacy:
+        raise ProtocolValueError(
+            f"metrics.legacy must be empty, got {list(metrics.legacy)}; v6 drops the legacy "
+            "diagnostics, whose parameters no version defined"
+        )
     if metrics.composite_score is not False:
         raise ProtocolValueError(
             "metrics.composite_score must be false; collapsing correlated views into one "
@@ -1913,8 +2041,48 @@ def _validate_aggregation(agg: Aggregation) -> None:
         )
     if boot.seed < 0:
         raise ProtocolValueError("aggregation.bootstrap.seed must be non-negative")
-    if not agg.across_tracks:
-        raise ProtocolValueError("aggregation.across_tracks must not be empty")
+    if not agg.across_recordings:
+        raise ProtocolValueError("aggregation.across_recordings must not be empty")
+
+
+def _validate_aggregation_procedure(agg: Aggregation) -> None:
+    """The reductions and the bootstrap draw are closed, so the seed fixes the interval.
+
+    A seed selects a stream, not a procedure: with the draw, the interval rule, or the
+    median convention left open, two correct implementations given the same seed can
+    publish different intervals.
+    """
+    for name, stated, frozen in (
+        ("within_recording", agg.within_recording, _WITHIN_RECORDING),
+        ("macro_mean", agg.macro_mean, _MACRO_MEAN),
+        ("median_even_count", agg.median_even_count, _MEDIAN_EVEN_COUNT),
+        ("bootstrap.draw", agg.bootstrap.draw, _BOOTSTRAP_DRAW),
+        ("bootstrap.interval", agg.bootstrap.interval, _BOOTSTRAP_INTERVAL),
+    ):
+        if stated != frozen:
+            raise ProtocolValueError(
+                f"aggregation.{name} must be {frozen!r}, got {stated!r}; the same seed under "
+                "another procedure publishes a different interval"
+            )
+
+
+def _validate_scoring(sc: Scoring) -> None:
+    """Coverage and failure attribution are closed, and the headline needs full coverage."""
+    for name, stated, frozen in (
+        ("coverage", sc.coverage, _COVERAGE),
+        ("system_failure", sc.system_failure, _SYSTEM_FAILURE),
+        ("harness_failure", sc.harness_failure, _HARNESS_FAILURE),
+    ):
+        if stated != frozen:
+            raise ProtocolValueError(
+                f"scoring.{name} must be {frozen!r}, got {stated!r}; who a failure is charged "
+                "to decides each system's coverage"
+            )
+    if sc.coverage_required != 1.0:
+        raise ProtocolValueError(
+            f"scoring.coverage_required must be 1.0, got {sc.coverage_required}; a comparison "
+            "over the frames both systems happened to survive rewards failure"
+        )
 
 
 def _validate_reporting(rep: Reporting) -> None:
@@ -1965,11 +2133,15 @@ def _validate(protocol: Protocol) -> None:
     _validate_golden_fixtures(protocol.golden_fixtures, protocol.canonicalisation)
     _validate_source_outcomes(protocol.source_outcomes)
     _validate_selection(protocol.selection)
+    _validate_selection_rules(protocol.selection)
     _validate_eligibility(protocol.eligibility)
+    _validate_eligibility_outcomes(protocol.eligibility)
     _validate_duplicate_detection(protocol.duplicate_detection)
     _validate_conditioning(protocol.conditioning)
     _validate_metrics(protocol.metrics)
+    _validate_scoring(protocol.scoring)
     _validate_aggregation(protocol.aggregation)
+    _validate_aggregation_procedure(protocol.aggregation)
     _validate_reporting(protocol.reporting)
     _validate_gates(protocol.publication_gates)
 

@@ -72,6 +72,12 @@ SUPERSEDED_ARTIFACTS = {
     "docs/benchmark-protocol-v4.md": (
         "2e1437721489347d28866ed7c30ba355ef11dc48d560f7a8ac607fdea783391f"  # pragma: allowlist secret
     ),
+    "benchmark/protocols/v5.json": (
+        "371026afa94c13ce9f85bfe70c34238d8d223011bf4d65fcd97b7321bfa3ec81"  # pragma: allowlist secret
+    ),
+    "docs/benchmark-protocol-v5.md": (
+        "ea46cc7a2d123097967db4c95b33e3d6b1e671aa9ffba6d88228ae7578c1e1b9"  # pragma: allowlist secret
+    ),
 }
 
 
@@ -98,7 +104,7 @@ class TestRealProtocol:
     """The checked-in config must load and describe itself accurately."""
 
     def test_it_loads(self) -> None:
-        assert load_protocol().protocol_version == 5
+        assert load_protocol().protocol_version == 6
 
     def test_digest_is_of_the_exact_file_bytes(self) -> None:
         """The provenance claim is 'these bytes governed this run', so the digest
@@ -152,7 +158,9 @@ class TestImmutability:
             protocol.metrics.legacy,
             protocol.publication_gates.required,
             protocol.selection.permanent_failure_codes,
-            protocol.aggregation.across_tracks,
+            protocol.aggregation.across_recordings,
+            protocol.eligibility.recording_ineligible_reasons,
+            protocol.eligibility.frame_ineligible_reasons,
         ):
             assert isinstance(value, tuple)
 
@@ -220,8 +228,8 @@ class TestVersionCommitments:
     """Protocol promises are enforced at load, so weakening one requires a version bump."""
 
     def test_unsupported_version(self, tmp_path: Path) -> None:
-        path = variant(tmp_path, lambda d: d.update({"protocol_version": 6}))
-        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 6"):
+        path = variant(tmp_path, lambda d: d.update({"protocol_version": 7}))
+        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 7"):
             _load_from_path(path)
 
     def test_composite_score_cannot_be_enabled(self, tmp_path: Path) -> None:
@@ -397,9 +405,10 @@ class TestNumericBounds:
         with pytest.raises(ProtocolValueError, match="primary contains duplicates"):
             _load_from_path(path)
 
-    def test_metric_that_is_both_primary_and_legacy_is_rejected(self, tmp_path: Path) -> None:
-        path = variant(tmp_path, lambda d: d["metrics"].update({"legacy": ["pesq", "si_snr"]}))
-        with pytest.raises(ProtocolValueError, match="legacy overlaps"):
+    def test_a_legacy_metric_is_rejected(self, tmp_path: Path) -> None:
+        """v6 drops the legacy diagnostics, whose parameters no version defined."""
+        path = variant(tmp_path, lambda d: d["metrics"].update({"legacy": ["pesq"]}))
+        with pytest.raises(ProtocolValueError, match="legacy must be empty"):
             _load_from_path(path)
 
 
@@ -503,7 +512,7 @@ class TestOnlyOneApprovedConfiguration:
             d["aggregation"]["bootstrap"]["iterations"] = 50_000
 
         parsed = _load_from_path(variant(tmp_path, alternate))
-        assert parsed.protocol_version == 5
+        assert parsed.protocol_version == 6
         assert parsed.selection.seed == 999
 
         approved = load_protocol()
@@ -518,9 +527,9 @@ class TestAmendmentChain:
 
     def test_chain_names_the_immediately_superseded_artifacts(self) -> None:
         amends = load_protocol().amends
-        assert amends.protocol_version == 4
-        assert amends.protocol_path == "benchmark/protocols/v4.json"
-        assert amends.document_path == "docs/benchmark-protocol-v4.md"
+        assert amends.protocol_version == 5
+        assert amends.protocol_path == "benchmark/protocols/v5.json"
+        assert amends.document_path == "docs/benchmark-protocol-v5.md"
 
     def test_recorded_digests_match_the_archived_files(self) -> None:
         amends = load_protocol().amends
@@ -560,14 +569,14 @@ class TestAmendmentChain:
 
     def test_the_predecessor_must_be_the_immediately_previous_version(self, tmp_path: Path) -> None:
         path = variant(tmp_path, lambda d: d["amends"].update({"protocol_version": 0}))
-        with pytest.raises(ProtocolValueError, match=r"amends\.protocol_version must be 4"):
+        with pytest.raises(ProtocolValueError, match=r"amends\.protocol_version must be 5"):
             _load_from_path(path)
 
     def test_the_superseded_config_is_not_loadable_as_current(self) -> None:
         """Proof the version bump is real rather than cosmetic: the archived v1 file
         still parses, and the current validator refuses it."""
-        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 4"):
-            _load_from_path(REPO_ROOT / "benchmark" / "protocols" / "v4.json")
+        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 5"):
+            _load_from_path(REPO_ROOT / "benchmark" / "protocols" / "v5.json")
 
 
 class TestFrozenTransform:
@@ -2141,3 +2150,129 @@ class TestAmplitudeConventionIsPinned:
         parsed = _load_from_path(variant(tmp_path, resize))
         assert parsed.metrics.log_spectral_distance.n_fft == 2048
         assert load_protocol().metrics.log_spectral_distance.n_fft != 2048
+
+
+class TestRulesV5LeftOpen:
+    """The selection, eligibility, scoring, and aggregation rules v6 closes."""
+
+    def test_the_real_protocol_states_each_rule(self) -> None:
+        protocol = load_protocol()
+        assert protocol.selection.collection_identifier == "MusopenCollectionAsFlac"
+        assert protocol.eligibility.recording_ineligible_reasons[0] == (
+            "RECORDING_BELOW_MIN_DURATION"
+        )
+        assert protocol.scoring.coverage_required == 1.0
+        assert protocol.metrics.legacy == ()
+        assert protocol.aggregation.median_even_count == "mean_of_middle_two"
+
+    @pytest.mark.parametrize(
+        "field",
+        ["collection_identifier", "source_identifier", "ordering", "permanent_unavailability_code"],
+    )
+    def test_each_selection_rule_is_closed(self, tmp_path: Path, field: str) -> None:
+        """The same seed over another collection, identifier, or ordering is another walk."""
+        path = variant(tmp_path, lambda d: d["selection"].update({field: "other"}))
+        with pytest.raises(ProtocolValueError, match=rf"selection\.{field} must be"):
+            _load_from_path(path)
+
+    def test_recording_codes_are_compared_in_order(self, tmp_path: Path) -> None:
+        """The same codes reordered make a different reason primary."""
+
+        def swap(d: dict[str, Any]) -> None:
+            codes = d["eligibility"]["recording_ineligible_reasons"]
+            codes[0], codes[1] = codes[1], codes[0]
+
+        with pytest.raises(ProtocolValueError, match="recording_ineligible_reasons must be"):
+            _load_from_path(variant(tmp_path, swap))
+
+    def test_a_frame_code_cannot_be_dropped(self, tmp_path: Path) -> None:
+        path = variant(
+            tmp_path,
+            lambda d: d["eligibility"].update(
+                {"frame_ineligible_reasons": ["FRAME_BELOW_RMS_FLOOR"]}
+            ),
+        )
+        with pytest.raises(ProtocolValueError, match="frame_ineligible_reasons must be"):
+            _load_from_path(path)
+
+    @pytest.mark.parametrize(
+        ("field", "message"),
+        [
+            ("reason_selection", "stopping at the first failure"),
+            ("metric_applicability", "shrinks the population"),
+        ],
+    )
+    def test_each_eligibility_rule_is_closed(
+        self, tmp_path: Path, field: str, message: str
+    ) -> None:
+        path = variant(tmp_path, lambda d: d["eligibility"].update({field: "other"}))
+        with pytest.raises(ProtocolValueError, match=message):
+            _load_from_path(path)
+
+    def test_the_decoded_pcm_hash_is_closed(self, tmp_path: Path) -> None:
+        path = variant(
+            tmp_path,
+            lambda d: d["duplicate_detection"].update({"decoded_pcm_hash": "canonical_waveform"}),
+        )
+        with pytest.raises(ProtocolValueError, match="decoded_pcm_hash must be"):
+            _load_from_path(path)
+
+    @pytest.mark.parametrize("field", ["coverage", "system_failure", "harness_failure"])
+    def test_each_scoring_rule_is_closed(self, tmp_path: Path, field: str) -> None:
+        """Who a failure is charged to decides each system's coverage."""
+        path = variant(tmp_path, lambda d: d["scoring"].update({field: "other"}))
+        with pytest.raises(ProtocolValueError, match=rf"scoring\.{field} must be"):
+            _load_from_path(path)
+
+    def test_the_headline_needs_full_coverage(self, tmp_path: Path) -> None:
+        path = variant(tmp_path, lambda d: d["scoring"].update({"coverage_required": 0.99}))
+        with pytest.raises(ProtocolValueError, match=r"coverage_required must be 1\.0"):
+            _load_from_path(path)
+
+    @pytest.mark.parametrize(
+        ("section", "field"),
+        [
+            ((), "within_recording"),
+            ((), "macro_mean"),
+            ((), "median_even_count"),
+            (("bootstrap",), "draw"),
+            (("bootstrap",), "interval"),
+        ],
+    )
+    def test_each_aggregation_rule_is_closed(
+        self, tmp_path: Path, section: tuple[str, ...], field: str
+    ) -> None:
+        """A seed selects a stream, not a procedure."""
+
+        def change(d: dict[str, Any]) -> None:
+            target = d["aggregation"]
+            for key in section:
+                target = target[key]
+            target[field] = "other"
+
+        name = ".".join((*section, field))
+        with pytest.raises(ProtocolValueError, match=rf"aggregation\.{name} must be"):
+            _load_from_path(variant(tmp_path, change))
+
+    def test_the_old_track_key_is_unknown(self, tmp_path: Path) -> None:
+        """v6 renames track to recording; the old key must not load as a synonym."""
+
+        def rename(d: dict[str, Any]) -> None:
+            d["aggregation"]["within_track"] = d["aggregation"].pop("within_recording")
+
+        with pytest.raises(ProtocolSchemaError, match="unknown key"):
+            _load_from_path(variant(tmp_path, rename))
+
+    def test_the_new_codes_share_no_name_with_other_vocabularies(self) -> None:
+        """A code that appears in two vocabularies could be counted under either."""
+        protocol = load_protocol()
+        vocabularies = [
+            protocol.eligibility.recording_ineligible_reasons,
+            protocol.eligibility.frame_ineligible_reasons,
+            (protocol.selection.permanent_unavailability_code,),
+            protocol.source_outcomes.ineligible_reasons,
+            protocol.source_outcomes.abort_reasons,
+        ]
+        every_code = [code for vocabulary in vocabularies for code in vocabulary]
+
+        assert len(every_code) == len(set(every_code))

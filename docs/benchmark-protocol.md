@@ -1,18 +1,19 @@
-# Benchmark protocol v5
+# Benchmark protocol v6
 
 Frozen before candidate identities are selected, downloaded for evaluation,
 auditioned, or scored. The source collection has already been inspected in general
 terms; what has not happened is any decision about which recordings enter the
 benchmark.
 
-> **Note:** v5 amends v4, which amended v3, which amended v2, which amended v1, all
-> before any evaluation ran. The operational values live in
-> `benchmark/protocols/v5.json`, which is normative; this document explains them and
+> **Note:** v6 amends v5, which amended v4, which amended v3, which amended v2, which
+> amended v1, all before any evaluation ran. The operational values live in
+> `benchmark/protocols/v6.json`, which is normative; this document explains them and
 > its numbers are illustrative. Superseded versions are preserved unmodified, as
 > [benchmark-protocol-v1.md](benchmark-protocol-v1.md),
 > [benchmark-protocol-v2.md](benchmark-protocol-v2.md),
-> [benchmark-protocol-v3.md](benchmark-protocol-v3.md), and
-> [benchmark-protocol-v4.md](benchmark-protocol-v4.md) with their configs, so an
+> [benchmark-protocol-v3.md](benchmark-protocol-v3.md),
+> [benchmark-protocol-v4.md](benchmark-protocol-v4.md), and
+> [benchmark-protocol-v5.md](benchmark-protocol-v5.md) with their configs, so an
 > artifact recording an older `protocol_version` stays interpretable. See
 > [Amendment](#amendment) for what changed and why.
 
@@ -51,9 +52,14 @@ SHA-256 of the newline-joined per-file digests in sorted filename order.
 
 **Automatic exclusion**, no discretion:
 
-1. Source item and file identity within the collection
+1. Source item and file identity within the collection. A candidate's source
+   identifier is `MusopenCollectionAsFlac/<path in the item>`. Training files are named
+   with the item identifier, two underscores, and the path with each slash replaced by
+   an underscore (`dataset/acquire.py`), so a candidate is compared in that form
 2. Raw file SHA-256
-3. Decoded PCM SHA-256, which catches re-encodes of the same master
+3. Decoded PCM SHA-256, which catches lossless re-encodes of the same master. The hash
+   covers the samples as the pinned decoder returns them, float64 and interleaved, as
+   contiguous little-endian bytes with no header, before downmix and resampling
 
 **Flag for adjudication**, never automatic exclusion: aligned MFCC sequence
 similarity at or above **0.50**.
@@ -72,6 +78,10 @@ benchmark candidates can never become the detector's tuning set:
 | Negatives: different recordings | 28 | max 0.0995 |
 | Negatives, same composer | 6 | max 0.0808 |
 | Negatives, same session: consecutive movements, one performer, one room, one mic | 21 | max 0.1033 |
+
+> **Note:** the same-composer row is not in the calibration block of `v6.json`, so the
+> loader does not check it, and nothing below depends on it. It is kept as it was
+> reported.
 
 0.50 sits nearly five times above the highest observed negative and well below the
 lowest positive. The same-session set is the hardest false-positive case available:
@@ -96,13 +106,15 @@ is the standard feature for cover-song detection, which is the opposite of the
 question here. Using it would have excluded legitimate alternate performances and
 silently distorted the test distribution.
 
-Adjudication answers exactly one question: same underlying performance, yes or no.
-It is performed without reference to any model output, and every decision is logged
-with its reason in the run manifest.
+Adjudication answers exactly one question: same underlying performance, with the
+answer yes, no, or uncertain. An uncertain answer excludes the candidate. It is
+performed without reference to any model output, and every decision is logged with its
+reason in the run manifest.
 
-Recorded per candidate: source identifier, filename, composer, work, performer
-where available, byte size, both hashes, maximum aligned-MFCC similarity against
-the training corpus, and any adjudication.
+Recorded per candidate: source identifier, byte size, both hashes, maximum
+aligned-MFCC similarity against the training corpus, and any adjudication. Composer,
+work, and performer are recorded where the collection metadata provides them; v6 does
+not require them.
 
 ## Selection
 
@@ -110,8 +122,11 @@ Candidates are not downloaded, inspected, and then filtered. Filtering after
 inspection is how a benchmark becomes curated. The admission algorithm has no
 discretionary branch.
 
-1. Enumerate the complete candidate universe from collection metadata
-2. Order it deterministically by source identifier, then shuffle with seed `20260726`
+1. Enumerate the complete candidate universe from the metadata of the Internet Archive
+   item `MusopenCollectionAsFlac`, the collection the training recordings came from
+2. Sort the source identifiers by Unicode code point, then walk them in the order
+   `numpy.random.Generator(PCG64(20260726)).permutation(n)` gives, where `n` is the
+   size of the frozen universe
 3. Walk that order strictly. For each candidate: fetch, apply the frozen technical
    and disjointness predicates, admit or reject
 4. Rejected candidates are skipped and the walk continues. There is no manual
@@ -120,7 +135,9 @@ discretionary branch.
 Acquisition failures do not determine membership. A transient failure (network,
 timeout, 5xx) retries the same candidate three times with exponential backoff and
 does not advance the walk. Only a permanent source condition (404, 410, or a file
-that cannot be decoded) excludes a candidate, and it is logged with its cause.
+that cannot be decoded) excludes a candidate, and it is logged with its cause. A 404 or
+410 is recorded as `CANDIDATE_PERMANENTLY_UNAVAILABLE`; a file that cannot be decoded
+carries its source-ineligible code.
 
 The candidate universe is enumerated once and frozen to
 `benchmark/manifests/candidate_universe.json` with its own digest, recording the
@@ -483,6 +500,17 @@ comparator rather than leaving code to infer strictness from prose. Energy is
 the sum is fixed rather than left to whichever of `np.mean`, `np.sum`, or `np.dot` an
 implementation picks, which can differ in the last bits.
 
+**Eligibility codes.** A recording can fail with `RECORDING_BELOW_MIN_DURATION`,
+`RECORDING_BELOW_RMS_FLOOR`, or `RECORDING_WITHOUT_ELIGIBLE_FRAMES`, and a frame with
+`FRAME_BELOW_RMS_FLOOR` or `FRAME_NOT_SCOREABLE_BY_PRIMARY_METRIC`, each list in
+precedence order. The first failure in that order is the primary reason, and any others
+are recorded as supplemental. Both recording floors are always evaluated, and both frame
+checks are always evaluated, so neither verdict in a pair hides the other.
+`RECORDING_WITHOUT_ELIGIBLE_FRAMES` is evaluated only for a recording that cleared both
+recording floors, once its frames are cut after partition assignment, so it is never
+supplemental to a floor code. Such a recording keeps its partition position,
+contributes no frames, and is left out of the across-recording count.
+
 Every candidate frame is recorded with its RMS and its verdict, not only the
 eligible ones. The population considered before filtering is then provable from the
 manifest rather than asserted, which is the same denominator discipline the
@@ -497,19 +525,17 @@ frames from the *training* corpus the distribution bottoms out near -39 dBFS at 
 candidate population was unknown when it was chosen, which is the point of choosing
 it beforehand.
 
-**Metric applicability** is then determined per metric, from clean reference
-material only, never from model output. The ~15,000 frames dropped by the withdrawn
-benchmark were not quiet by RMS at all; PESQ's internal voice-activity check
-refused to score them. So PESQ is reported over the subset where
-`PESQ(clean, clean)` computes successfully, fixed before either system runs and
-identical for both. Because PESQ's acceptance of musical content is unlikely to be
-random with respect to texture or dynamics, that subset is reported as its own
-population and never used to define the benchmark.
+**Metric applicability** is decided from the clean reference only, before either
+system runs, never from model output. Each primary metric's reference-side validity is
+checked on every clean frame, and a frame that any primary metric cannot score, such
+as a constant reference for SI-SNR, is ineligible for every metric with
+`FRAME_NOT_SCOREABLE_BY_PRIMARY_METRIC`. The primary metrics therefore share one
+population: they apply to every eligible frame, and no metric shrinks the population
+the others use. The ~15,000 frames dropped by the withdrawn benchmark were not quiet by
+RMS at all; PESQ's internal voice-activity check refused to score them, which is the
+failure this rule prevents.
 
-The primary metrics apply to every eligible frame.
-
-Populations tracked and reported separately: eligible, per-metric applicable,
-submitted, scored.
+Populations tracked and reported separately: eligible, submitted, scored.
 
 ## Source outcomes
 
@@ -555,7 +581,7 @@ by convention:
 | | Effect | Codes |
 |---|---|---|
 | Source-ineligible | recorded, published, run continues | the 13 codes below |
-| Abort | run stops, publication blocked | `SOURCE_HASH_MISMATCH`, `GOLDEN_FIXTURE_FAILURE`, `ENVIRONMENT_MISMATCH`, `ENVIRONMENT_CAPACITY_FAILURE`, `UNEXPECTED_IO_FAILURE`, `INTERNAL_CANONICALISATION_ERROR` |
+| Abort | run stops, publication blocked | `SOURCE_HASH_MISMATCH`, `LOCAL_ARTIFACT_UNSTABLE`, `LOCAL_ARTIFACT_NOT_REGULAR_FILE`, `GOLDEN_FIXTURE_FAILURE`, `ENVIRONMENT_MISMATCH`, `ENVIRONMENT_CAPACITY_FAILURE`, `UNEXPECTED_IO_FAILURE`, `INTERNAL_CANONICALISATION_ERROR` |
 
 Keeping them in separate closed vocabularies is what makes a harness failure not
 merely discouraged from becoming a source verdict but unable to be spelled as one.
@@ -743,7 +769,7 @@ from an inapplicable one.
 
 | | Fields |
 |---|---|
-| Always | `logical_source_id`, `stage`, `primary_reason_code`, `identity_status`, `protocol_sha256`, `unevaluated_stages` |
+| Always | `logical_source_id`, `terminating_evaluation_stage`, `primary_reason_code`, `identity_status`, `identity_method`, `protocol_sha256`, `unevaluated_evaluation_stages` |
 | When `identity_status` is `complete_sha256` | `local_sha256` |
 | When inspection succeeded | `observed_metadata` |
 | When the decoder rejected the artifact | `decoder_diagnostic` |
@@ -798,6 +824,14 @@ framing and overlap, resampling behaviour, channel handling, sample rate, and
 seeds. Every generated sample carries `source_track_id`, `partition`,
 `frame_index`, `degradation_id`, and `seed`.
 
+> **Note:** v6 does not yet freeze these values, and `v6.json` has no degradation
+> section. The benchmark degradation is to reproduce the process that generated the
+> training pairs, which differs from the current `dataset/noise.py` (see
+> [v5 to v6](#v5-to-v6)). That process is to be ported and checked against the
+> training pairs first, and a later amendment freezes it before any candidate is
+> acquired. The training noise was drawn without a recorded seed, so no benchmark seed
+> can be shown to differ from it.
+
 ## Metric conditioning
 
 Frozen before results exist, because "alignment fix" is otherwise indistinguishable
@@ -805,8 +839,10 @@ from shifting outputs until the metric improves.
 
 - Metrics computed at 16 kHz mono, on waveforms produced by
   [Canonicalisation](#canonicalisation), which pins every step of getting there.
-  Metric libraries frozen: `pesq`, `pystoi` 0.4.1, numpy 2.3.5, scipy 1.17.1,
-  soundfile 0.14.0. Exact versions are recorded per run
+  Metric libraries frozen: numpy 2.3.5 and soundfile 0.14.0. v6 drops the legacy
+  PESQ and STOI diagnostics, so `pesq` and `pystoi` are no longer metric libraries
+  here, and no benchmark module outside the tests imports scipy. Exact versions are
+  recorded per run
 - Clean reference and system output are compared at equal length. Where they differ
   by at most **160 samples (10 ms at 16 kHz)**, the longer is front-aligned and
   truncated to the shorter, and the discarded duration is recorded per item
@@ -994,11 +1030,12 @@ judgement:
 
 ### Legacy diagnostics
 
-PESQ and STOI are computed and recorded in the machine-readable artifact for
-comparability with the withdrawn figures. They are **not** included in the headline
-README table, because a reader who sees `PESQ 4.1` will read it as an audio-quality
-claim regardless of the disclaimer beside it. Preventing foreseeable
-misinterpretation is part of reporting honestly, not just computing correctly.
+Dropped in v6. v5 listed PESQ and STOI as legacy diagnostics, kept for comparability
+with the withdrawn figures and excluded from the headline, and defined PESQ's
+applicability subset as the frames where `PESQ(clean, clean)` succeeds. No version
+defined the parameters that computing either metric, or that subset, needs: the PESQ
+mode and the STOI settings.
+The withdrawn figures remain in [benchmarks.md](benchmarks.md) as history.
 
 ### Not run
 
@@ -1018,11 +1055,11 @@ natural direction for a later stratum.
 ## Scoring
 
 Both systems receive an identical population, checked by identifier at two levels.
-Track identifiers must be equal across systems and equal to the frozen expected set.
-Within each track, frame identifiers must also be equal across systems and equal to
-that track's frozen eligible set: equal counts are not sufficient, because two
-systems can score the same number of different frames and produce per-track means
-that are not comparable.
+Recording identifiers must be equal across systems and equal to the frozen expected
+set. Within each recording, frame identifiers must also be equal across systems and
+equal to that recording's frozen eligible set: equal counts are not sufficient,
+because two systems can score the same number of different frames and produce
+per-recording means that are not comparable.
 
 Eligibility is computed once from the clean reference and frozen, never recomputed
 from a system's own output. The expected population is always read from the
@@ -1044,21 +1081,35 @@ reliability defect hide behind reruns:
   for that run, because a comparison over survivors rewards failure. Full coverage
   on both systems is a precondition for publishing the quality comparison
 
+**Coverage** is computed per system: the frames with a valid output divided by the
+eligible frames. The headline requires 1.0 for both systems. A failure inside one
+system's denoise call for a frame, whether an exception or an output that conditioning
+rejects, is a system failure for that frame: the frame stays in the population and
+lowers that system's coverage. A failure outside the call, such as preparing the input,
+reading the output, or the environment, is a harness failure and aborts the run, so the
+harness's faults are never charged to a system.
+
 ## Aggregation
 
 Frames within a recording are not independent observations; reporting a frame count
 as N overstates confidence by roughly the frames-per-recording factor.
 
-1. Per-frame metrics, primary and legacy
+1. Per-frame primary metrics
 2. Within each recording, the arithmetic mean of its eligible frames, unweighted.
    The published estimand is therefore the **mean frame-level metric for a
    recording**, which is not the same quantity as a metric computed over the whole
    recording's aggregate signal energy
-3. Across recordings, the macro mean and median
+3. Across recordings, the unweighted macro mean and the median. With an even number
+   of recordings, the median is the mean of the middle two
 4. Bootstrap over recordings, never frames: 10,000 resamples, percentile method,
-   95% level, seed `20260726`. For the paired comparison, per-track differences
-   are formed first and then track indices are resampled once per iteration, so
+   95% level, seed `20260726`. For the paired comparison, per-recording differences
+   are formed first and then recording indices are resampled once per iteration, so
    the pairing is preserved; the two systems are never resampled independently
+
+The draw is fixed: a single `numpy.random.Generator(PCG64(20260726))` draws one index
+array per iteration, `integers(0, n, size=n)`, with replacement, in iteration order,
+and the same array is applied to every estimand. The interval bounds are
+`numpy.percentile` of the iteration means with `method="linear"` at 2.5 and 97.5.
 
 Bootstrap reproducibility depends on the pinned runtime, not on the seed alone. A
 seed selects a stream only within a fixed generator implementation, so the protocol
@@ -1072,10 +1123,8 @@ primary metric is reported as a per-recording difference with its own bootstrap
 interval, which is more informative than two independent intervals. "Headline"
 means that set of three differences, never a single summary of them.
 
-Reported per metric: per-track mean and median, 95% CI by recording, paired
-difference CI, N recordings, N eligible frames, per-metric applicable frames, and
-coverage. Legacy speech metrics are reported in a separate labelled section so they
-cannot be read as headline results.
+Reported per metric: per-recording mean and median, 95% CI by recording, paired
+difference CI, N recordings, N eligible frames, and coverage.
 
 ## Publication
 
@@ -1097,6 +1146,65 @@ defect discovered after results exist invalidates those results rather than
 retroactively changing the rules that produced them. Superseded versions stay in the
 tree rather than being replaced, and each version names its predecessor by digest;
 the loader recomputes those digests, so the chain is checked rather than asserted.
+
+### v5 to v6
+
+Found by an audit of v5 against the steps not yet built (the runner, selection,
+scoring, aggregation, and publication), before any candidate universe was enumerated.
+No candidate audio, canonical waveform, eligibility outcome, degraded input, system
+output, metric score, aggregate, or comparative conclusion had been acquired,
+generated, or inspected. The measurements behind v6 used training data only: the
+metadata of the 146,200 training pairs and 25 of their audio pairs.
+
+**Rules that decide which recordings are tested or how scores are formed.** v5 left
+these undefined or stated them inconsistently. v6 defines:
+
+- the collection, the source identifier, and the ordering the selection seed applies
+  to. A seed selects a walk only together with all three;
+- the decoded representation the third exclusion rule hashes;
+- `CANDIDATE_PERMANENTLY_UNAVAILABLE` for a 404 or 410, which v5 excluded without a
+  code;
+- the recording and frame eligibility codes and their precedence;
+- one scored population for all primary metrics, decided from the clean reference
+  before either system runs. v5 said the primary metrics apply to every eligible frame
+  and also that a constant reference is invalid for SI-SNR while clearing the loudness
+  floor, and no rule said which held;
+- coverage, and the boundary between a system failure and a harness failure;
+- the bootstrap draw, the interval rule, and the median convention for an even count.
+  The v5 document said the sampling procedure and draw order were pinned, but
+  `v5.json` did not pin them.
+
+**Dropped.** The legacy PESQ and STOI diagnostics. No version defined the parameters
+that computing them, or PESQ's applicability subset, needs.
+
+**Corrections to the v5 document.** The abort table listed six of the eight abort
+codes. The failure record table used `stage` and `unevaluated_stages`, and left out
+`identity_method`, where `v5.json` names `terminating_evaluation_stage`,
+`unevaluated_evaluation_stages`, and `identity_method`. "Track" is now "recording" in
+the aggregation keys (`within_recording`, `across_recordings`) and in the text that
+describes them. The same-composer calibration row, which `v5.json` does not carry, is
+marked as unchecked. The third exclusion rule catches lossless re-encodes, not
+re-encodes in general.
+
+**Deferred, not required by v6.** Composer, work, and performer per candidate; a
+byte-exact manifest serialisation, so manifest digests are taken over the bytes of the
+written file; and a coded check for a burned partition, which stays a written rule.
+
+**Disclosures about the training data,** recorded so the benchmark is not described
+more favourably than the evidence allows:
+
+- The training pairs were written on 2026-03-07, between commits `d8993b2` and
+  `2174dce`, and most likely came from `dataset/noise.py` at `d8993b2`. That version
+  scaled tape hiss as though it had unit power after normalising it to unit peak. On 25
+  pairs with only hiss and rolloff enabled, the realised hiss SNR was 5.41 to 13.06 dB
+  above the recorded `hiss_snr_db`, median 10.25 dB. The current `dataset/noise.py`
+  normalises the hiss power, so it is not the training process. The training metadata
+  records no seed.
+- Training dropped frames whose linear RMS was below 0.01 after normalising each
+  recording to a peak of 0.95. The benchmark floor is -45 dBFS on the unnormalised
+  canonical waveform, so the two frame populations differ. v6 does not change the
+  benchmark floor.
+- Degradation is not frozen in v6 (see [Degradation](#degradation)).
 
 ### v4 to v5
 
