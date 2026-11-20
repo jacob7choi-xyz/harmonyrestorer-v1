@@ -29,6 +29,8 @@
   - `EMPTY_SOURCE` looks unreachable for FLAC under libsndfile 1.2.2: a zero-frame write produced zero bytes, and a total of zero means unknown.
   - A failed canonical validation: v4 does not name its outcome; the code returns `INTERNAL_CANONICALISATION_ERROR`, an abort (`benchmark/canonicalisation.py`).
   - `docs/benchmark-protocol.md` says "the twelve codes below" for the source-ineligible vocabulary, which has 13 codes.
+  - Frame identifiers: `docs/benchmark-protocol.md` requires frame identifiers to be equal across systems but never defines them, so `benchmark/framing.py` identifies a frame only by its row, which covers samples `[i * frame_samples, (i + 1) * frame_samples)`.
+  - RMS for eligibility: `rms_definition` in `benchmark/protocols/v4.json` is prose that the loader stores but never checks, and it does not fix the order of the mean-square sum. `np.mean`, `np.sum`, and `np.dot` can round differently in the last bits; whether that changes any verdict was not measured.
 
 ## Future Enhancements
 
