@@ -7,11 +7,13 @@ module measures the duration and the two loudness floors only. Decoding has alre
 checked upstream, and disjointness belongs to the duplicate screen, so the results here are
 named for the floors rather than for eligibility.
 
-**Measured facts, not reason codes.** v5 lists `recordings_eligible` and `frames_eligible`
-in its reduction chain but freezes no reason codes for either narrowing and no precedence
-between a short and a quiet recording. The records here carry the sample count, each RMS
-in dBFS, and one boolean per floor, and both recording floors are always evaluated, so no
-precedence is invented. `docs/todo.md` records the missing codes.
+**Measured facts, not reason codes.** v5 froze no reason codes for these narrowings. v6
+names them, each list in precedence order with the first failure primary and both
+recording floors always evaluated (`eligibility.recording_ineligible_reasons` and
+`eligibility.frame_ineligible_reasons`). The records here still carry the sample count,
+each RMS in dBFS, and one boolean per floor, and both recording floors are always
+evaluated, which is what that rule needs. Mapping these facts to codes belongs to the
+code that records outcomes, which does not exist yet.
 
 **The RMS is computed exactly as v5 defines it.** Energy is `numpy.mean(x * x)` over the
 float64 samples, then `20 * log10(sqrt(energy))`, with no epsilon. Zero energy is negative
