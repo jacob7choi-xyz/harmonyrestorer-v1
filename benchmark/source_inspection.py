@@ -3,7 +3,8 @@
 It reads the container's own description of the audio from the exact buffer acquisition
 hashed, checks that description against the frozen bounds, and only then projects how
 much memory the rest of canonicalisation will hold. This module calls `soundfile.info`
-only; it never asks soundfile for samples.
+only; it never asks soundfile for samples. `benchmark.source_decode` does, for a source
+that passed every check here.
 
 **The decoder's report is the authority, never the filename.** Protocol v4 freezes
 `metadata_authority` as `decoder_reported`, and its note records that a file named `.wav`
