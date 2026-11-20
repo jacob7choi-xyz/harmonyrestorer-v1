@@ -20,6 +20,7 @@
 
 - [x] Reconcile the scipy version in `docs/benchmark-protocol.md`: protocol v5 corrects it to 1.17.1, which `uv.lock` resolves for Python 3.11. v5 does not enforce it at load, since the benchmark code does not import scipy.
 - [x] Settle the open questions found while implementing v4 canonicalisation: protocol v5 (`benchmark/protocols/v5.json`) freezes the golden fixtures, the frame identifier, and the RMS reduction, states the v4 implementation's readings as rules, and corrects the v4 document. The "v4 to v5" section of `docs/benchmark-protocol.md` lists each item.
+- [ ] Amend the protocol to name eligibility outcomes, before any candidate recording is acquired. v5 lists `recordings_eligible` and `frames_eligible` in its reduction chain and says every narrowing carries its reason codes, but freezes no code for a recording below the duration or loudness floor or a frame below the loudness floor, and no precedence when a recording fails both. `benchmark/eligibility.py` records the measured values and one verdict per floor until then. Precedence decides which category a recording that fails both floors is counted under, so it has to be fixed before real data is seen.
 
 ## Future Enhancements
 

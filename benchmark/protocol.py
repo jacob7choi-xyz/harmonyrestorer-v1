@@ -702,7 +702,7 @@ class Selection:
 class Eligibility:
     """Floors a recording and its frames must clear to be scored."""
 
-    recording_min_duration_s: float
+    recording_min_duration_s: int
     recording_rms_dbfs_min: float
     frame_rms_dbfs_min: float
     rms_operation: str
@@ -1633,6 +1633,15 @@ def _validate_eligibility(el: Eligibility) -> None:
                 f"eligibility.{name} must be {_RMS_COMPARATOR!r}; the document says "
                 "'above' the floor and code must not infer strictness from English"
             )
+    # The duration rule compares sample counts in integer arithmetic, which a float here
+    # would silently turn into a float comparison. The loader does not check field types,
+    # so this check is what makes the rule hold. type() rather than isinstance(), because
+    # isinstance(True, int) is true.
+    if type(el.recording_min_duration_s) is not int:
+        raise ProtocolValueError(
+            "eligibility.recording_min_duration_s must be a whole number of seconds, got "
+            f"{el.recording_min_duration_s!r}; the duration rule is integer arithmetic"
+        )
     if el.recording_min_duration_s <= 0:
         raise ProtocolValueError("eligibility.recording_min_duration_s must be positive")
     for name, value in (
