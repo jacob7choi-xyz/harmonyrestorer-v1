@@ -48,6 +48,8 @@ Build a modular dataset pipeline in `dataset/` that handles four stages:
 | `--exclude` keyword filter | Filters before download to avoid wasting bandwidth |
 | scipy for filters | Standard DSP library, already a transitive dependency via audio-separator |
 
+> **Note:** Added 2026-11-20. The 5-30 dB range is the hiss SNR each pair records; the hiss actually added was quieter. The pairs were written on 2026-03-07 between 22:15 and 22:20, after commit `d8993b2` and before `2174dce`, and most likely came from `noise.py` at `d8993b2`, which scaled the hiss as though it had unit power after normalising it to unit peak. On 25 pairs with only hiss and rolloff enabled, the realised hiss SNR was 5.41 to 13.06 dB above the recorded value, median 10.25 dB. The current `noise.py` normalises the hiss power. See the v5 to v6 section of `docs/benchmark-protocol.md`.
+
 ## Results (2026-03-07)
 
 First full run of the pipeline:
