@@ -1,17 +1,18 @@
-# Benchmark protocol v4
+# Benchmark protocol v5
 
 Frozen before candidate identities are selected, downloaded for evaluation,
 auditioned, or scored. The source collection has already been inspected in general
 terms; what has not happened is any decision about which recordings enter the
 benchmark.
 
-> **Note:** v4 amends v3, which amended v2, which amended v1, all before any
-> evaluation ran. The operational values live in `benchmark/protocols/v4.json`, which
-> is normative; this document explains them and its numbers are illustrative.
-> Superseded versions are preserved unmodified, as
+> **Note:** v5 amends v4, which amended v3, which amended v2, which amended v1, all
+> before any evaluation ran. The operational values live in
+> `benchmark/protocols/v5.json`, which is normative; this document explains them and
+> its numbers are illustrative. Superseded versions are preserved unmodified, as
 > [benchmark-protocol-v1.md](benchmark-protocol-v1.md),
-> [benchmark-protocol-v2.md](benchmark-protocol-v2.md), and
-> [benchmark-protocol-v3.md](benchmark-protocol-v3.md) with their configs, so an
+> [benchmark-protocol-v2.md](benchmark-protocol-v2.md),
+> [benchmark-protocol-v3.md](benchmark-protocol-v3.md), and
+> [benchmark-protocol-v4.md](benchmark-protocol-v4.md) with their configs, so an
 > artifact recording an older `protocol_version` stays interpretable. See
 > [Amendment](#amendment) for what changed and why.
 
@@ -398,10 +399,10 @@ resample result without calling soxr, so canonical samples would come from a pic
 on disk rather than the pinned resampler.
 
 Semantic validation and runtime conformance are separate responsibilities and are
-separate functions. "Is this a valid v4 protocol" and "may this machine
-authoritatively execute it" are different questions, and canonicalisation and the CI
-conformance job call the environment check directly under its own name. The loader
-calls it too, with no way to switch it off: `load_protocol()` is the authoritative
+separate functions. "Is this a valid protocol" and "may this machine authoritatively
+execute it" are different questions, so the environment check is a public function of
+its own. The loader calls it with no way to switch it off; no other code calls it
+today, and no separate CI conformance job exists. `load_protocol()` is the authoritative
 execution loader, not a neutral historical parser, and a parameter that could
 weaken it would be the same hole as a loader that accepts a path.
 
@@ -412,6 +413,33 @@ authoritative and their digests identify those artifacts; other environments ver
 against the frozen artifacts rather than being assumed to regenerate every bit. A
 golden fixture in the test suite makes cross-platform agreement an observation rather
 than an assumption.
+
+### Golden fixtures
+
+Two fixtures are run through inspection, decode, and canonicalisation before any
+candidate is opened, and a run that cannot reproduce their frozen canonical digests
+aborts with `GOLDEN_FIXTURE_FAILURE`. Each is generated in code from seeded integers
+(PCG64, full signed range, the first frame at the negative rail and the second at
+zero) and encoded to FLAC in memory. The digest covers the decoded canonical samples,
+not the FLAC bytes, because the encoded bytes carry the libFLAC version and can differ
+between builds while decoded integer PCM cannot.
+
+| Fixture | Source | Digest asserted on | Covers |
+|---|---|---|---|
+| `analytic` | 16 kHz mono PCM_16, 64,777 frames | every platform | inspection, the metadata and waveform checks, decode, the one-channel downmix, signed-zero normalisation, canonical validation, the digest |
+| `resampler` | 44.1 kHz stereo PCM_24, 132,423 frames | the reference platform | the same steps with the two-channel downmix, and the resampler |
+
+At the target rate the resampler returns its input, so the analytic fixture's
+canonical samples are its integers divided by full scale, and its digest can be
+recomputed without the decoder. Signed-zero normalisation runs on it but has nothing to
+change, because integer PCM decodes no negative zero. The resampler's output is not
+bit-identical across architectures, so its digest is asserted only on the reference
+platform, `darwin_arm64`, where canonical artifacts are generated.
+
+The benchmark runs on the reference platform. A run on any other platform aborts with
+`ENVIRONMENT_MISMATCH` before any fixture is tried. "Digest asserted on" names where
+the test suite checks a fixture, so the analytic fixture is checked on Linux CI as
+well; it does not permit a run elsewhere.
 
 ## Framing
 
@@ -430,6 +458,9 @@ is recorded. Dropping it is the obvious choice; counting it is the part worth
 stating, because a remainder that is neither scored nor counted hides how the
 candidate set was formed.
 
+A frame is identified by the SHA-256 of its recording's canonical waveform together
+with its zero-based index, frame `i` covering samples `[i * 32000, (i + 1) * 32000)`.
+
 ## Eligibility
 
 Determined **before either system runs**, from source audio and ground truth only,
@@ -447,7 +478,10 @@ cleanly, is at least 60 s long, has full-file RMS above -50 dBFS, and passes
 disjointness. A frame is eligible if its clean reference has RMS above -45 dBFS.
 Duration is compared in integer samples, and both RMS floors are strict
 greater-than. "Above" reads that way in English, but the config states the
-comparator rather than leaving code to infer strictness from prose.
+comparator rather than leaving code to infer strictness from prose. Energy is
+`numpy.mean(x * x)` over the float64 samples with the pinned NumPy, so the order of
+the sum is fixed rather than left to whichever of `np.mean`, `np.sum`, or `np.dot` an
+implementation picks, which can differ in the last bits.
 
 Every candidate frame is recorded with its RMS and its verdict, not only the
 eligible ones. The population considered before filtering is then provable from the
@@ -520,7 +554,7 @@ by convention:
 
 | | Effect | Codes |
 |---|---|---|
-| Source-ineligible | recorded, published, run continues | the twelve codes below |
+| Source-ineligible | recorded, published, run continues | the 13 codes below |
 | Abort | run stops, publication blocked | `SOURCE_HASH_MISMATCH`, `GOLDEN_FIXTURE_FAILURE`, `ENVIRONMENT_MISMATCH`, `ENVIRONMENT_CAPACITY_FAILURE`, `UNEXPECTED_IO_FAILURE`, `INTERNAL_CANONICALISATION_ERROR` |
 
 Keeping them in separate closed vocabularies is what makes a harness failure not
@@ -771,7 +805,7 @@ from shifting outputs until the metric improves.
 
 - Metrics computed at 16 kHz mono, on waveforms produced by
   [Canonicalisation](#canonicalisation), which pins every step of getting there.
-  Metric libraries frozen: `pesq`, `pystoi` 0.4.1, numpy 2.3.5, scipy 1.18.0,
+  Metric libraries frozen: `pesq`, `pystoi` 0.4.1, numpy 2.3.5, scipy 1.17.1,
   soundfile 0.14.0. Exact versions are recorded per run
 - Clean reference and system output are compared at equal length. Where they differ
   by at most **160 samples (10 ms at 16 kHz)**, the longer is front-aligned and
@@ -1063,6 +1097,70 @@ defect discovered after results exist invalidates those results rather than
 retroactively changing the rules that produced them. Superseded versions stay in the
 tree rather than being replaced, and each version names its predecessor by digest;
 the loader recomputes those digests, so the chain is checked rather than asserted.
+
+### v4 to v5
+
+Discovered while implementing canonicalisation, before any candidate universe was
+frozen and before any candidate canonical waveform, candidate frame eligibility
+outcome, degraded input, system output, metric score, aggregate, or comparative
+conclusion had been generated or inspected. The measurements behind v5 used synthetic
+signals only, together with the training-corpus measurements v4 already cites.
+
+**The golden fixture had no definition.** v4 required a golden fixture to be decoded
+before any candidate but defined no fixture, no expected digest, and no field to hold
+one, so the precondition could be neither executed nor checked. v5 freezes the two
+fixtures described under [Golden fixtures](#golden-fixtures). Run on both platforms
+available, with soxr 1.1.0, the same libsoxr build string (`0.1.3-14-ga66f3ee`), and
+libsndfile 1.2.2 on each, the analytic fixture produced the same digest and the
+resampler fixture did not:
+
+- analytic, both platforms: `a092fd3b42e4c2142ce999ad11e7c6b8e05ff673408922d924c5367aec1d23b1` <!-- pragma: allowlist secret -->
+- resampler, `darwin_arm64`: `a82cd013caa67872a1eccc17c8b20a55afa785044c6952731398e739da7b3df5` <!-- pragma: allowlist secret -->
+- resampler, `linux_x86_64` (CI runner): `85cef603a2e5c2f319dd6255a09dac084e466b3e6d0f006240b341bddb2d5b36` <!-- pragma: allowlist secret -->
+
+Under the existing `reference_artifact_authoritative` model, v5 names `darwin_arm64`
+as the reference platform and requires runs to execute there, which is a new rule: a
+run elsewhere aborts with `ENVIRONMENT_MISMATCH`.
+
+**Two rules eligibility needs were left open.** v4 required frame identifiers to agree
+across systems without defining them, and named `mean(x*x)` in prose without fixing
+the reduction. v5 defines the frame identifier and the RMS reduction (see
+[Framing](#framing) and [Eligibility](#eligibility)). No eligibility code existed, so
+nothing computed under v4 changes.
+
+**Clarifications, stating as rules what the v4 implementation already does where v4
+was silent.** None changes a computation.
+
+- A FLAC header whose total sample count is zero, meaning unknown, is reported by
+  libsndfile 1.2.2 as 9,223,372,036,854,775,807 frames and excluded at metadata
+  validation as exceeding the duration and decoded-size bounds.
+- A subtype under an unadmitted container is not evaluated; the record carries
+  `UNSUPPORTED_CONTAINER` alone.
+- NaN fails finiteness only, having no position to compare against the amplitude
+  range; an infinity fails both finiteness and amplitude.
+- A FLAC header that understates its sample count decodes that many samples and the
+  rest is dropped without an error; the record cannot show it.
+- `EMPTY_SOURCE` stays a check although no FLAC buffer tried reached it under
+  libsndfile 1.2.2: a zero-frame write produced zero bytes, and a total of zero means
+  unknown.
+- A canonical waveform that fails canonical validation aborts the run with
+  `INTERNAL_CANONICALISATION_ERROR`; by then the source checks have passed, so no
+  ineligibility stage is left to name.
+- FLAC/PCM_32 stays admitted. libsndfile 1.2.2 cannot write it, so no fixture covers
+  it, and reading it is untested.
+- The environment check refuses to load when `LIBROSA_CACHE_DIR` is set (see
+  [Environment](#environment)).
+
+**Corrections to the v4 document.** The source-ineligible vocabulary has 13 codes, not
+twelve. The metric environment runs scipy 1.17.1, which `uv.lock` resolves for
+Python 3.11; v4 listed 1.18.0, which requires Python 3.12 or later. v4 said
+canonicalisation and a CI conformance job call the environment check directly;
+neither does, and no such job exists.
+
+> **Note:** the v4 document was edited after it was frozen. Commit 048c6f2 added the
+> sentence on refusing a configured librosa cache to the live document without an
+> amendment. The archived [benchmark-protocol-v4.md](benchmark-protocol-v4.md) is the
+> document as frozen at 630fe8c, without that sentence, and v5 adopts it here.
 
 ### v3 to v4
 

@@ -18,19 +18,8 @@
 
 ## Benchmark Protocol
 
-- [ ] Reconcile the scipy version in `docs/benchmark-protocol.md`, which lists scipy 1.18.0 among the frozen metric libraries. The project runs on Python 3.11, where `uv.lock` resolves scipy 1.17.1, because scipy 1.18.0 requires Python 3.12 or later. `benchmark/protocols/v4.json` does not pin scipy and `load_protocol` does not check it. Settle this through the amendment process before the replacement benchmark runs, together with the next amendment if one comes first.
-- [ ] Settle these open questions in the next protocol amendment (v5). Each was found while implementing v4 canonicalisation, and the code cited takes the reading described until the amendment decides:
-  - Golden fixture digests: v4 has no field for the expected digests of the golden fixtures, so they need an amendment before the fixtures are committed.
-  - Unknown-length FLAC: a header whose total sample count is zero (unknown) was reported by libsndfile 1.2.2 as 9,223,372,036,854,775,807 frames, so the source is excluded as too long when it may be short (`benchmark/source_inspection.py`).
-  - Subtype under an unadmitted container: v4 does not say whether the subtype is also established as unsupported; the code records the container reason only (`benchmark/source_inspection.py`).
-  - FLAC/PCM_32: v4 admits it, but libsndfile 1.2.2 cannot write it, and reading it is untested.
-  - NaN and infinity against the amplitude range: v4 is silent; the code counts NaN as non-finite only and an infinity as both non-finite and out of range (`benchmark/source_decode.py`).
-  - A FLAC header that understates its total samples decodes that many and drops the rest without an error, and the record cannot show it (`benchmark/tests/test_source_decode.py`).
-  - `EMPTY_SOURCE` looks unreachable for FLAC under libsndfile 1.2.2: a zero-frame write produced zero bytes, and a total of zero means unknown.
-  - A failed canonical validation: v4 does not name its outcome; the code returns `INTERNAL_CANONICALISATION_ERROR`, an abort (`benchmark/canonicalisation.py`).
-  - `docs/benchmark-protocol.md` says "the twelve codes below" for the source-ineligible vocabulary, which has 13 codes.
-  - Frame identifiers: `docs/benchmark-protocol.md` requires frame identifiers to be equal across systems but never defines them, so `benchmark/framing.py` identifies a frame only by its row, which covers samples `[i * frame_samples, (i + 1) * frame_samples)`.
-  - RMS for eligibility: `rms_definition` in `benchmark/protocols/v4.json` is prose that the loader stores but never checks, and it does not fix the order of the mean-square sum. `np.mean`, `np.sum`, and `np.dot` can round differently in the last bits; whether that changes any verdict was not measured.
+- [x] Reconcile the scipy version in `docs/benchmark-protocol.md`: protocol v5 corrects it to 1.17.1, which `uv.lock` resolves for Python 3.11. v5 does not enforce it at load, since the benchmark code does not import scipy.
+- [x] Settle the open questions found while implementing v4 canonicalisation: protocol v5 (`benchmark/protocols/v5.json`) freezes the golden fixtures, the frame identifier, and the RMS reduction, states the v4 implementation's readings as rules, and corrects the v4 document. The "v4 to v5" section of `docs/benchmark-protocol.md` lists each item.
 
 ## Future Enhancements
 

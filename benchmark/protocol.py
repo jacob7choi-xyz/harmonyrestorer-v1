@@ -1,6 +1,6 @@
 """Immutable, validated access to the frozen benchmark protocol.
 
-Two things share the authority here, with different jobs. `benchmark/protocols/v4.json`
+Two things share the authority here, with different jobs. `benchmark/protocols/v5.json`
 holds the frozen values a run executes against; its digest is what establishes *which*
 values those are. This module defines what counts as a *well-formed* protocol, which is
 why the gate set, the supported version, the transform vocabulary, and the
@@ -64,9 +64,9 @@ logger = logging.getLogger(__name__)
 # Private so that production code has no supported affordance for reading the file
 # itself. `load_protocol` is the way in.
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_PROTOCOL_PATH = _REPO_ROOT / "benchmark" / "protocols" / "v4.json"
+_PROTOCOL_PATH = _REPO_ROOT / "benchmark" / "protocols" / "v5.json"
 
-SUPPORTED_PROTOCOL_VERSION = 4
+SUPPORTED_PROTOCOL_VERSION = 5
 
 # Which protocol v2 supersedes, and the artifacts it supersedes, as historical facts
 # rather than as arithmetic. `SUPPORTED_PROTOCOL_VERSION - 1` would encode a universal
@@ -74,9 +74,9 @@ SUPPORTED_PROTOCOL_VERSION = 4
 # governance model promises. The paths are frozen here so the config cannot redirect
 # the amendment chain at another file whose digest it also records, and so a relative
 # path out of the tree is not reachable at all.
-_PREDECESSOR_VERSION = 3
-_PREDECESSOR_PROTOCOL_PATH = "benchmark/protocols/v3.json"
-_PREDECESSOR_DOCUMENT_PATH = "docs/benchmark-protocol-v3.md"
+_PREDECESSOR_VERSION = 4
+_PREDECESSOR_PROTOCOL_PATH = "benchmark/protocols/v4.json"
+_PREDECESSOR_DOCUMENT_PATH = "docs/benchmark-protocol-v4.md"
 
 # Closed vocabularies for the frozen LSD transform. Each admits exactly one value. The
 # fields exist so an independent implementer reads each convention from the
@@ -368,6 +368,13 @@ _HASH_BYTE_ORDER = "little"
 _HASH_CONTAINER = "none"
 _REPRODUCIBILITY_MODEL = "reference_artifact_authoritative"
 _PARTIAL_TRAILING_FRAME = "dropped_and_counted"
+_FRAME_IDENTIFIER = "canonical_sha256_and_frame_index"
+_RMS_REDUCTION = "numpy_mean_of_elementwise_square_float64"
+_GOLDEN_GENERATOR = "pcg64_full_range_integers_negative_rail_then_zero"
+_GOLDEN_REFERENCE_PLATFORM = "darwin_arm64"
+# The subtypes the generator can write: libsndfile 1.2.2 writes no PCM_32 FLAC.
+_GOLDEN_SUBTYPES = ("PCM_16", "PCM_24")
+_GOLDEN_SCOPES = ("every_platform", "reference_platform")
 _ELIGIBILITY_COMPUTED_FROM = "canonical_waveform"
 _RMS_COMPARATOR = "greater_than"
 _BIN_REDUCTION = "rms"
@@ -405,6 +412,7 @@ _ROOT_KEYS = frozenset(
         "amends",
         "canonicalisation",
         "framing",
+        "golden_fixtures",
         "environment",
         "selection",
         "eligibility",
@@ -589,6 +597,36 @@ class Framing:
     first_frame_start_sample: int
     partial_trailing_frame: str
     partial_trailing_frame_note: str
+    frame_identifier: str
+    frame_identifier_note: str
+
+
+@dataclass(frozen=True)
+class GoldenFixture:
+    """One known input and the canonical digest it must reproduce."""
+
+    name: str
+    purpose: str
+    seed: int
+    sample_rate: int
+    channels: int
+    frames: int
+    container: str
+    subtype: str
+    canonical_sha256: str
+    verified_on: str
+
+
+@dataclass(frozen=True)
+class GoldenFixtures:
+    """The fixtures a run must reproduce before any candidate, and where they are binding."""
+
+    note: str
+    generator: str
+    generator_note: str
+    reference_platform: str
+    reference_platform_note: str
+    fixtures: tuple[GoldenFixture, ...]
 
 
 @dataclass(frozen=True)
@@ -675,6 +713,8 @@ class Eligibility:
     frame_rms_comparator: str
     comparator_note: str
     denominator_note: str
+    rms_reduction: str
+    rms_reduction_note: str
 
 
 @dataclass(frozen=True)
@@ -924,6 +964,7 @@ class Protocol:
     amends: Amends
     canonicalisation: Canonicalisation
     framing: Framing
+    golden_fixtures: GoldenFixtures
     environment: Environment
     selection: Selection
     eligibility: Eligibility
@@ -1029,6 +1070,20 @@ def _parse_source_outcomes(data: Mapping[str, Any]) -> SourceOutcomes:
     )
 
 
+def _parse_golden_fixtures(data: Mapping[str, Any]) -> GoldenFixtures:
+    """Build the golden fixture section, each fixture its own frozen record."""
+    at = "golden_fixtures"
+    return _build(
+        GoldenFixtures,
+        data,
+        at,
+        fixtures=tuple(
+            _build(GoldenFixture, fixture, f"{at}.fixtures[{index}]")
+            for index, fixture in enumerate(data["fixtures"])
+        ),
+    )
+
+
 def _parse_selection(data: Mapping[str, Any]) -> Selection:
     """Build the selection section with immutable collections."""
     return _build(
@@ -1104,6 +1159,7 @@ def _parse(data: Mapping[str, Any], digest: str, source: Path) -> Protocol:
         canonicalisation=_parse_canonicalisation(data["canonicalisation"]),
         source_outcomes=_parse_source_outcomes(data["source_outcomes"]),
         framing=_build(Framing, data["framing"], "framing"),
+        golden_fixtures=_parse_golden_fixtures(data["golden_fixtures"]),
         environment=_build(Environment, data["environment"], "environment"),
         selection=_parse_selection(data["selection"]),
         eligibility=_build(Eligibility, data["eligibility"], "eligibility"),
@@ -1181,7 +1237,8 @@ def _validate_canonicalisation(canon: Canonicalisation) -> None:
     ):
         if actual != expected:
             raise ProtocolValueError(
-                f"canonicalisation.{field} must be {expected!r} in v4, got {actual!r}"
+                f"canonicalisation.{field} must be {expected!r} in v{SUPPORTED_PROTOCOL_VERSION}, "
+                f"got {actual!r}"
             )
 
     if canon.decode.always_2d is not True:
@@ -1315,10 +1372,11 @@ def _validate_canonical_domain(canonical: CanonicalValidation) -> None:
 def verify_canonicalisation_environment(protocol: Protocol) -> None:
     """Check that this runtime is the one the canonical waveform is defined by.
 
-    Separate from semantic validation because "is this a valid v4 protocol" and "may this
+    Separate from semantic validation because "is this a valid protocol" and "may this
     machine authoritatively execute it" are different questions. `load_protocol` calls this,
-    with no way to switch it off, so the normal path stays fail-closed; canonicalisation and
-    the CI conformance job call it directly for the same reason under their own names.
+    with no way to switch it off, so the normal path stays fail-closed. It is public so a
+    caller can repeat the check; no other code calls it today, and no separate CI
+    conformance job exists.
 
     Only the Python packages are enforced. The lockfile makes those deterministic, while
     native libsndfile and libsoxr vary by platform and are recorded as provenance instead.
@@ -1403,6 +1461,58 @@ def _validate_framing(framing: Framing, canon: Canonicalisation, conditioning_ra
             f"{framing.partial_trailing_frame!r}; a remainder that is neither scored nor "
             "counted hides how the candidate set was formed"
         )
+    if framing.frame_identifier != _FRAME_IDENTIFIER:
+        raise ProtocolValueError(
+            f"framing.frame_identifier must be {_FRAME_IDENTIFIER!r}, got "
+            f"{framing.frame_identifier!r}; systems must name the same frames the same way"
+        )
+
+
+def _validate_golden_fixtures(golden: GoldenFixtures, canon: Canonicalisation) -> None:
+    """The fixtures must be generable, admissible, and binding on at least every platform.
+
+    A fixture outside the source domain would be refused by the very checks it exists to
+    exercise, and a set with no every-platform fixture would leave a decoder fault on a
+    non-reference machine to be charged to the first candidate.
+    """
+    if golden.generator != _GOLDEN_GENERATOR:
+        raise ProtocolValueError(f"golden_fixtures.generator must be {_GOLDEN_GENERATOR!r}")
+    if golden.reference_platform != _GOLDEN_REFERENCE_PLATFORM:
+        raise ProtocolValueError(
+            f"golden_fixtures.reference_platform must be {_GOLDEN_REFERENCE_PLATFORM!r}, the "
+            "platform whose resampler output the frozen digests record"
+        )
+    names = [fixture.name for fixture in golden.fixtures]
+    if not names or len(set(names)) != len(names):
+        raise ProtocolValueError("golden_fixtures.fixtures must be non-empty with unique names")
+    if not any(fixture.verified_on == "every_platform" for fixture in golden.fixtures):
+        raise ProtocolValueError(
+            "golden_fixtures must include an every_platform fixture, so a decoder fault on any "
+            "machine aborts before a candidate is opened"
+        )
+    for fixture in golden.fixtures:
+        _validate_golden_fixture(fixture, canon)
+
+
+def _validate_golden_fixture(fixture: GoldenFixture, canon: Canonicalisation) -> None:
+    """One fixture: a scope, a generable admitted format, and a well-formed digest."""
+    at = f"golden_fixtures.fixtures[{fixture.name!r}]"
+    if fixture.verified_on not in _GOLDEN_SCOPES:
+        raise ProtocolValueError(f"{at}.verified_on must be one of {_GOLDEN_SCOPES}")
+    if fixture.subtype not in _GOLDEN_SUBTYPES:
+        raise ProtocolValueError(f"{at}.subtype must be one of {_GOLDEN_SUBTYPES}")
+    if (fixture.container, fixture.subtype) not in canon.decode.source_formats:
+        raise ProtocolValueError(f"{at} must use an admitted source format")
+    if not canon.downmix.channels_min <= fixture.channels <= canon.downmix.channels_max:
+        raise ProtocolValueError(f"{at}.channels must be within the downmix range")
+    if fixture.sample_rate < canon.source_validation.min_sample_rate:
+        raise ProtocolValueError(f"{at}.sample_rate must be at least the minimum source rate")
+    # The generator writes the negative rail and zero into the first two frames.
+    if not 2 <= fixture.frames <= canon.decode.max_source_duration_s * fixture.sample_rate:
+        raise ProtocolValueError(f"{at}.frames must be at least 2 and within the duration bound")
+    digest = fixture.canonical_sha256
+    if len(digest) != 64 or not all(c in "0123456789abcdef" for c in digest):
+        raise ProtocolValueError(f"{at}.canonical_sha256 must be 64 lowercase hex digits")
 
 
 def _validate_source_outcomes(outcomes: SourceOutcomes) -> None:
@@ -1464,7 +1574,8 @@ def _validate_source_outcomes(outcomes: SourceOutcomes) -> None:
     ):
         if actual != expected:
             raise ProtocolValueError(
-                f"source_outcomes.{field} must be {expected!r} in v4, got {actual!r}"
+                f"source_outcomes.{field} must be {expected!r} in v{SUPPORTED_PROTOCOL_VERSION}, "
+                f"got {actual!r}"
             )
     if outcomes.unevaluated_stages_recorded is not True:
         raise ProtocolValueError(
@@ -1497,6 +1608,11 @@ def _validate_selection(sel: Selection) -> None:
 
 def _validate_eligibility(el: Eligibility) -> None:
     """Loudness floors are dBFS below full scale, so they cannot be positive."""
+    if el.rms_reduction != _RMS_REDUCTION:
+        raise ProtocolValueError(
+            f"eligibility.rms_reduction must be {_RMS_REDUCTION!r}; a different summation can "
+            "move a frame across the floor in the last bits"
+        )
     if el.rms_operation != _RMS_OPERATION:
         raise ProtocolValueError(
             f"eligibility.rms_operation must be {_RMS_OPERATION!r}; an epsilon or a different "
@@ -1837,6 +1953,7 @@ def _validate(protocol: Protocol) -> None:
     _validate_framing(
         protocol.framing, protocol.canonicalisation, protocol.conditioning.sample_rate
     )
+    _validate_golden_fixtures(protocol.golden_fixtures, protocol.canonicalisation)
     _validate_source_outcomes(protocol.source_outcomes)
     _validate_selection(protocol.selection)
     _validate_eligibility(protocol.eligibility)
