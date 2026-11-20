@@ -24,13 +24,13 @@ that it is not evaluated, and the question is recorded for the next protocol ame
 
 **A sample count of "unknown" is believed, and excludes the file.** FLAC permits a header
 whose total sample count is zero, meaning unknown. With libsndfile 1.2.2 from the locked
-soundfile wheel, on macOS, such a file was reported as 9,223,372,036,854,775,807 frames;
-other platforms were not checked. Under `decoder_reported` authority that is the file's
-length, so it fails the duration and decoded-size bounds and is excluded before samples
-are requested, which fails closed. The published reason then says the
-source is too long when it may be short; the observed metadata carries the sentinel value,
-so the record shows why. Whether v4 should name this case is recorded for the next
-protocol amendment rather than decided here.
+soundfile wheel, on macOS, such a file was reported as 9,223,372,036,854,775,807 frames,
+and the test that pins this report also passed on the Linux CI runner. Under
+`decoder_reported` authority that is the file's length, so it fails the duration and
+decoded-size bounds and is excluded before samples are requested, which fails closed. The
+published reason then says the source is too long when it may be short; the observed
+metadata carries the sentinel value, so the record shows why. Whether v4 should name this
+case is recorded for the next protocol amendment rather than decided here.
 """
 
 from __future__ import annotations
