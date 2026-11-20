@@ -392,6 +392,11 @@ Python package versions are enforced when the protocol loads, because the lockfi
 makes them deterministic. Native library versions, libsndfile and soxr, are recorded
 as provenance rather than enforced, because they vary by platform.
 
+The same check refuses to load when `LIBROSA_CACHE_DIR` is set. With that variable set
+and librosa's cache level at 20 or more, a second process was observed returning a cached
+resample result without calling soxr, so canonical samples would come from a pickle file
+on disk rather than the pinned resampler.
+
 Semantic validation and runtime conformance are separate responsibilities and are
 separate functions. "Is this a valid v4 protocol" and "may this machine
 authoritatively execute it" are different questions, and canonicalisation and the CI
