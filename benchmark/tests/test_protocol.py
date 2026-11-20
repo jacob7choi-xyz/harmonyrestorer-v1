@@ -1920,6 +1920,30 @@ class TestCanonicalisationLibrariesAreEnforced:
             load_protocol()
 
 
+class TestResamplerCacheIsRefused:
+    """librosa caches resample results on disk when LIBROSA_CACHE_DIR is set and its cache
+    level reaches 20. In a second process a cached result was returned with soxr replaced by
+    a function that raises, so the samples came from a pickle file and not the resampler."""
+
+    @pytest.mark.parametrize(
+        "value", [pytest.param("/tmp/cache", id="path"), pytest.param("", id="empty")]
+    )
+    def test_a_set_cache_directory_refuses_to_load(
+        self, monkeypatch: pytest.MonkeyPatch, value: str
+    ) -> None:
+        """Set at all, even empty, because librosa reads the raw value at import."""
+        monkeypatch.setenv("LIBROSA_CACHE_DIR", value)
+
+        with pytest.raises(ProtocolEnvironmentError, match="LIBROSA_CACHE_DIR is set"):
+            load_protocol()
+
+    def test_an_unset_cache_directory_loads(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """The default environment, with the variable absent, is accepted."""
+        monkeypatch.delenv("LIBROSA_CACHE_DIR", raising=False)
+
+        load_protocol()
+
+
 class TestAmendmentChainIsNotRedirectable:
     """Digest verification alone would not establish which artifacts are amended.
 

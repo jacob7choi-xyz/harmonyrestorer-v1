@@ -50,6 +50,7 @@ import hashlib
 import importlib.metadata
 import json
 import logging
+import os
 from collections.abc import Mapping
 from dataclasses import dataclass, fields
 from pathlib import Path
@@ -119,6 +120,8 @@ _READ_BOUND_ENFORCEMENT = "before_allocation"
 _LIVE_BYTES_RULE = "source_plus_decoded_plus_downmix_plus_canonical_projected_before_decode"
 _METADATA_VALIDATION = "validated_before_projection_and_allocation"
 _RES_TYPE = "soxr_hq"
+# librosa reads this at import and, when set, may serve resample results from disk.
+_LIBROSA_CACHE_ENV = "LIBROSA_CACHE_DIR"
 _OUTPUT_LENGTH_RULE = "ceil_source_samples_times_target_rate_over_source_rate"
 
 # Exact and ordered, not a set that merely contains something. A membership check would
@@ -1322,11 +1325,20 @@ def verify_canonicalisation_environment(protocol: Protocol) -> None:
     Package metadata is read rather than the modules imported, because importing librosa on
     every protocol load would be expensive.
 
+    librosa's on-disk cache is refused whenever `LIBROSA_CACHE_DIR` is set. With it set and
+    the cache level at 20 or more, a second process returned a cached resample result with
+    soxr replaced by a function that raises, so canonical samples would come from a pickle
+    file rather than the pinned resampler, and loading a tampered pickle can run code. The
+    variable is refused at any value and level because that is simpler and fails closed.
+    librosa reads the environment once, when it is imported, so this check and librosa's
+    cache state could disagree if the environment changed in between.
+
     Args:
         protocol: A parsed protocol whose semantics have already been validated.
 
     Raises:
-        ProtocolEnvironmentError: If a pinned package is missing or is a different version.
+        ProtocolEnvironmentError: If a pinned package is missing or is a different version,
+            or librosa's on-disk cache is configured.
     """
     canon = protocol.canonicalisation
     for package, pinned in (
@@ -1343,6 +1355,11 @@ def verify_canonicalisation_environment(protocol: Protocol) -> None:
                 f"protocol pins {package} {pinned} but the runtime has {installed}; the "
                 "canonical waveform depends on it, so every content hash would differ"
             )
+    if _LIBROSA_CACHE_ENV in os.environ:
+        raise ProtocolEnvironmentError(
+            f"{_LIBROSA_CACHE_ENV} is set, which lets librosa return resample results from an "
+            "on-disk cache instead of computing them; unset it to canonicalise"
+        )
 
 
 def _validate_framing(framing: Framing, canon: Canonicalisation, conditioning_rate: int) -> None:
