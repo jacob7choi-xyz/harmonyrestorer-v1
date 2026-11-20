@@ -134,7 +134,7 @@ class TestDecoded:
         """A header claiming fewer samples than the stream holds decodes that many.
 
         Pinned so a change is seen: the trailing audio is dropped without an error, and the
-        record cannot show it. Recorded for the next protocol amendment.
+        record cannot show it. Protocol v5 states this behaviour as the rule.
         """
         inspected, result = decode(with_total_samples(encoded(noise()), FRAMES - 1000))
 

@@ -19,8 +19,7 @@ ineligibility vocabulary has no stage left to name. A resampled length that diff
 v4's integer rule, a resampler refusal, or a canonical waveform that fails validation is
 returned as `INTERNAL_CANONICALISATION_ERROR`, which aborts the run. v4 names the length
 assertion but does not say which record a failed canonical validation produces; this
-module takes the only code that fits, and the question is recorded for the next protocol
-amendment.
+module takes the only code that fits, and protocol v5 states that as the rule.
 
 Temporaries outside v4's live-bytes rule remain: librosa's input check builds one boolean
 per sample, and normalising a view allocates a second canonical-sized array. Both are left

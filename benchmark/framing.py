@@ -12,9 +12,10 @@ waveform. Viewing also adds no allocation, where copying would add up to the siz
 waveform.
 
 This module cuts frames only. Frame RMS and the eligibility verdict are computed later,
-from these frames, and v4 does not define a per-frame identifier, so none is produced
-here. v4 also requires frames to be cut only after partition assignment; that ordering
-belongs to the caller.
+from these frames. Protocol v5 identifies a frame by its recording's canonical SHA-256
+and its row index, both of which the caller already holds, so no identifier is stored
+here. Frames are to be cut only after partition assignment; that ordering belongs to the
+caller.
 """
 
 from __future__ import annotations

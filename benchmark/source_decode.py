@@ -132,8 +132,7 @@ def waveform_violations(
 
     v4 does not say how a non-finite sample relates to the amplitude range. Here NaN fails
     finiteness only, because it has no position to compare, while an infinity fails both,
-    because it lies outside [-1.0, 1.0]. The question is recorded for the next protocol
-    amendment.
+    because it lies outside [-1.0, 1.0]. Protocol v5 states this reading as the rule.
 
     Args:
         samples: The decoded array, already shown to match inspection.
