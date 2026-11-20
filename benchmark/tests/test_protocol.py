@@ -723,6 +723,18 @@ class TestCanonicalWaveformIsPinned:
         with pytest.raises(ProtocolValueError, match="frame_rms_comparator must be"):
             _load_from_path(path)
 
+    @pytest.mark.parametrize("duration", [60.0, True])
+    def test_the_recording_minimum_is_a_whole_number_of_seconds(
+        self, tmp_path: Path, duration: float
+    ) -> None:
+        """The duration rule is integer arithmetic. A float would make it a float
+        comparison, and a bool would pass as the integer 1."""
+        path = variant(
+            tmp_path, lambda d: d["eligibility"].update({"recording_min_duration_s": duration})
+        )
+        with pytest.raises(ProtocolValueError, match="must be a whole number of seconds"):
+            _load_from_path(path)
+
     def test_a_partial_trailing_frame_must_be_counted(self, tmp_path: Path) -> None:
         """A remainder that is neither scored nor counted hides how the candidate set was
         formed, which is the denominator problem one level down."""
