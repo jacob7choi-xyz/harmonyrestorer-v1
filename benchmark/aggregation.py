@@ -25,6 +25,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from decimal import Decimal
 
 import numpy as np
 import numpy.typing as npt
@@ -129,9 +130,11 @@ def bootstrap_means(estimands: Values, protocol: Protocol) -> Values:
 
 def _interval(means: Values, confidence: float) -> Interval:
     """The linear-interpolation percentile bounds at the protocol's confidence."""
-    low, high = np.percentile(
-        means, [100.0 * (1.0 - confidence) / 2.0, 100.0 * (1.0 + confidence) / 2.0], method="linear"
-    )
+    # Decimal arithmetic on the written confidence: in binary floating point,
+    # 100 * (1 - 0.95) / 2 is 2.500000000000002, not the 2.5 the protocol names, and on
+    # some draws that moved the lower bound by a unit in the last place.
+    tail = (Decimal(1) - Decimal(repr(confidence))) * 50
+    low, high = np.percentile(means, [float(tail), float(100 - tail)], method="linear")
     return Interval(float(low), float(high))
 
 

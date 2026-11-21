@@ -109,15 +109,19 @@ class TestSummarise:
     def test_the_intervals_are_linear_percentiles_of_the_shared_draws(
         self, protocol: Protocol
     ) -> None:
-        values = np.random.default_rng(1).normal(size=9)
-        recordings = [same_everywhere(f"r{i}", [float(v)], [0.0]) for i, v in enumerate(values)]
-        snr = summarise(recordings, protocol)[0]
+        """The bounds are the 2.5th and 97.5th percentiles the protocol names. Seeds 2, 4, 8
+        and 9 gave a different last bit when the lower bound was computed in floating point
+        as 2.500000000000002, so the test covers ten seeds rather than one."""
+        for seed in range(1, 11):
+            values = np.random.default_rng(seed).normal(size=9)
+            recordings = [same_everywhere(f"r{i}", [float(v)], [0.0]) for i, v in enumerate(values)]
+            snr = summarise(recordings, protocol)[0]
 
-        means = bootstrap_means(values[None, :], protocol)[0]
-        low, high = np.percentile(means, [2.5, 97.5], method="linear")
-        assert (snr.opgan_interval.low, snr.opgan_interval.high) == (low, high)
-        assert (snr.paired_interval.low, snr.paired_interval.high) == (low, high)
-        assert (snr.uvr_interval.low, snr.uvr_interval.high) == (0.0, 0.0)
+            means = bootstrap_means(values[None, :], protocol)[0]
+            low, high = np.percentile(means, [2.5, 97.5], method="linear")
+            assert (snr.opgan_interval.low, snr.opgan_interval.high) == (low, high), seed
+            assert (snr.paired_interval.low, snr.paired_interval.high) == (low, high), seed
+            assert (snr.uvr_interval.low, snr.uvr_interval.high) == (0.0, 0.0), seed
 
     def test_a_paired_effect_is_formed_before_resampling(self, protocol: Protocol) -> None:
         """Equal per-recording differences give a zero-width interval, however the systems vary."""
