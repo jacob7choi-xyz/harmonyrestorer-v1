@@ -94,12 +94,12 @@ class MetricSummary:
 
 
 def median(values: Values) -> float:
-    """The median; with an even count, the mean of the middle two, as v6 states."""
-    ordered = np.sort(values)
-    middle = ordered.size // 2
-    if ordered.size % 2:
-        return float(ordered[middle])
-    return float((ordered[middle - 1] + ordered[middle]) / 2.0)
+    """The median; with an even count, the mean of the middle two, as v6 states.
+
+    `numpy.median` takes the mean of the two middle values for an even count, which is the
+    rule v6 names, so this delegates to it.
+    """
+    return float(np.median(values))
 
 
 def bootstrap_means(estimands: Values, protocol: Protocol) -> Values:
