@@ -12,24 +12,27 @@ import numpy.typing as npt
 import pytest
 
 from benchmark.degradation import (
-    D8993B2_RANGES,
     DegradationParams,
     apply_degradation,
     degrade_frame,
     draw_params,
     frame_seed,
+    golden_degraded_sha256,
     high_freq_rolloff,
     mains_hum,
     tape_hiss,
     tape_saturation,
     vinyl_crackle,
 )
+from benchmark.golden_fixture import platform_token
+from benchmark.protocol import load_protocol
 
 RATE = 16000
 FRAME = 32000
 # Not byte-symmetric, so reading its words in the wrong byte order changes them.
 DIGEST = hashlib.sha256(b"degradation").hexdigest()
-TRAINING = D8993B2_RANGES
+PROTOCOL = load_protocol()
+TRAINING = PROTOCOL.degradation.ranges
 # Every optional effect off and the cutoff at Nyquist, so only hiss can change the signal.
 HISS_ONLY = DegradationParams(
     hiss_snr_db=20.0,
@@ -65,8 +68,8 @@ class TestDrawOrder:
     def test_draws_follow_the_training_order(self) -> None:
         """Replayed call by call, in the order random_degradation's keywords appear.
 
-        The literal values are d8993b2's, written out independently of D8993B2_RANGES so
-        this test also checks the constant.
+        The literal values are d8993b2's, written out independently of the protocol's ranges
+        so this test also checks them.
         """
         replay = generator()
         expected = [
@@ -334,3 +337,24 @@ class TestSeeding:
     ) -> None:
         with pytest.raises(ValueError, match=message):
             frame_seed(seed, digest, index)
+
+
+class TestGolden:
+    """The degradation golden: one frame of the analytic fixture with a fixed seed."""
+
+    def test_the_golden_seed_draws_every_optional_effect(self) -> None:
+        """Otherwise the digest would not cover saturation, crackle, or hum."""
+        golden = PROTOCOL.degradation.golden
+        fixture = next(f for f in PROTOCOL.golden_fixtures.fixtures if f.name == golden.fixture)
+        seed = frame_seed(golden.seed, fixture.canonical_sha256, golden.frame_index)
+
+        params = draw_params(np.random.Generator(np.random.PCG64(seed)), TRAINING)
+
+        assert params.enable_saturation and params.enable_crackle and params.enable_hum
+
+    @pytest.mark.skipif(
+        platform_token() != PROTOCOL.golden_fixtures.reference_platform,
+        reason="the degradation digest is asserted on the reference platform only",
+    )
+    def test_the_digest_on_the_reference_platform(self) -> None:
+        assert golden_degraded_sha256(PROTOCOL) == PROTOCOL.degradation.golden.degraded_sha256

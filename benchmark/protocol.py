@@ -1,6 +1,6 @@
 """Immutable, validated access to the frozen benchmark protocol.
 
-Two things share the authority here, with different jobs. `benchmark/protocols/v6.json`
+Two things share the authority here, with different jobs. `benchmark/protocols/v7.json`
 holds the frozen values a run executes against; its digest is what establishes *which*
 values those are. This module defines what counts as a *well-formed* protocol, which is
 why the gate set, the supported version, the transform vocabulary, and the
@@ -64,9 +64,9 @@ logger = logging.getLogger(__name__)
 # Private so that production code has no supported affordance for reading the file
 # itself. `load_protocol` is the way in.
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_PROTOCOL_PATH = _REPO_ROOT / "benchmark" / "protocols" / "v6.json"
+_PROTOCOL_PATH = _REPO_ROOT / "benchmark" / "protocols" / "v7.json"
 
-SUPPORTED_PROTOCOL_VERSION = 6
+SUPPORTED_PROTOCOL_VERSION = 7
 
 # Which protocol v2 supersedes, and the artifacts it supersedes, as historical facts
 # rather than as arithmetic. `SUPPORTED_PROTOCOL_VERSION - 1` would encode a universal
@@ -74,9 +74,9 @@ SUPPORTED_PROTOCOL_VERSION = 6
 # governance model promises. The paths are frozen here so the config cannot redirect
 # the amendment chain at another file whose digest it also records, and so a relative
 # path out of the tree is not reachable at all.
-_PREDECESSOR_VERSION = 5
-_PREDECESSOR_PROTOCOL_PATH = "benchmark/protocols/v5.json"
-_PREDECESSOR_DOCUMENT_PATH = "docs/benchmark-protocol-v5.md"
+_PREDECESSOR_VERSION = 6
+_PREDECESSOR_PROTOCOL_PATH = "benchmark/protocols/v6.json"
+_PREDECESSOR_DOCUMENT_PATH = "docs/benchmark-protocol-v6.md"
 
 # Closed vocabularies for the frozen LSD transform. Each admits exactly one value. The
 # fields exist so an independent implementer reads each convention from the
@@ -403,6 +403,25 @@ _MACRO_MEAN = "unweighted_arithmetic_mean_over_recordings"
 _MEDIAN_EVEN_COUNT = "mean_of_middle_two"
 _BOOTSTRAP_DRAW = "pcg64_integers_with_replacement_one_index_array_per_iteration"
 _BOOTSTRAP_INTERVAL = "numpy_percentile_linear"
+_DEGRADATION_PROCESS = "port_of_dataset_noise_py_at_d8993b2"
+_FRAME_SEED = "seed_sequence_of_seed_digest_words_big_endian_frame_index"
+_DRAW_ORDER = "parameters_then_hiss_crackle_hum_as_applied"
+_DEGRADATION_LEVEL = "recording_peak_scaled_to_headroom_reference_scaled_by_same_gain"
+_COPIES_PER_FRAME = 1
+_HISS_COLORS = ("pink", "brown")
+_RANGE_PAIRS = (
+    "hiss_snr_db",
+    "rolloff_hz",
+    "crackle_density",
+    "crackle_amplitude",
+    "hum_amplitude",
+    "saturation_drive",
+)
+_ENGINES = "shipped_backend_engines_one_denoise_call_per_frame"
+_INPUT_FORMAT = "wav_float_16000_mono"
+_OUTPUT_READ = "soundfile_float64"
+_MODEL_IDENTITY_CHECK = "runner_must_compare_each_digest_with_the_file_the_engine_loads"
+_GOLDEN_RUN_CHECK = "before_any_candidate_after_golden_fixtures_aborts_golden_fixture_failure"
 
 # A positive paired effect must favour OpGAN for every metric, so the effect
 # expression follows from the metric's direction instead of being chosen per metric.
@@ -436,6 +455,7 @@ _ROOT_KEYS = frozenset(
         "amends",
         "canonicalisation",
         "framing",
+        "degradation",
         "golden_fixtures",
         "environment",
         "selection",
@@ -443,6 +463,7 @@ _ROOT_KEYS = frozenset(
         "source_outcomes",
         "duplicate_detection",
         "conditioning",
+        "system_execution",
         "metrics",
         "scoring",
         "reporting",
@@ -624,6 +645,81 @@ class Framing:
     partial_trailing_frame_note: str
     frame_identifier: str
     frame_identifier_note: str
+
+
+@dataclass(frozen=True)
+class TrainingNoiseRanges:
+    """The parameter distributions of training's `random_degradation` at `d8993b2`.
+
+    A `(low, high)` pair is drawn with `Generator.uniform`. An effect behind a threshold is
+    enabled when `Generator.random()` exceeds it. `headroom` is the peak each recording was
+    scaled to before its frames were cut.
+    """
+
+    hiss_snr_db: tuple[float, float]
+    hiss_colors: tuple[str, ...]
+    rolloff_hz: tuple[float, float]
+    crackle_threshold: float
+    crackle_density: tuple[float, float]
+    crackle_amplitude: tuple[float, float]
+    hum_threshold: float
+    hum_amplitude: tuple[float, float]
+    hum_freqs: tuple[float, ...]
+    saturation_threshold: float
+    saturation_drive: tuple[float, float]
+    headroom: float
+
+
+@dataclass(frozen=True)
+class DegradationGolden:
+    """A frame of a golden fixture, degraded with a fixed seed, and its expected digest."""
+
+    fixture: str
+    frame_index: int
+    seed: int
+    degraded_sha256: str
+    verified_on: str
+
+
+@dataclass(frozen=True)
+class Degradation:
+    """The frozen noise process, its seed, and the level frames are degraded at."""
+
+    note: str
+    process: str
+    ranges: TrainingNoiseRanges
+    ranges_note: str
+    seed: int
+    seed_note: str
+    frame_seed: str
+    draw_order: str
+    copies_per_frame: int
+    level: str
+    level_note: str
+    golden: DegradationGolden
+    golden_run_check: str
+    golden_note: str
+    scipy_version: str
+
+
+@dataclass(frozen=True)
+class SystemExecution:
+    """How a degraded frame reaches each system, and which files the systems are."""
+
+    note: str
+    engines: str
+    input_format: str
+    output_read: str
+    torch_versions: tuple[str, ...]
+    torch_versions_note: str
+    audio_separator_version: str
+    opgan_checkpoint_sha256: str
+    uvr_model: str
+    uvr_model_sha256: str
+    uvr_vr_model_data_sha256: str
+    uvr_mdx_model_data_sha256: str
+    model_identity_check: str
+    model_identity_note: str
 
 
 @dataclass(frozen=True)
@@ -1021,6 +1117,7 @@ class Protocol:
     amends: Amends
     canonicalisation: Canonicalisation
     framing: Framing
+    degradation: Degradation
     golden_fixtures: GoldenFixtures
     environment: Environment
     selection: Selection
@@ -1028,6 +1125,7 @@ class Protocol:
     source_outcomes: SourceOutcomes
     duplicate_detection: DuplicateDetection
     conditioning: Conditioning
+    system_execution: SystemExecution
     metrics: Metrics
     scoring: Scoring
     reporting: Reporting
@@ -1142,6 +1240,21 @@ def _parse_golden_fixtures(data: Mapping[str, Any]) -> GoldenFixtures:
     )
 
 
+def _parse_degradation(data: Mapping[str, Any]) -> Degradation:
+    """Build the degradation section; numeric ranges become tuples of floats."""
+    raw = data["ranges"]
+    ranges = _build(
+        TrainingNoiseRanges,
+        raw,
+        "degradation.ranges",
+        **{name: tuple(float(v) for v in raw[name]) for name in _RANGE_PAIRS},
+        hiss_colors=tuple(raw["hiss_colors"]),
+        hum_freqs=tuple(float(v) for v in raw["hum_freqs"]),
+    )
+    golden = _build(DegradationGolden, data["golden"], "degradation.golden")
+    return _build(Degradation, data, "degradation", ranges=ranges, golden=golden)
+
+
 def _parse_selection(data: Mapping[str, Any]) -> Selection:
     """Build the selection section with immutable collections."""
     return _build(
@@ -1217,6 +1330,7 @@ def _parse(data: Mapping[str, Any], digest: str, source: Path) -> Protocol:
         canonicalisation=_parse_canonicalisation(data["canonicalisation"]),
         source_outcomes=_parse_source_outcomes(data["source_outcomes"]),
         framing=_build(Framing, data["framing"], "framing"),
+        degradation=_parse_degradation(data["degradation"]),
         golden_fixtures=_parse_golden_fixtures(data["golden_fixtures"]),
         environment=_build(Environment, data["environment"], "environment"),
         selection=_parse_selection(data["selection"]),
@@ -1229,6 +1343,12 @@ def _parse(data: Mapping[str, Any], digest: str, source: Path) -> Protocol:
         ),
         duplicate_detection=_parse_duplicate_detection(data["duplicate_detection"]),
         conditioning=_build(Conditioning, data["conditioning"], "conditioning"),
+        system_execution=_build(
+            SystemExecution,
+            data["system_execution"],
+            "system_execution",
+            torch_versions=tuple(data["system_execution"]["torch_versions"]),
+        ),
         metrics=_parse_metrics(data["metrics"]),
         scoring=_build(Scoring, data["scoring"], "scoring"),
         reporting=_build(Reporting, data["reporting"], "reporting"),
@@ -1469,20 +1589,44 @@ def verify_canonicalisation_environment(protocol: Protocol) -> None:
         ("librosa", canon.resample.library_version),
         ("soxr", canon.resample.soxr_version),
     ):
-        try:
-            installed = importlib.metadata.version(package)
-        except importlib.metadata.PackageNotFoundError as e:
-            raise ProtocolEnvironmentError(f"{package} is not installed") from e
-        if installed != pinned:
-            raise ProtocolEnvironmentError(
-                f"protocol pins {package} {pinned} but the runtime has {installed}; the "
-                "canonical waveform depends on it, so every content hash would differ"
-            )
+        _require_package(
+            package,
+            (pinned,),
+            "the canonical waveform depends on it, so every content hash would differ",
+        )
     if _LIBROSA_CACHE_ENV in os.environ:
         raise ProtocolEnvironmentError(
             f"{_LIBROSA_CACHE_ENV} is set, which lets librosa return resample results from an "
             "on-disk cache instead of computing them; unset it to canonicalise"
         )
+
+
+def _require_package(package: str, pinned: tuple[str, ...], consequence: str) -> None:
+    """Raise unless the installed distribution of *package* is exactly one of *pinned*."""
+    try:
+        installed = importlib.metadata.version(package)
+    except importlib.metadata.PackageNotFoundError as e:
+        raise ProtocolEnvironmentError(f"{package} is not installed") from e
+    if installed not in pinned:
+        raise ProtocolEnvironmentError(
+            f"protocol pins {package} {' or '.join(pinned)} but the runtime has {installed}; "
+            f"{consequence}"
+        )
+
+
+def _verify_execution_environment(protocol: Protocol) -> None:
+    """Check the packages the degradation and the two systems run on.
+
+    scipy filters the degraded input, and torch and audio-separator run the systems, so a
+    different version changes inputs or outputs without changing the protocol digest.
+    """
+    execution = protocol.system_execution
+    for package, pinned, consequence in (
+        ("scipy", (protocol.degradation.scipy_version,), "the degraded input depends on it"),
+        ("torch", execution.torch_versions, "both systems run on it"),
+        ("audio-separator", (execution.audio_separator_version,), "the UVR system runs on it"),
+    ):
+        _require_package(package, pinned, consequence)
 
 
 def _validate_framing(framing: Framing, canon: Canonicalisation, conditioning_rate: int) -> None:
@@ -1654,6 +1798,91 @@ def _validate_source_outcomes(outcomes: SourceOutcomes) -> None:
             "publishes no checksum and the acquisition script records none, so claiming one "
             "would let publication assert upstream identity the run cannot establish"
         )
+
+
+def _validate_noise_ranges(ranges: TrainingNoiseRanges) -> None:
+    """Each range must be ordered, each threshold a probability, and the headroom a peak."""
+    for name in _RANGE_PAIRS:
+        _require_ordered_pair(name, getattr(ranges, name))
+    for name in ("crackle_threshold", "hum_threshold", "saturation_threshold"):
+        if not 0.0 <= getattr(ranges, name) <= 1.0:
+            raise ProtocolValueError(f"degradation.ranges.{name} must lie in [0, 1]")
+    if ranges.hiss_colors != _HISS_COLORS:
+        raise ProtocolValueError(
+            f"degradation.ranges.hiss_colors must be {list(_HISS_COLORS)}; the port draws "
+            "between exactly these two, in this order"
+        )
+    if not ranges.hum_freqs:
+        raise ProtocolValueError("degradation.ranges.hum_freqs must not be empty")
+    if not 0.0 < ranges.headroom <= 1.0:
+        raise ProtocolValueError("degradation.ranges.headroom must lie in (0, 1]")
+
+
+def _require_ordered_pair(name: str, pair: tuple[float, ...]) -> None:
+    if len(pair) != 2 or not pair[0] < pair[1]:
+        raise ProtocolValueError(
+            f"degradation.ranges.{name} must be [low, high] with low < high, got {list(pair)}"
+        )
+
+
+def _validate_degradation(deg: Degradation, golden: GoldenFixtures) -> None:
+    """The process, seeding, draw order, copies, and level are closed; the golden is real."""
+    for name, stated, frozen in (
+        ("process", deg.process, _DEGRADATION_PROCESS),
+        ("frame_seed", deg.frame_seed, _FRAME_SEED),
+        ("draw_order", deg.draw_order, _DRAW_ORDER),
+        ("level", deg.level, _DEGRADATION_LEVEL),
+        ("golden_run_check", deg.golden_run_check, _GOLDEN_RUN_CHECK),
+    ):
+        if stated != frozen:
+            raise ProtocolValueError(
+                f"degradation.{name} must be {frozen!r}, got {stated!r}; the same seed under "
+                "another process, seeding, order, or level degrades differently"
+            )
+    if deg.copies_per_frame != _COPIES_PER_FRAME:
+        raise ProtocolValueError(
+            f"degradation.copies_per_frame must be {_COPIES_PER_FRAME}; more copies multiply "
+            "each frame's weight in the scored population"
+        )
+    if deg.seed < 0 or deg.golden.seed < 0 or deg.golden.frame_index < 0:
+        raise ProtocolValueError("degradation seeds and the golden frame index must be >= 0")
+    if deg.golden.fixture not in {fixture.name for fixture in golden.fixtures}:
+        raise ProtocolValueError(
+            f"degradation.golden.fixture {deg.golden.fixture!r} is not a golden fixture"
+        )
+    if deg.golden.verified_on not in _GOLDEN_SCOPES:
+        raise ProtocolValueError(f"degradation.golden.verified_on must be one of {_GOLDEN_SCOPES}")
+    _require_digest("degradation.golden.degraded_sha256", deg.golden.degraded_sha256)
+    _validate_noise_ranges(deg.ranges)
+
+
+def _require_digest(name: str, value: str) -> None:
+    if len(value) != 64 or not all(c in "0123456789abcdef" for c in value):
+        raise ProtocolValueError(f"{name} must be 64 lowercase hex digits")
+
+
+def _validate_system_execution(se: SystemExecution) -> None:
+    """How systems run and which files they are, as closed tokens and full digests."""
+    for name, stated, frozen in (
+        ("engines", se.engines, _ENGINES),
+        ("input_format", se.input_format, _INPUT_FORMAT),
+        ("output_read", se.output_read, _OUTPUT_READ),
+        ("model_identity_check", se.model_identity_check, _MODEL_IDENTITY_CHECK),
+    ):
+        if stated != frozen:
+            raise ProtocolValueError(
+                f"system_execution.{name} must be {frozen!r}, got {stated!r}; what each "
+                "system receives, returns, and is decides what its scores describe"
+            )
+    for name in (
+        "opgan_checkpoint_sha256",
+        "uvr_model_sha256",
+        "uvr_vr_model_data_sha256",
+        "uvr_mdx_model_data_sha256",
+    ):
+        _require_digest(f"system_execution.{name}", getattr(se, name))
+    if not se.torch_versions:
+        raise ProtocolValueError("system_execution.torch_versions must not be empty")
 
 
 def _validate_selection(sel: Selection) -> None:
@@ -2131,6 +2360,7 @@ def _validate(protocol: Protocol) -> None:
         protocol.framing, protocol.canonicalisation, protocol.conditioning.sample_rate
     )
     _validate_golden_fixtures(protocol.golden_fixtures, protocol.canonicalisation)
+    _validate_degradation(protocol.degradation, protocol.golden_fixtures)
     _validate_source_outcomes(protocol.source_outcomes)
     _validate_selection(protocol.selection)
     _validate_selection_rules(protocol.selection)
@@ -2138,6 +2368,8 @@ def _validate(protocol: Protocol) -> None:
     _validate_eligibility_outcomes(protocol.eligibility)
     _validate_duplicate_detection(protocol.duplicate_detection)
     _validate_conditioning(protocol.conditioning)
+    _validate_system_execution(protocol.system_execution)
+    _verify_execution_environment(protocol)
     _validate_metrics(protocol.metrics)
     _validate_scoring(protocol.scoring)
     _validate_aggregation(protocol.aggregation)
