@@ -65,6 +65,16 @@ class TestTrainingFilename:
             == f"{ITEM}__Bach_Goldberg_01.flac"
         )
 
+    def test_every_training_file_name_is_in_the_form_rule_1_builds(self) -> None:
+        """Checks the item prefix and the double underscore against the 145 names
+        `dataset/acquire.py` wrote. The manifest does not record the original paths, so the
+        slash replacement itself is checked by the nested-path test above, not here."""
+        prefix = f"{ITEM}__"
+        for entry in json.loads(MANIFEST.read_text())["recordings"]:
+            name = entry["filename"]
+            assert name.startswith(prefix), name
+            assert training_filename(f"{ITEM}/{name.removeprefix(prefix)}", ITEM) == name
+
     def test_two_paths_can_flatten_alike(self) -> None:
         """Not one-to-one, which can only exclude more under rule 1."""
         assert training_filename(f"{ITEM}/a/b_c.flac", ITEM) == training_filename(
