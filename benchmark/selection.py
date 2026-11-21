@@ -29,11 +29,13 @@ grounds for an exclusion rather than the first.
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 
 import numpy as np
+
+from benchmark._source_validation import SourceOutcomeError, checked_digest
 
 __all__ = [
     "ExclusionRule",
@@ -139,19 +141,38 @@ def exclusions(
 
 
 def training_identities(
-    manifest: Sequence[dict[str, object]], decoded_sha256: Iterable[str]
+    manifest: Sequence[Mapping[str, object]], decoded_sha256: Mapping[str, str]
 ) -> TrainingIdentities:
     """The three identity sets from the training manifest's entries and the decoded digests.
 
     Args:
         manifest: The `recordings` entries of `benchmark/manifests/training_corpus.json`.
-        decoded_sha256: Each training recording's decoded-PCM digest.
+        decoded_sha256: Each training recording's decoded-PCM digest, keyed by its file name.
 
     Returns:
         The identities the rules compare against.
+
+    Raises:
+        SelectionError: If a file name repeats, if the decoded digests do not cover exactly
+            the manifest's file names, or if a digest is not 64 lowercase hexadecimal
+            characters. A missing decoded digest would leave rule 3 unable to exclude a
+            copy of that recording, so an incomplete set is refused rather than used.
     """
+    filenames = [str(entry["filename"]) for entry in manifest]
+    if len(set(filenames)) != len(filenames):
+        raise SelectionError("the training manifest repeats a file name")
+    if set(decoded_sha256) != set(filenames):
+        missing = sorted(set(filenames) - set(decoded_sha256))
+        unknown = sorted(set(decoded_sha256) - set(filenames))
+        raise SelectionError(f"decoded digests missing for {missing}, unknown for {unknown}")
+    raw = [str(entry["sha256"]) for entry in manifest]
+    for digest in (*raw, *decoded_sha256.values()):
+        try:
+            checked_digest(digest, "sha256")
+        except SourceOutcomeError as error:
+            raise SelectionError(str(error)) from error
     return TrainingIdentities(
-        filenames=frozenset(str(entry["filename"]) for entry in manifest),
-        raw_sha256=frozenset(str(entry["sha256"]) for entry in manifest),
-        decoded_sha256=frozenset(decoded_sha256),
+        filenames=frozenset(filenames),
+        raw_sha256=frozenset(raw),
+        decoded_sha256=frozenset(decoded_sha256.values()),
     )

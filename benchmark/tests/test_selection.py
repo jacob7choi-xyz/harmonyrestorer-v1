@@ -120,9 +120,30 @@ class TestTrainingIdentities:
 
     def test_the_manifest_gives_every_name_and_digest(self) -> None:
         recordings = json.loads(MANIFEST.read_text())["recordings"]
-        identities = training_identities(recordings, ["e" * 64])
+        decoded = {entry["filename"]: f"{index:064x}" for index, entry in enumerate(recordings)}
+        identities = training_identities(recordings, decoded)
         assert len(identities.filenames) == len(identities.raw_sha256) == 145
-        assert identities.decoded_sha256 == frozenset({"e" * 64})
+        assert identities.decoded_sha256 == frozenset(decoded.values())
         first = recordings[0]
         assert first["filename"] in identities.filenames
         assert first["sha256"] in identities.raw_sha256
+
+    @pytest.mark.parametrize(
+        ("manifest", "decoded"),
+        [
+            ([{"filename": "a", "sha256": "a" * 64}, {"filename": "b", "sha256": "b" * 64}],
+             {"a": "c" * 64}),
+            ([{"filename": "a", "sha256": "a" * 64}], {"a": "c" * 64, "b": "d" * 64}),
+            ([{"filename": "a", "sha256": "a" * 64}, {"filename": "a", "sha256": "b" * 64}],
+             {"a": "c" * 64}),
+            ([{"filename": "a", "sha256": "A" * 64}], {"a": "c" * 64}),
+            ([{"filename": "a", "sha256": "a" * 64}], {"a": "c" * 63}),
+        ],
+        ids=["decoded_missing", "decoded_unknown", "name_repeated", "raw_uppercase",
+             "decoded_short"],
+    )  # fmt: skip
+    def test_an_incomplete_or_malformed_corpus_is_refused(
+        self, manifest: list[dict[str, object]], decoded: dict[str, str]
+    ) -> None:
+        with pytest.raises(SelectionError):
+            training_identities(manifest, decoded)
