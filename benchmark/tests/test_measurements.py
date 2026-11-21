@@ -5,6 +5,7 @@ The measurements themselves read `data/pairs/`, which is not in the repository.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 from pathlib import Path
 
@@ -13,6 +14,7 @@ import pytest
 import soundfile as sf
 
 from benchmark.degradation import high_freq_rolloff, tape_saturation
+from benchmark.measurements.capacity import parse_result, run_pipeline, write_tone_flac
 from benchmark.measurements.d8993b2_equivalence import bit_identical
 from benchmark.measurements.training_pairs import (
     expected_hiss_peak,
@@ -21,6 +23,8 @@ from benchmark.measurements.training_pairs import (
     sampled_metadata,
     spectral_slope,
 )
+from benchmark.measurements.worker_exits import CASES, Exit, run_case
+from benchmark.protocol import CapacityFixture, load_protocol
 
 RATE = 16000
 FRAME = 32000
@@ -154,3 +158,52 @@ class TestEngineCall:
 
         with pytest.raises(KeyError):
             call(Broken(), tmp_path / "frame.wav")
+
+
+class TestCapacityHelpers:
+    """The capacity measurement's writer, pipeline, and result parsing on a small fixture."""
+
+    def small_fixture(self) -> CapacityFixture:
+        """The frozen fixture's format and tones, at 16 kHz for one second."""
+        frozen = load_protocol().runner.capacity_fixture
+        return dataclasses.replace(frozen, sample_rate=RATE, frames=RATE)
+
+    def test_the_tones_are_written_in_the_fixture_format(self, tmp_path: Path) -> None:
+        path = tmp_path / "small.flac"
+
+        write_tone_flac(path, self.small_fixture())
+
+        info = sf.info(str(path))
+        samples, _ = sf.read(path, dtype="float64")
+        t = np.arange(RATE) / RATE
+        expected = 0.3 * np.sin(2 * np.pi * 440.0 * t) + 0.2 * np.sin(2 * np.pi * 1234.5 * t)
+        assert (info.format, info.subtype, info.channels, info.frames) == (
+            "FLAC",
+            "PCM_24",
+            1,
+            RATE,
+        )
+        np.testing.assert_allclose(samples, expected, atol=2.0**-23)
+
+    def test_the_pipeline_canonicalises_the_fixture(self, tmp_path: Path) -> None:
+        path = tmp_path / "small.flac"
+        write_tone_flac(path, self.small_fixture())
+
+        result = run_pipeline(path)
+
+        assert result["canonical"] == "CanonicalWaveform"
+        assert result["canonical_bytes"] == RATE * 8
+
+    def test_a_result_line_is_parsed_and_its_absence_is_none(self) -> None:
+        assert parse_result('noise\nRESULT {"peak_rss": 5}\n') == {"peak_rss": 5}
+        assert parse_result("Traceback (most recent call last):\n") is None
+
+
+class TestWorkerExits:
+    """How a child's end reaches the parent, for the cases that are the same on any POSIX."""
+
+    def test_an_exit_code_is_returned(self) -> None:
+        assert run_case("print('x'); print('y'); raise SystemExit(3)") == Exit(3, "x\ny\n", "")
+
+    def test_sigkill_is_minus_nine(self) -> None:
+        assert run_case(CASES["sigkill"]).returncode == -9
