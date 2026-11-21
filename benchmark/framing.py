@@ -14,8 +14,9 @@ waveform.
 This module cuts frames only. Frame RMS and the eligibility verdict are computed later,
 from these frames. Protocol v5 identifies a frame by its recording's canonical SHA-256
 and its row index, both of which the caller already holds, so no identifier is stored
-here. Frames are to be cut only after partition assignment; that ordering belongs to the
-caller.
+here. Frames for degradation and scoring are to be cut only after partition assignment;
+from protocol v11 the selection walk also cuts them before admission, to check the frame
+floors, and that check produces no derived artifact. The ordering belongs to the caller.
 """
 
 from __future__ import annotations

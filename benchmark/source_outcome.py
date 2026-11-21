@@ -115,6 +115,7 @@ class AbortReason(StrEnum):
     ENVIRONMENT_CAPACITY_FAILURE = "ENVIRONMENT_CAPACITY_FAILURE"
     UNEXPECTED_IO_FAILURE = "UNEXPECTED_IO_FAILURE"
     INTERNAL_CANONICALISATION_ERROR = "INTERNAL_CANONICALISATION_ERROR"
+    WORKER_TIMEOUT = "WORKER_TIMEOUT"
 
 
 class SourceContextPolicy(StrEnum):
@@ -183,6 +184,7 @@ ABORT_SOURCE_CONTEXT: Mapping[AbortReason, SourceContextPolicy] = MappingProxyTy
         AbortReason.ENVIRONMENT_CAPACITY_FAILURE: SourceContextPolicy.OPTIONAL,
         AbortReason.UNEXPECTED_IO_FAILURE: SourceContextPolicy.OPTIONAL,
         AbortReason.INTERNAL_CANONICALISATION_ERROR: SourceContextPolicy.OPTIONAL,
+        AbortReason.WORKER_TIMEOUT: SourceContextPolicy.REQUIRED,
     }
 )
 

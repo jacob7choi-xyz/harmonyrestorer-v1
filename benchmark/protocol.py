@@ -1,6 +1,6 @@
 """Immutable, validated access to the frozen benchmark protocol.
 
-Two things share the authority here, with different jobs. `benchmark/protocols/v10.json`
+Two things share the authority here, with different jobs. `benchmark/protocols/v11.json`
 holds the frozen values a run executes against; its digest is what establishes *which*
 values those are. This module defines what counts as a *well-formed* protocol, which is
 why the gate set, the supported version, the transform vocabulary, and the
@@ -64,9 +64,9 @@ logger = logging.getLogger(__name__)
 # Private so that production code has no supported affordance for reading the file
 # itself. `load_protocol` is the way in.
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_PROTOCOL_PATH = _REPO_ROOT / "benchmark" / "protocols" / "v10.json"
+_PROTOCOL_PATH = _REPO_ROOT / "benchmark" / "protocols" / "v11.json"
 
-SUPPORTED_PROTOCOL_VERSION = 10
+SUPPORTED_PROTOCOL_VERSION = 11
 
 # Which protocol v2 supersedes, and the artifacts it supersedes, as historical facts
 # rather than as arithmetic. `SUPPORTED_PROTOCOL_VERSION - 1` would encode a universal
@@ -74,9 +74,9 @@ SUPPORTED_PROTOCOL_VERSION = 10
 # governance model promises. The paths are frozen here so the config cannot redirect
 # the amendment chain at another file whose digest it also records, and so a relative
 # path out of the tree is not reachable at all.
-_PREDECESSOR_VERSION = 9
-_PREDECESSOR_PROTOCOL_PATH = "benchmark/protocols/v9.json"
-_PREDECESSOR_DOCUMENT_PATH = "docs/benchmark-protocol-v9.md"
+_PREDECESSOR_VERSION = 10
+_PREDECESSOR_PROTOCOL_PATH = "benchmark/protocols/v10.json"
+_PREDECESSOR_DOCUMENT_PATH = "docs/benchmark-protocol-v10.md"
 
 # Closed vocabularies for the frozen LSD transform. Each admits exactly one value. The
 # fields exist so an independent implementer reads each convention from the
@@ -184,6 +184,7 @@ _ABORT_REASONS = (
     "ENVIRONMENT_CAPACITY_FAILURE",
     "UNEXPECTED_IO_FAILURE",
     "INTERNAL_CANONICALISATION_ERROR",
+    "WORKER_TIMEOUT",
 )
 # Grouped, because "12 sources rejected" invites the reader to conclude the collection is
 # defective when most of them may simply sit outside limits this benchmark declared in
@@ -436,6 +437,7 @@ _PARTITION_ORDER = ("test", "demo", "test_reserve", "development_reserve")
 _PARTITION_ASSIGNMENT = "consecutive_admission_positions_in_partition_order"
 _SHORT_UNIVERSE = "run_invalid_nothing_published"
 _PREDICATE_ORDER = (
+    "identifier_syntax",
     "training_source_identity",
     "fetch",
     "raw_sha256",
@@ -481,6 +483,17 @@ _ADJUDICATION_RECORD_MATCH = (
 )
 _ADJUDICATION_UNMATCHED = "walk_halts_awaiting_adjudication_nothing_published"
 _ADJUDICATION_ADMITS = "only_when_every_flagged_reference_is_a_different_performance"
+_IDENTIFIER_SYNTAX = (
+    "collection_slash_path_of_nonempty_segments_not_dot_or_dotdot_without_nul_backslash_cc_cs"
+)
+_IDENTIFIER_SYNTAX_CODE = "CANDIDATE_IDENTIFIER_MALFORMED"
+_LISTING_CHECK = "listed_size_md5_sha1_each_checked_where_listed_all_attempts_mismatch_excludes"
+_LISTING_MISMATCH_CODE = "CANDIDATE_LISTING_MISMATCH"
+_OVERSIZE_FETCH = "stop_at_max_identity_stream_bytes_plus_one_no_digest_raw_rule_by_size"
+_RECORDING_WITHOUT_FRAMES = "evaluated_in_the_walk_before_admission_rejects"
+_DEGENERATE_SCOPE = "candidate_features_only"
+_TIMEOUT_ABORT = "WORKER_TIMEOUT"
+_WORKER_TIMEOUT = "harness_setting_exceeding_it_aborts"
 
 # A positive paired effect must favour OpGAN for every metric, so the effect
 # expression follows from the metric's direction instead of being chosen per metric.
@@ -817,6 +830,9 @@ class Runner:
     capacity_fixture: CapacityFixture
     capacity_note: str
     peak_memory_per_source: str
+    timeout_abort: str
+    worker_timeout: str
+    worker_timeout_note: str
 
 
 @dataclass(frozen=True)
@@ -936,6 +952,14 @@ class Selection:
     retries_exhausted: str
     retries_exhausted_code: str
     retries_exhausted_note: str
+    identifier_syntax: str
+    identifier_syntax_code: str
+    identifier_syntax_note: str
+    listing_check: str
+    listing_mismatch_code: str
+    listing_check_note: str
+    oversize_fetch: str
+    oversize_fetch_note: str
 
 
 @dataclass(frozen=True)
@@ -961,6 +985,7 @@ class Eligibility:
     reason_selection_note: str
     metric_applicability: str
     metric_applicability_note: str
+    recording_without_eligible_frames: str
 
 
 @dataclass(frozen=True)
@@ -1036,6 +1061,8 @@ class DuplicateDetection:
     adjudication_unmatched: str
     adjudication_admits: str
     adjudication_record_note: str
+    degenerate_scope: str
+    degenerate_scope_note: str
 
 
 @dataclass(frozen=True)
@@ -2064,6 +2091,8 @@ def _validate_runner(runner: Runner, canon: Canonicalisation, reference_platform
         ("capacity_abort", runner.capacity_abort, _CAPACITY_ABORT),
         ("other_worker_death_abort", runner.other_worker_death_abort, _OTHER_WORKER_DEATH_ABORT),
         ("peak_memory_per_source", runner.peak_memory_per_source, _PEAK_MEMORY_PER_SOURCE),
+        ("timeout_abort", runner.timeout_abort, _TIMEOUT_ABORT),
+        ("worker_timeout", runner.worker_timeout, _WORKER_TIMEOUT),
     ):
         if stated != frozen:
             raise ProtocolValueError(
@@ -2171,6 +2200,11 @@ def _validate_selection_walk(sel: Selection) -> None:
         ("transient_failure", sel.transient_failure, _TRANSIENT_FAILURE),
         ("retries_exhausted", sel.retries_exhausted, _RETRIES_EXHAUSTED),
         ("retries_exhausted_code", sel.retries_exhausted_code, _RETRIES_EXHAUSTED_CODE),
+        ("identifier_syntax", sel.identifier_syntax, _IDENTIFIER_SYNTAX),
+        ("identifier_syntax_code", sel.identifier_syntax_code, _IDENTIFIER_SYNTAX_CODE),
+        ("listing_check", sel.listing_check, _LISTING_CHECK),
+        ("listing_mismatch_code", sel.listing_mismatch_code, _LISTING_MISMATCH_CODE),
+        ("oversize_fetch", sel.oversize_fetch, _OVERSIZE_FETCH),
     ):
         if stated != frozen:
             raise ProtocolValueError(
@@ -2205,6 +2239,12 @@ def _validate_eligibility_outcomes(el: Eligibility) -> None:
         raise ProtocolValueError(
             f"eligibility.reason_selection must be {_ELIGIBILITY_REASON_SELECTION!r}; stopping "
             "at the first failure would hide the verdicts after it"
+        )
+    if el.recording_without_eligible_frames != _RECORDING_WITHOUT_FRAMES:
+        raise ProtocolValueError(
+            "eligibility.recording_without_eligible_frames must be "
+            f"{_RECORDING_WITHOUT_FRAMES!r}; whether such a recording keeps a slot decides "
+            "how many recordings are scored"
         )
     if el.metric_applicability != _METRIC_APPLICABILITY:
         raise ProtocolValueError(
@@ -2359,6 +2399,7 @@ def _validate_adjudication(dd: DuplicateDetection) -> None:
         ("adjudication_record_match", dd.adjudication_record_match, _ADJUDICATION_RECORD_MATCH),
         ("adjudication_unmatched", dd.adjudication_unmatched, _ADJUDICATION_UNMATCHED),
         ("adjudication_admits", dd.adjudication_admits, _ADJUDICATION_ADMITS),
+        ("degenerate_scope", dd.degenerate_scope, _DEGENERATE_SCOPE),
     ):
         if stated != frozen:
             raise ProtocolValueError(

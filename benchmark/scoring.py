@@ -16,8 +16,9 @@ The four gates computed here are named as `publication_gates.required` names the
 others (the protocol and candidate universe digests, and the training screen) are decided
 elsewhere.
 
-A recording whose frames were all ineligible is not part of the expected population here:
-v6 leaves it out of the across-recording count, so the caller does not pass it.
+A recording whose frames were all ineligible is not part of the expected population here.
+v6 to v10 kept it in its partition and left it out of the across-recording count; from v11
+the selection walk rejects it before admission, so no admitted recording has none.
 """
 
 from __future__ import annotations
