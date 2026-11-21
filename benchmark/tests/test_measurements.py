@@ -6,11 +6,14 @@ The measurements themselves read `data/pairs/`, which is not in the repository.
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import json
 import sys
 from pathlib import Path
 
+import librosa
 import numpy as np
+import numpy.typing as npt
 import pytest
 import soundfile as sf
 
@@ -26,8 +29,16 @@ from benchmark.measurements.training_pairs import (
     sampled_metadata,
     spectral_slope,
 )
+from benchmark.measurements.training_screen import (
+    Degenerate,
+    load_recording,
+    offsets,
+    similarity,
+    transformed,
+    unit_features,
+)
 from benchmark.measurements.worker_exits import CASES, Exit, run_case
-from benchmark.protocol import CapacityFixture, load_protocol
+from benchmark.protocol import CapacityFixture, MfccConfig, load_protocol
 
 RATE = 16000
 FRAME = 32000
@@ -230,3 +241,117 @@ class TestDeadWorkerFootprint:
     @pytest.mark.skipif(sys.platform == "darwin", reason="footprint is read on macOS")
     def test_no_footprint_is_claimed_off_macos(self) -> None:
         assert run_footprint_case("pass") == Ended(0, None, "")
+
+
+class TestTrainingScreen:
+    """The screen's building blocks on synthetic features and a small FLAC."""
+
+    @pytest.fixture(scope="class")
+    def config(self) -> MfccConfig:
+        """The frozen MFCC configuration."""
+        return load_protocol().duplicate_detection.mfcc
+
+    @staticmethod
+    def random_unit(frames: int, seed: int) -> npt.NDArray[np.float64]:
+        """Unit-length random frames, standing in for normalised MFCCs."""
+        values = np.random.default_rng(seed).standard_normal((frames, 20))
+        unit: npt.NDArray[np.float64] = values / np.linalg.norm(values, axis=1, keepdims=True)
+        return unit
+
+    def test_offsets_are_multiples_of_the_stride_within_the_search(
+        self, config: MfccConfig
+    ) -> None:
+        lags = offsets(config)
+        assert (lags[0], lags[-1], len(lags)) == (-156, 156, 157)
+        assert 0 in lags
+        assert all(lag % config.alignment_stride_frames == 0 for lag in lags)
+
+    def test_an_odd_reach_stops_at_the_last_multiple_of_the_stride(
+        self, config: MfccConfig
+    ) -> None:
+        """At hop 512 and 16 kHz, 4.97 s reaches 155.3 frames: rounded down to 155, and 155 is
+        not a multiple of 2, so the last offset is 154."""
+        lags = offsets(dataclasses.replace(config, alignment_search_s=4.97))
+        assert (lags[0], lags[-1]) == (-154, 154)
+
+    def test_identical_features_score_one(self) -> None:
+        a = self.random_unit(500, 0)
+        assert similarity(a, a, [0], 100) == pytest.approx(1.0)
+
+    def test_a_shift_inside_the_search_is_found(self, config: MfccConfig) -> None:
+        a = self.random_unit(800, 1)
+        assert similarity(a, a[40:], offsets(config), 100) == pytest.approx(1.0)
+        assert similarity(a[40:], a, offsets(config), 100) == pytest.approx(1.0)
+
+    def test_a_shift_outside_the_search_is_not_found(self, config: MfccConfig) -> None:
+        a = self.random_unit(800, 2)
+        score = similarity(a, a[200:], offsets(config), 100)
+        assert score is not None
+        assert score < 0.2
+
+    def test_too_little_overlap_gives_no_score(self) -> None:
+        a = self.random_unit(99, 3)
+        assert similarity(a, a, [0], 100) is None
+
+    def test_features_are_unit_frames_of_z_normalised_coefficients(
+        self, config: MfccConfig
+    ) -> None:
+        t = np.arange(RATE * 2) / RATE
+        waveform = 0.3 * np.sin(2 * np.pi * 440.0 * t * (1.0 + t))
+        unit, degenerate = unit_features(waveform, config)
+        assert unit.shape[1] == config.n_mfcc
+        np.testing.assert_allclose(np.linalg.norm(unit, axis=1), 1.0)
+        assert degenerate == Degenerate(0, 0)
+
+    def test_features_match_a_direct_computation(self, config: MfccConfig) -> None:
+        """Centred and scaled per coefficient, then each frame scaled to unit length."""
+        waveform = np.random.default_rng(5).uniform(-0.5, 0.5, RATE * 2)
+        mfcc = librosa.feature.mfcc(y=waveform, sr=RATE, n_mfcc=20, hop_length=512)
+        z = ((mfcc - mfcc.mean(axis=1, keepdims=True)) / mfcc.std(axis=1, keepdims=True)).T
+        expected = z / np.linalg.norm(z, axis=1, keepdims=True)
+        np.testing.assert_allclose(unit_features(waveform, config)[0], expected, atol=1e-12)
+
+    def test_silence_is_counted_as_degenerate_rather_than_divided_by_zero(
+        self, config: MfccConfig
+    ) -> None:
+        unit, degenerate = unit_features(np.zeros(RATE), config)
+        assert not np.isnan(unit).any()
+        assert degenerate.zero_variance_coefficients == config.n_mfcc
+        assert degenerate.zero_norm_frames == len(unit)
+
+    def test_the_transforms_trim_attenuate_and_round_trip(self) -> None:
+        protocol = load_protocol()
+        waveform = np.random.default_rng(4).uniform(-0.5, 0.5, RATE * 5)
+        assert len(transformed(waveform, "trim_3_s", protocol)) == RATE * 2
+        np.testing.assert_allclose(
+            transformed(waveform, "gain_minus_6_db", protocol), waveform * 10.0 ** (-6.0 / 20.0)
+        )
+        assert len(transformed(waveform, "round_trip_8_khz", protocol)) == RATE * 5
+
+    def test_a_recording_gives_its_decoded_digest_and_canonical_waveform(
+        self, tmp_path: Path
+    ) -> None:
+        protocol = load_protocol()
+        t = np.arange(RATE) / RATE
+        stereo = np.stack(
+            [0.3 * np.sin(2 * np.pi * 440.0 * t), 0.2 * np.sin(2 * np.pi * 660.0 * t)], 1
+        )
+        path = tmp_path / "pair.flac"
+        sf.write(path, stereo, RATE, format="FLAC", subtype="PCM_24")
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+
+        loaded = load_recording(path, name="pair.flac", expected_sha256=digest, protocol=protocol)
+
+        assert not isinstance(loaded, str)
+        decoded, _ = sf.read(path, dtype="float64", always_2d=True)
+        assert loaded[0] == hashlib.sha256(decoded.astype("<f8").tobytes()).hexdigest()
+        np.testing.assert_allclose(loaded[1], decoded.mean(axis=1), atol=1e-12)
+
+    def test_a_recording_that_differs_from_its_digest_is_refused(self, tmp_path: Path) -> None:
+        path = tmp_path / "tones.flac"
+        sf.write(path, np.zeros(RATE), RATE, format="FLAC", subtype="PCM_24")
+        loaded = load_recording(
+            path, name="tones.flac", expected_sha256="0" * 64, protocol=load_protocol()
+        )
+        assert isinstance(loaded, str)
+        assert "SOURCE_HASH_MISMATCH" in loaded
