@@ -1,6 +1,11 @@
 """The selection walk's order and the automatic exclusions against the training corpus.
 
-Protocol v6 freezes both, and neither needs the network:
+Protocol v6 freezes both, v9 adds the candidate filter and the rejection codes, and none
+of it needs the network:
+
+- **Candidates.** A listed file is a candidate when the suffix of the final component of its
+  path, lowercased, is `.flac` (v9), the test `dataset/acquire.py` applied when the training
+  recordings were downloaded. Training recordings pass it and stay in the universe.
 
 - **Walk order.** The frozen universe's source identifiers are sorted as Python strings, by
   Unicode code point, and walked in the order that sorted list takes when indexed by
@@ -22,9 +27,9 @@ admit one that should have been excluded.
 Every rule is evaluated and every match is returned, so the audit trail can show all the
 grounds for an exclusion rather than the first.
 
-> **Note:** v8 freezes the rules but names no code for each in the selection audit trail.
-> The names of `ExclusionRule` are this module's own and are expected to be replaced by
-> the amendment frozen before the candidate universe is enumerated.
+`ExclusionRule`'s values are v9's codes for the three rules against training. v9's codes
+for a match against an earlier admission, and for the duplicate screen, belong to the walk,
+which is not in this module.
 """
 
 from __future__ import annotations
@@ -32,6 +37,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import PurePosixPath
 
 import numpy as np
 
@@ -42,6 +48,7 @@ __all__ = [
     "SelectionError",
     "TrainingIdentities",
     "exclusions",
+    "is_candidate",
     "training_filename",
     "training_identities",
     "walk_order",
@@ -53,11 +60,11 @@ class SelectionError(ValueError):
 
 
 class ExclusionRule(StrEnum):
-    """The three automatic exclusions, in v6's order. Names are code-owned until v9."""
+    """The three automatic exclusions against training, in v6's order, with v9's codes."""
 
-    SOURCE_IDENTITY = "training_source_identity"
-    RAW_SHA256 = "training_raw_sha256"
-    DECODED_PCM_SHA256 = "training_decoded_pcm_sha256"
+    SOURCE_IDENTITY = "TRAINING_SOURCE_IDENTITY"
+    RAW_SHA256 = "TRAINING_RAW_SHA256"
+    DECODED_PCM_SHA256 = "TRAINING_DECODED_PCM_SHA256"
 
 
 @dataclass(frozen=True)
@@ -67,6 +74,18 @@ class TrainingIdentities:
     filenames: frozenset[str]
     raw_sha256: frozenset[str]
     decoded_sha256: frozenset[str]
+
+
+def is_candidate(path_in_item: str) -> bool:
+    """Whether a listed file is in the candidate universe under v9's filter.
+
+    Args:
+        path_in_item: The file's path within the item, as the item's listing names it.
+
+    Returns:
+        True when the final path component's suffix, lowercased, is `.flac`.
+    """
+    return PurePosixPath(path_in_item).suffix.lower() == ".flac"
 
 
 def walk_order(identifiers: Iterable[str], seed: int) -> tuple[str, ...]:

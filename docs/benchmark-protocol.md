@@ -1,13 +1,14 @@
-# Benchmark protocol v8
+# Benchmark protocol v9
 
 Frozen before candidate identities are selected, downloaded for evaluation,
 auditioned, or scored. The source collection has already been inspected in general
 terms; what has not happened is any decision about which recordings enter the
 benchmark.
 
-> **Note:** v8 amends v7, which amended v6, which amended v5, which amended v4, which
-> amended v3, which amended v2, which amended v1, all before any evaluation ran. The
-> operational values live in `benchmark/protocols/v8.json`, which is normative; this
+> **Note:** v9 amends v8, which amended v7, which amended v6, which amended v5, which
+> amended v4, which amended v3, which amended v2, which amended v1, all before any
+> evaluation ran. The
+> operational values live in `benchmark/protocols/v9.json`, which is normative; this
 > document explains them and
 > its numbers are illustrative. Superseded versions are preserved unmodified, as
 > [benchmark-protocol-v1.md](benchmark-protocol-v1.md),
@@ -15,8 +16,9 @@ benchmark.
 > [benchmark-protocol-v3.md](benchmark-protocol-v3.md),
 > [benchmark-protocol-v4.md](benchmark-protocol-v4.md),
 > [benchmark-protocol-v5.md](benchmark-protocol-v5.md),
-> [benchmark-protocol-v6.md](benchmark-protocol-v6.md), and
-> [benchmark-protocol-v7.md](benchmark-protocol-v7.md) with their configs, so an
+> [benchmark-protocol-v6.md](benchmark-protocol-v6.md),
+> [benchmark-protocol-v7.md](benchmark-protocol-v7.md), and
+> [benchmark-protocol-v8.md](benchmark-protocol-v8.md) with their configs, so an
 > artifact recording an older `protocol_version` stays interpretable. See
 > [Amendment](#amendment) for what changed and why.
 
@@ -64,44 +66,58 @@ SHA-256 of the newline-joined per-file digests in sorted filename order.
    covers the samples as the pinned decoder returns them, float64 and interleaved, as
    contiguous little-endian bytes with no header, before downmix and resampling
 
+From v9, rules 2 and 3 also compare each candidate with every candidate admitted earlier
+in the walk, so two copies of one recording cannot both be admitted. A match against
+training is recorded under the training code.
+
 **Flag for adjudication**, never automatic exclusion: aligned MFCC sequence
-similarity at or above **0.50**.
+similarity at or above **0.30** (0.50 until v9), against the training corpus and then
+against every candidate admitted earlier in the walk.
 
-Method, frozen: librosa 0.11.0 `feature.mfcc`, `n_mfcc=20`, `hop_length=512`,
-mono at 16 kHz, per-coefficient z-normalisation; alignment search over +/-5 s at a
-stride of 2 frames; similarity is the best mean per-frame cosine over the
-overlapping region, requiring at least 100 overlapping frames.
+Method, frozen: librosa 0.11.0 `feature.mfcc`, `n_mfcc=20`, `hop_length=512`, computed
+on the canonical waveform, mono at 16 kHz, per-coefficient z-normalisation with the
+population standard deviation; alignment search over +/-5 s at a stride of 2 frames;
+similarity is the best mean per-frame cosine over the overlapping region, requiring at
+least 100 overlapping frames. From v9, every other argument the features depend on is
+written in `v9.json` as a value, including the ones that were librosa's defaults when the
+screen was calibrated (`n_fft` 2048, Hann window, centred frames with constant padding,
+128 mel bands from 0 to 8000 Hz with Slaney normalisation and a float32 filter bank,
+decibels with reference 1.0, floor 1e-10 and an 80 dB range, an orthonormal type 2 DCT,
+and no lifter), so a library upgrade that changes a default cannot change the screen. The
+offsets run over every multiple of the stride up to floor(5 * 16000 / 512) = 156 frames,
+about 4.99 s. A coefficient with zero variance over a recording, a frame vector with zero
+norm, or a comparison with too little overlap makes the screen's answer uncertain, which
+excludes the candidate.
 
-The threshold is calibrated, not chosen. Using training recordings only, so that
-benchmark candidates can never become the detector's tuning set:
+The threshold is calibrated, not chosen, on training recordings only, so that benchmark
+candidates can never become the detector's tuning set. v9 recalibrated it on all 145
+training recordings, because the sets v1 reported, and the code that scored them, are not
+in the repository:
 
 | Set | n | Result |
 |---|---|---|
-| Positives: same performance, trimmed 3 s / gain -6 dB / resampled through 8 kHz | 15 | min 0.8471 |
-| Negatives: different recordings | 28 | max 0.0995 |
-| Negatives, same composer | 6 | max 0.0808 |
-| Negatives, same session: consecutive movements, one performer, one room, one mic | 21 | max 0.1033 |
+| Positives: each recording against itself trimmed 3 s / gain -6 dB / resampled through 8 kHz | 435 | min 0.7550 |
+| Same-session takes: two files named as take 1 and take 2 of one movement | 1 | 0.4832 |
+| Negatives: every other pair of different recordings | 10,439 | max 0.1435 |
 
-> **Note:** the same-composer row is not in the calibration block of `v6.json`, so the
-> loader does not check it, and nothing below depends on it. It is kept as it was
-> reported.
+The take pair is the third movement of Brahms's Symphony No. 2, and its files end
+`take1` and `take2`. It was identified from the file names only and was not listened to.
+Over all 10,440 pairs including it, the median score was 0.0239 and the 99.9th percentile
+0.1112. v1's figures were a positives minimum of 0.8471 (n=15), a negatives maximum of
+0.0995 (n=28), and a same-session maximum of 0.1033 (n=21, consecutive movements by one
+performer); they are kept in the archived documents.
 
-0.50 sits nearly five times above the highest observed negative and well below the
-lowest positive. The same-session set is the hardest false-positive case available:
-identical performer, venue, microphone, and mastering, differing only in the music.
-It separates cleanly, which indicates the detector responds to performance identity
-rather than to recording conditions or timbre.
+0.30 sits above every negative and below every positive and the one take pair observed,
+so that pair would be flagged; how other takes would score was not measured. Under v8's
+0.50, the take pair would have passed unflagged, and the margin above the highest negative
+was a ratio of about 1.03 rather than the "nearly five times" v1 reported.
 
-**Known calibration gap.** The most adversarial case, the same composition played
-by a different performer, could not be tested: the training corpus contains one
-performance per work. The same-session negatives do not substitute for it: they test
-recording-condition similarity with different note sequences, whereas the untested
-case shares the note sequence and differs in performance. Those are different
-failure axes. The mechanism argues it should still separate, since the metric
-requires frame-level alignment and differing tempo and rubato destroy
-correspondence, but that is reasoning rather than measurement. It is a further
-reason the detector only flags for adjudication instead of excluding
-automatically.
+**Known calibration gap.** The same composition played by a different performer is
+still untested: no pair of training recordings was identified as one work by two
+performers. The mechanism argues it should separate, since the metric requires
+frame-level alignment and differing tempo and rubato destroy correspondence, but that is
+reasoning rather than measurement. v9 decides the adjudication answer for it in advance
+(below), so a flag on such a pair does not need a decision made after candidates are seen.
 
 Chroma similarity was considered and rejected. Chroma encodes pitch-class content,
 so two performances of the same composition are near-identical by construction; it
@@ -112,10 +128,20 @@ silently distorted the test distribution.
 Adjudication answers exactly one question: same underlying performance, with the
 answer yes, no, or uncertain. An uncertain answer excludes the candidate. It is
 performed without reference to any model output, and every decision is logged with its
-reason in the run manifest.
+reason in the run manifest. v9 fixes the answers for the two cases the screen is most
+likely to raise:
+
+- **Another take of the same work from the same session** as a training recording, or as
+  a candidate admitted earlier, is the same underlying performance, and the candidate is
+  excluded. File names or Internet Archive metadata naming the same work and session decide
+  it, and a flag that cannot be ruled out excludes the candidate.
+- **The same composition played by a different performer** is a different performance,
+  and the candidate is admitted. The benchmark measures unseen recordings, not unseen
+  pieces.
 
 Recorded per candidate: source identifier, byte size, both hashes, maximum
-aligned-MFCC similarity against the training corpus, and any adjudication. Composer,
+aligned-MFCC similarity against the training corpus and against earlier admissions, and
+any adjudication with its evidence. Composer,
 work, and performer are recorded where the collection metadata provides them; v6 does
 not require them.
 
@@ -126,12 +152,19 @@ inspection is how a benchmark becomes curated. The admission algorithm has no
 discretionary branch.
 
 1. Enumerate the complete candidate universe from the metadata of the Internet Archive
-   item `MusopenCollectionAsFlac`, the collection the training recordings came from
+   item `MusopenCollectionAsFlac`, the collection the training recordings came from. From
+   v9, a listed file is a candidate when the suffix of the final component of its path,
+   lowercased, is `.flac`, the test `dataset/acquire.py` applied when the training
+   recordings were downloaded. The training recordings pass that test and stay in the
+   universe; the first exclusion rule removes each of them before any fetch
 2. Sort the source identifiers by Unicode code point, then walk them in the order
    `numpy.random.Generator(PCG64(20260726)).permutation(n)` gives, where `n` is the
-   size of the frozen universe
-3. Walk that order strictly. For each candidate: fetch, apply the frozen technical
-   and disjointness predicates, admit or reject
+   size of the frozen universe. Identifiers are compared exactly as the listing gives
+   them, with no Unicode normalisation or case folding
+3. Walk that order strictly. For each candidate, in this order: the first exclusion rule
+   (before any fetch); fetch; the raw digest; the source-outcome stages; the decoded-PCM
+   digest; the eligibility floors; the duplicate screen. The first check a candidate fails
+   is the predicate responsible
 4. Rejected candidates are skipped and the walk continues. There is no manual
    substitution and no reordering
 
@@ -152,10 +185,18 @@ the test set.
 A full selection audit trail is recorded for every candidate examined: position in
 the walk, source identifier, admitted or rejected, the predicate responsible for a
 rejection, and the assigned partition. Anyone can then ask why a given recording is
-absent without trusting the script's summary.
+absent without trusting the script's summary. From v9 each disjointness rejection has its
+own code: `TRAINING_SOURCE_IDENTITY`, `TRAINING_RAW_SHA256`, `ADMITTED_RAW_SHA256`,
+`TRAINING_DECODED_PCM_SHA256`, `ADMITTED_DECODED_PCM_SHA256`,
+`SCREEN_SAME_PERFORMANCE_TRAINING`, `SCREEN_SAME_PERFORMANCE_ADMITTED`, and
+`SCREEN_UNCERTAIN`. A source-outcome or eligibility failure keeps its own code from those
+sections.
 
 Partitions are assigned by position in the admitted sequence, before any audio is
-auditioned:
+auditioned. Admissions are numbered from 1 in walk order: the first 30 are test, the next
+6 demo, the next 6 test_reserve, and the next 6 development_reserve, and the walk stops at
+the 48th admission. If the universe runs out first, the run is invalid and nothing is
+published:
 
 | Partition | N | Use |
 |---|---|---|
@@ -871,8 +912,14 @@ mono float WAV and passed to each system's shipped backend engine with one `deno
 call; the output WAV is read as float64. OpGAN is the checkpoint whose SHA-256
 `backend/app/config.py` pins. UVR is `UVR-DeNoise.pth` through audio-separator. Before
 any candidate, the runner must compare the digest of each file an engine loads with the
-frozen digests: the OpGAN checkpoint, the UVR model, and the two UVR parameter files. No
-runner exists yet.
+frozen digests: the OpGAN checkpoint, the UVR model, and the two UVR parameter files.
+
+From v9 both engines run in the run's own process, each built once after the run
+preconditions pass. An exception raised inside a `denoise` call is that system's failure
+for that frame. A native crash ends the process, so no publication artifact is written
+and the run is invalid; it is charged to neither system. Before each call the runner
+writes, atomically, a marker naming the recording, the frame, and the system, so the frame
+a crash happened on can be identified afterwards.
 
 Before v7 was frozen, both engines were run on 23 degraded float WAV frames built from
 synthetic tones and training clean frames. Every call succeeded, both returned 16 kHz
@@ -1204,6 +1251,14 @@ lowers that system's coverage. A failure outside the call, such as preparing the
 reading the output, or the environment, is a harness failure and aborts the run, so the
 harness's faults are never charged to a system.
 
+From v9, the reference an output is scored against is the canonical frame times the
+frame's gain, computed in float64, then truncated to the common length by conditioning.
+Eligibility checks the frame as cut, so a frame can pass eligibility and still give a
+reference that a primary metric refuses once truncated: a frame that is constant apart
+from its last 130 samples, scored against an output 130 samples shorter, is one. That is a
+harness failure and aborts the run; it is never charged to the system whose output was
+being scored.
+
 ## Aggregation
 
 Frames within a recording are not independent observations; reporting a frame count
@@ -1225,6 +1280,8 @@ The draw is fixed: a single `numpy.random.Generator(PCG64(20260726))` draws one 
 array per iteration, `integers(0, n, size=n)`, with replacement, in iteration order,
 and the same array is applied to every estimand. The interval bounds are
 `numpy.percentile` of the iteration means with `method="linear"` at 2.5 and 97.5.
+The index arrays pick positions, so the order of the recordings changes the intervals;
+from v9 the recordings are in the test partition's admission order.
 
 Bootstrap reproducibility depends on the pinned runtime, not on the seed alone. A
 seed selects a stream only within a fixed generator implementation, so the protocol
@@ -1261,6 +1318,27 @@ defect discovered after results exist invalidates those results rather than
 retroactively changing the rules that produced them. Superseded versions stay in the
 tree rather than being replaced, and each version names its predecessor by digest;
 the loader recomputes those digests, so the chain is checked rather than asserted.
+
+### v8 to v9
+
+v8 left open which listed files are candidates, how admissions map to partitions and when
+the walk stops, the duplicate screen's full parameters and its handling of degenerate
+features, how a flagged take or another performer's recording is adjudicated, duplicates
+among admitted candidates, the bootstrap's recording order, the precision of the scored
+reference and a reference that truncation makes unscoreable, where the engines run, and
+the order and codes of the selection checks. v9 defines them (see
+[Identity and disjointness](#identity-and-disjointness), [Selection](#selection),
+[System execution](#system-execution), [Scoring](#scoring), and
+[Aggregation](#aggregation)).
+
+Before v9 was frozen, the duplicate screen was recalibrated on the 145 training
+recordings, on the reference platform, twice with identical output. The highest score
+between two different recordings, 0.4832, came from a pair whose file names mark them as
+two takes of one movement, so v9 counts a same-session take as the same performance and
+moves the flag threshold from 0.50 to 0.30, between the next highest pair (0.1435) and
+that take pair. No candidate universe had been enumerated by the benchmark, and no
+candidate audio had been acquired or inspected. The Internet Archive item's file listing
+was read by `dataset/acquire.py` when the training recordings were downloaded.
 
 ### v7 to v8
 

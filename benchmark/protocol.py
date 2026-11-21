@@ -1,6 +1,6 @@
 """Immutable, validated access to the frozen benchmark protocol.
 
-Two things share the authority here, with different jobs. `benchmark/protocols/v8.json`
+Two things share the authority here, with different jobs. `benchmark/protocols/v9.json`
 holds the frozen values a run executes against; its digest is what establishes *which*
 values those are. This module defines what counts as a *well-formed* protocol, which is
 why the gate set, the supported version, the transform vocabulary, and the
@@ -64,9 +64,9 @@ logger = logging.getLogger(__name__)
 # Private so that production code has no supported affordance for reading the file
 # itself. `load_protocol` is the way in.
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_PROTOCOL_PATH = _REPO_ROOT / "benchmark" / "protocols" / "v8.json"
+_PROTOCOL_PATH = _REPO_ROOT / "benchmark" / "protocols" / "v9.json"
 
-SUPPORTED_PROTOCOL_VERSION = 8
+SUPPORTED_PROTOCOL_VERSION = 9
 
 # Which protocol v2 supersedes, and the artifacts it supersedes, as historical facts
 # rather than as arithmetic. `SUPPORTED_PROTOCOL_VERSION - 1` would encode a universal
@@ -74,9 +74,9 @@ SUPPORTED_PROTOCOL_VERSION = 8
 # governance model promises. The paths are frozen here so the config cannot redirect
 # the amendment chain at another file whose digest it also records, and so a relative
 # path out of the tree is not reachable at all.
-_PREDECESSOR_VERSION = 7
-_PREDECESSOR_PROTOCOL_PATH = "benchmark/protocols/v7.json"
-_PREDECESSOR_DOCUMENT_PATH = "docs/benchmark-protocol-v7.md"
+_PREDECESSOR_VERSION = 8
+_PREDECESSOR_PROTOCOL_PATH = "benchmark/protocols/v8.json"
+_PREDECESSOR_DOCUMENT_PATH = "docs/benchmark-protocol-v8.md"
 
 # Closed vocabularies for the frozen LSD transform. Each admits exactly one value. The
 # fields exist so an independent implementer reads each convention from the
@@ -430,6 +430,48 @@ _CAPACITY_GENERATOR = "tones_0_3_at_440_hz_plus_0_2_at_1234_5_hz"
 _PEAK_MEMORY_PER_SOURCE = "lifetime_max_phys_footprint_recorded"
 _MEMORY_METRIC = "lifetime_max_phys_footprint"
 _GOLDEN_RUN_CHECK = "before_any_candidate_after_golden_fixtures_aborts_golden_fixture_failure"
+_CANDIDATE_FILTER = "final_path_component_suffix_lowercased_is_flac"
+_IDENTIFIER_COMPARISON = "exact_code_points_as_listed"
+_PARTITION_ORDER = ("test", "demo", "test_reserve", "development_reserve")
+_PARTITION_ASSIGNMENT = "consecutive_admission_positions_in_partition_order"
+_SHORT_UNIVERSE = "run_invalid_nothing_published"
+_PREDICATE_ORDER = (
+    "training_source_identity",
+    "fetch",
+    "raw_sha256",
+    "source_outcome_stages",
+    "decoded_pcm_sha256",
+    "eligibility",
+    "duplicate_screen",
+)
+_REJECTION_CODES = (
+    "TRAINING_SOURCE_IDENTITY",
+    "TRAINING_RAW_SHA256",
+    "ADMITTED_RAW_SHA256",
+    "TRAINING_DECODED_PCM_SHA256",
+    "ADMITTED_DECODED_PCM_SHA256",
+    "SCREEN_SAME_PERFORMANCE_TRAINING",
+    "SCREEN_SAME_PERFORMANCE_ADMITTED",
+    "SCREEN_UNCERTAIN",
+)
+_MFCC_INPUT = "canonical_waveform"
+_MFCC_WINDOW = "hann"
+_MFCC_PAD_MODE = "constant"
+_MFCC_MEL_NORM = "slaney"
+_MFCC_MEL_BASIS_DTYPE = "float32"
+_MFCC_DCT_NORM = "ortho"
+_ALIGNMENT_OFFSETS = "multiples_of_stride_within_floor_of_search_s_times_rate_over_hop"
+_DEGENERATE_FEATURES = "uncertain"
+_SCREEN_SCOPE = "training_then_earlier_admitted"
+_SAME_SESSION_TAKE = "same_performance_excluded"
+_DIFFERENT_PERFORMER = "admitted"
+_ADJUDICATION_EVIDENCE = "file_names_or_archive_metadata_or_unresolved_flag_excludes"
+_RECORDING_ORDER = "test_partition_admission_order"
+_SCORED_REFERENCE = "float64_canonical_frame_times_gain"
+_REFERENCE_REFUSED = "harness_failure"
+_ENGINE_PROCESS = "in_process_each_engine_built_once_after_run_preconditions"
+_NATIVE_CRASH = "run_invalid_no_publication_artifact"
+_PROGRESS_MARKER = "atomic_marker_before_each_denoise_call"
 
 # A positive paired effect must favour OpGAN for every metric, so the effect
 # expression follows from the metric's direction instead of being chosen per metric.
@@ -729,6 +771,10 @@ class SystemExecution:
     uvr_mdx_model_data_sha256: str
     model_identity_check: str
     model_identity_note: str
+    engine_process: str
+    native_crash: str
+    progress_marker: str
+    engine_process_note: str
 
 
 @dataclass(frozen=True)
@@ -866,6 +912,17 @@ class Selection:
     ordering: str
     ordering_note: str
     permanent_unavailability_code: str
+    candidate_filter: str
+    candidate_filter_note: str
+    identifier_comparison: str
+    identifier_comparison_note: str
+    partition_order: tuple[str, ...]
+    partition_assignment: str
+    partition_assignment_note: str
+    short_universe: str
+    predicate_order: tuple[str, ...]
+    rejection_codes: tuple[str, ...]
+    predicate_order_note: str
 
 
 @dataclass(frozen=True)
@@ -905,6 +962,29 @@ class MfccConfig:
     alignment_stride_frames: int
     min_overlap_frames: int
     similarity: str
+    input: str
+    n_fft: int
+    win_length: int
+    window: str
+    center: bool
+    pad_mode: str
+    power: float
+    n_mels: int
+    fmin: float
+    fmax: float
+    htk: bool
+    mel_norm: str
+    mel_basis_dtype: str
+    db_ref: float
+    db_amin: float
+    db_top_db: float
+    dct_type: int
+    dct_norm: str
+    lifter: float
+    zscore_ddof: int
+    alignment_offsets: str
+    degenerate_features: str
+    parameters_note: str
 
 
 @dataclass(frozen=True)
@@ -913,11 +993,14 @@ class MfccCalibration:
 
     positives_min: float
     positives_n: int
+    positives_set: str
     negatives_max: float
     negatives_n: int
-    same_session_negatives_max: float
-    same_session_negatives_n: int
+    negatives_set: str
+    same_session_takes_min: float
+    same_session_takes_n: int
     untested_case: str
+    calibration_note: str
 
 
 @dataclass(frozen=True)
@@ -931,6 +1014,11 @@ class DuplicateDetection:
     calibration: MfccCalibration
     decoded_pcm_hash: str
     decoded_pcm_hash_note: str
+    screen_scope: str
+    same_session_take: str
+    different_performer: str
+    adjudication_evidence: str
+    adjudication_note: str
 
 
 @dataclass(frozen=True)
@@ -1084,6 +1172,9 @@ class Scoring:
     system_failure: str
     harness_failure: str
     failure_note: str
+    reference: str
+    reference_refused_after_conditioning: str
+    reference_note: str
 
 
 @dataclass(frozen=True)
@@ -1099,6 +1190,7 @@ class Bootstrap:
     draw: str
     interval: str
     draw_note: str
+    recording_order: str
 
 
 @dataclass(frozen=True)
@@ -1306,6 +1398,9 @@ def _parse_selection(data: Mapping[str, Any]) -> Selection:
         "selection",
         partitions=MappingProxyType(dict(data["partitions"])),
         permanent_failure_codes=tuple(data["permanent_failure_codes"]),
+        partition_order=tuple(data["partition_order"]),
+        predicate_order=tuple(data["predicate_order"]),
+        rejection_codes=tuple(data["rejection_codes"]),
     )
 
 
@@ -1919,6 +2014,9 @@ def _validate_system_execution(se: SystemExecution) -> None:
         ("input_format", se.input_format, _INPUT_FORMAT),
         ("output_read", se.output_read, _OUTPUT_READ),
         ("model_identity_check", se.model_identity_check, _MODEL_IDENTITY_CHECK),
+        ("engine_process", se.engine_process, _ENGINE_PROCESS),
+        ("native_crash", se.native_crash, _NATIVE_CRASH),
+        ("progress_marker", se.progress_marker, _PROGRESS_MARKER),
     ):
         if stated != frozen:
             raise ProtocolValueError(
@@ -2035,6 +2133,31 @@ def _validate_selection_rules(sel: Selection) -> None:
             )
 
 
+def _validate_selection_walk(sel: Selection) -> None:
+    """Which files are candidates, how admissions fill partitions, and the check order.
+
+    The filter sets `n`, which with the seed fixes the walk, so it is closed for the same
+    reason the ordering is. The partition order must name every partition once, and the
+    check order and rejection codes decide which predicate the audit trail names.
+    """
+    for name, stated, frozen in (
+        ("candidate_filter", sel.candidate_filter, _CANDIDATE_FILTER),
+        ("identifier_comparison", sel.identifier_comparison, _IDENTIFIER_COMPARISON),
+        ("partition_assignment", sel.partition_assignment, _PARTITION_ASSIGNMENT),
+        ("short_universe", sel.short_universe, _SHORT_UNIVERSE),
+        ("partition_order", sel.partition_order, _PARTITION_ORDER),
+        ("predicate_order", sel.predicate_order, _PREDICATE_ORDER),
+        ("rejection_codes", sel.rejection_codes, _REJECTION_CODES),
+    ):
+        if stated != frozen:
+            raise ProtocolValueError(
+                f"selection.{name} must be {frozen!r}, got {stated!r}; which candidates are "
+                "walked and which check is recorded as responsible are fixed before the walk"
+            )
+    if set(sel.partition_order) != set(sel.partitions):
+        raise ProtocolValueError("selection.partition_order must name exactly the partitions")
+
+
 def _validate_eligibility_outcomes(el: Eligibility) -> None:
     """Eligibility codes, their precedence, and the single scored population are closed.
 
@@ -2121,16 +2244,19 @@ def _validate_calibration(dd: DuplicateDetection) -> None:
     for name, count in (
         ("positives_n", cal.positives_n),
         ("negatives_n", cal.negatives_n),
-        ("same_session_negatives_n", cal.same_session_negatives_n),
+        ("same_session_takes_n", cal.same_session_takes_n),
     ):
         if count <= 0:
             raise ProtocolValueError(f"duplicate_detection.calibration.{name} must be positive")
-    ceiling = max(cal.negatives_max, cal.same_session_negatives_max)
-    if not ceiling < dd.flag_threshold < cal.positives_min:
+    # A same-session take is the same performance under v9, so it must be flagged too: the
+    # threshold sits below both the copies and the takes, and above every other pair.
+    floor = min(cal.positives_min, cal.same_session_takes_min)
+    if not cal.negatives_max < dd.flag_threshold < floor:
         raise ProtocolValueError(
             f"duplicate_detection.flag_threshold {dd.flag_threshold} must lie strictly between "
-            f"the calibration negatives ceiling {ceiling} and the positives floor "
-            f"{cal.positives_min}; a threshold outside its own evidence is unjustified"
+            f"the calibration negatives ceiling {cal.negatives_max} and the floor {floor} of "
+            "the positives and same-session takes; a threshold outside its own evidence is "
+            "unjustified"
         )
 
 
@@ -2166,6 +2292,53 @@ def _validate_duplicate_detection(dd: DuplicateDetection) -> None:
             "another representation changes which re-encodes the third exclusion rule catches"
         )
     _validate_calibration(dd)
+    _validate_mfcc_parameters(dd.mfcc)
+    _validate_adjudication(dd)
+
+
+def _validate_mfcc_parameters(mfcc: MfccConfig) -> None:
+    """Every feature argument is stated; kinds are closed and magnitudes must be usable."""
+    for name, stated, frozen in (
+        ("input", mfcc.input, _MFCC_INPUT),
+        ("window", mfcc.window, _MFCC_WINDOW),
+        ("pad_mode", mfcc.pad_mode, _MFCC_PAD_MODE),
+        ("mel_norm", mfcc.mel_norm, _MFCC_MEL_NORM),
+        ("mel_basis_dtype", mfcc.mel_basis_dtype, _MFCC_MEL_BASIS_DTYPE),
+        ("dct_norm", mfcc.dct_norm, _MFCC_DCT_NORM),
+        ("alignment_offsets", mfcc.alignment_offsets, _ALIGNMENT_OFFSETS),
+        ("degenerate_features", mfcc.degenerate_features, _DEGENERATE_FEATURES),
+    ):
+        if stated != frozen:
+            raise ProtocolValueError(
+                f"duplicate_detection.mfcc.{name} must be {frozen!r}, got {stated!r}; the "
+                "calibration describes the screen only with the features it was measured on"
+            )
+    at = "duplicate_detection.mfcc"
+    if mfcc.n_fft <= 0 or mfcc.n_mels <= 0 or not 0 < mfcc.win_length <= mfcc.n_fft:
+        raise ProtocolValueError(
+            f"{at}: n_fft and n_mels must be positive, win_length in (0, n_fft]"
+        )
+    if not 0.0 <= mfcc.fmin < mfcc.fmax <= mfcc.sample_rate / 2:
+        raise ProtocolValueError(f"{at}: need 0 <= fmin < fmax <= sample_rate / 2")
+    if mfcc.power <= 0 or mfcc.db_ref <= 0 or mfcc.db_amin <= 0 or mfcc.db_top_db <= 0:
+        raise ProtocolValueError(f"{at}: power, db_ref, db_amin, and db_top_db must be positive")
+    if mfcc.dct_type not in (1, 2, 3) or mfcc.lifter < 0 or mfcc.zscore_ddof not in (0, 1):
+        raise ProtocolValueError(f"{at}: dct_type in 1-3, lifter >= 0, zscore_ddof 0 or 1")
+
+
+def _validate_adjudication(dd: DuplicateDetection) -> None:
+    """What a flag is compared against and how takes and performers are decided is closed."""
+    for name, stated, frozen in (
+        ("screen_scope", dd.screen_scope, _SCREEN_SCOPE),
+        ("same_session_take", dd.same_session_take, _SAME_SESSION_TAKE),
+        ("different_performer", dd.different_performer, _DIFFERENT_PERFORMER),
+        ("adjudication_evidence", dd.adjudication_evidence, _ADJUDICATION_EVIDENCE),
+    ):
+        if stated != frozen:
+            raise ProtocolValueError(
+                f"duplicate_detection.{name} must be {frozen!r}, got {stated!r}; an "
+                "adjudication rule decided after candidates are seen is a selection choice"
+            )
 
 
 def _validate_conditioning(cond: Conditioning) -> None:
@@ -2398,6 +2571,7 @@ def _validate_aggregation_procedure(agg: Aggregation) -> None:
         ("median_even_count", agg.median_even_count, _MEDIAN_EVEN_COUNT),
         ("bootstrap.draw", agg.bootstrap.draw, _BOOTSTRAP_DRAW),
         ("bootstrap.interval", agg.bootstrap.interval, _BOOTSTRAP_INTERVAL),
+        ("bootstrap.recording_order", agg.bootstrap.recording_order, _RECORDING_ORDER),
     ):
         if stated != frozen:
             raise ProtocolValueError(
@@ -2412,6 +2586,12 @@ def _validate_scoring(sc: Scoring) -> None:
         ("coverage", sc.coverage, _COVERAGE),
         ("system_failure", sc.system_failure, _SYSTEM_FAILURE),
         ("harness_failure", sc.harness_failure, _HARNESS_FAILURE),
+        ("reference", sc.reference, _SCORED_REFERENCE),
+        (
+            "reference_refused_after_conditioning",
+            sc.reference_refused_after_conditioning,
+            _REFERENCE_REFUSED,
+        ),
     ):
         if stated != frozen:
             raise ProtocolValueError(
@@ -2475,6 +2655,7 @@ def _validate(protocol: Protocol) -> None:
     _validate_source_outcomes(protocol.source_outcomes)
     _validate_selection(protocol.selection)
     _validate_selection_rules(protocol.selection)
+    _validate_selection_walk(protocol.selection)
     _validate_eligibility(protocol.eligibility)
     _validate_eligibility_outcomes(protocol.eligibility)
     _validate_duplicate_detection(protocol.duplicate_detection)

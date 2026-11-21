@@ -34,6 +34,7 @@ from benchmark.measurements.training_screen import (
     TRANSFORMS,
     Corpus,
     Degenerate,
+    coefficients,
     load_recording,
     offsets,
     report,
@@ -306,6 +307,17 @@ class TestTrainingScreen:
         assert unit.shape[1] == config.n_mfcc
         np.testing.assert_allclose(np.linalg.norm(unit, axis=1), 1.0)
         assert degenerate == Degenerate(0, 0)
+
+    def test_the_protocol_s_arguments_give_the_default_call_s_bits(
+        self, config: MfccConfig
+    ) -> None:
+        """The screen was calibrated with librosa's defaults; v9 writes each one down."""
+        for seed in range(3):
+            waveform = np.random.default_rng(seed).uniform(-0.5, 0.5, RATE * 3 + seed)
+            default = librosa.feature.mfcc(y=waveform, sr=RATE, n_mfcc=20, hop_length=512)
+            explicit = coefficients(waveform, config)
+            assert explicit.dtype == default.dtype
+            assert np.array_equal(explicit, default), seed
 
     def test_features_match_a_direct_computation(self, config: MfccConfig) -> None:
         """Centred and scaled per coefficient, then each frame scaled to unit length."""

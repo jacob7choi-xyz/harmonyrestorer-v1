@@ -13,7 +13,9 @@ the screen can state them:
 - **Input.** Each recording's canonical waveform from the frozen canonicalisation, already
   mono at 16 kHz, so no second resampling path is introduced.
 - **MFCC.** `librosa.feature.mfcc` with the frozen `n_mfcc` and `hop_length` and every other
-  argument at the pinned librosa version's defaults.
+  argument at the pinned librosa version's defaults. Protocol v9 writes each of those
+  arguments down, and the features are now computed from them; on the inputs tested they
+  give the same bits as the default call.
 - **Normalisation.** Each coefficient z-normalised over the recording's frames, with the
   population standard deviation. Whether the population or the sample standard deviation is
   used does not change any score: it scales every coefficient by the same factor, and each
@@ -39,7 +41,7 @@ identical output: all 145 files matched the manifest and canonicalised; no two s
 decoded-PCM digest; no zero-variance coefficient or zero-norm frame occurred. Positives:
 trim minimum 0.9856, gain minimum 1.0000, 8 kHz round trip minimum 0.7550 (the Peer Gynt
 "In the Hall of the Mountain King" recording), n=145 each. Negatives: 10,440 pairs, median
-0.0239, 99.9th percentile 0.1112, maximum 0.4832, none at or above the 0.50 threshold. That
+0.0239, 99.9th percentile 0.1112, maximum 0.4832, none at or above v8's 0.50 threshold. That
 maximum is a pair of files whose names identify one Brahms Symphony No. 2 movement and end
 `take1` and `take2`; the next highest pair is 0.1435. The identification is from the file
 names only, and the files were not listened to. If they are two takes, as the names indicate,
@@ -62,6 +64,7 @@ from collections import Counter
 from dataclasses import dataclass
 from itertools import combinations
 from pathlib import Path
+from typing import Literal
 
 import librosa
 import numpy as np
@@ -102,6 +105,31 @@ def offsets(config: MfccConfig) -> list[int]:
     return [k * config.alignment_stride_frames for k in range(-steps, steps + 1)]
 
 
+# The protocol closes pad_mode to "constant"; the table gives it librosa's literal type.
+_PAD_MODES: dict[str, Literal["constant"]] = {"constant": "constant"}
+
+
+def coefficients(waveform: npt.NDArray[np.float64], config: MfccConfig) -> npt.NDArray[np.float64]:
+    """The MFCCs with every argument taken from the protocol, shaped (coefficients, frames)."""
+    mel = librosa.feature.melspectrogram(
+        y=waveform, sr=config.sample_rate, n_fft=config.n_fft, hop_length=config.hop_length,
+        win_length=config.win_length, window=config.window, center=config.center,
+        pad_mode=_PAD_MODES[config.pad_mode], power=config.power, n_mels=config.n_mels,
+        fmin=config.fmin, fmax=config.fmax, htk=config.htk, norm=config.mel_norm,
+        dtype=np.dtype(config.mel_basis_dtype),
+    )  # fmt: skip
+    decibels = librosa.power_to_db(
+        mel, ref=config.db_ref, amin=config.db_amin, top_db=config.db_top_db
+    )
+    return np.asarray(
+        librosa.feature.mfcc(
+            S=decibels, n_mfcc=config.n_mfcc, dct_type=config.dct_type, norm=config.dct_norm,
+            lifter=config.lifter,
+        ),
+        dtype=np.float64,
+    )  # fmt: skip
+
+
 def unit_features(
     waveform: npt.NDArray[np.float64], config: MfccConfig
 ) -> tuple[Features, Degenerate]:
@@ -111,11 +139,9 @@ def unit_features(
     variance coefficient is left at zero and a zero-norm frame stays zero, and both are
     counted, so the measurement reports whether either occurs.
     """
-    mfcc = librosa.feature.mfcc(
-        y=waveform, sr=config.sample_rate, n_mfcc=config.n_mfcc, hop_length=config.hop_length
-    )
+    mfcc = coefficients(waveform, config)
     mean = mfcc.mean(axis=1, keepdims=True)
-    std = mfcc.std(axis=1, keepdims=True)
+    std = mfcc.std(axis=1, keepdims=True, ddof=config.zscore_ddof)
     flat = std[:, 0] == 0.0
     z = np.divide(mfcc - mean, std, out=np.zeros_like(mfcc), where=~flat[:, None]).T
     norms = np.linalg.norm(z, axis=1)
@@ -256,7 +282,7 @@ def negatives(corpus: Corpus, protocol: Protocol) -> list[tuple[float | None, st
 
 
 def report(corpus: Corpus, pairs: list[tuple[float | None, str, str]], protocol: Protocol) -> None:
-    """Print the calibration beside protocol v1's, and every fact the amendment will need.
+    """Print the calibration beside the loaded protocol's, and every fact an amendment needs.
 
     Prints `none` for a minimum or maximum over no scores rather than raising, so a run in
     which every recording failed still reports its failures.
@@ -271,9 +297,9 @@ def report(corpus: Corpus, pairs: list[tuple[float | None, str, str]], protocol:
     _report_negatives(pairs, protocol)
     cal = protocol.duplicate_detection.calibration
     print(
-        f"protocol v1: positives min {cal.positives_min} (n={cal.positives_n}), negatives max "
-        f"{cal.negatives_max} (n={cal.negatives_n}), same-session max "
-        f"{cal.same_session_negatives_max} (n={cal.same_session_negatives_n})"
+        f"protocol v{protocol.protocol_version}: positives min {cal.positives_min} "
+        f"(n={cal.positives_n}), negatives max {cal.negatives_max} (n={cal.negatives_n}), "
+        f"same-session takes min {cal.same_session_takes_min} (n={cal.same_session_takes_n})"
     )
 
 
