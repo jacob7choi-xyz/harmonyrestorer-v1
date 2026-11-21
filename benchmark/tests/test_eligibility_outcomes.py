@@ -17,7 +17,7 @@ from benchmark.eligibility_outcomes import (
     recording_frame_reasons,
     unscoreable_metrics,
 )
-from benchmark.framing import frame
+from benchmark.framing import FramedWaveform, frame
 from benchmark.protocol import Protocol, load_protocol
 
 DIGEST = "c" * 64
@@ -114,6 +114,18 @@ class TestFrameVerdicts:
         assert verdicts[2].unscoreable_by == ("si_snr",)
         assert verdicts[2].rms_dbfs == pytest.approx(-20.0)
         assert verdicts[3].rms_dbfs == -np.inf
+
+    def test_floors_from_another_recording_are_refused(self, protocol: Protocol) -> None:
+        """Floors measured on three frames, paired with a two-frame recording, would leave a
+        floor row unused; the mismatch is refused instead."""
+
+        def framed_from(samples: npt.NDArray[np.float64]) -> FramedWaveform:
+            samples.flags.writeable = False
+            return frame(CanonicalWaveform(samples, DIGEST), protocol.framing)
+
+        two, three = framed_from(music(64000)), framed_from(music(96000))
+        with pytest.raises(ValueError, match="floors cover"):
+            frame_verdicts(two, frame_floors(three, protocol.eligibility), protocol.metrics)
 
     def test_a_quiet_frame_that_metrics_accept_is_below_the_floor_only(
         self, protocol: Protocol

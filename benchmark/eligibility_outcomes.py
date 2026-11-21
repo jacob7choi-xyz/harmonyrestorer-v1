@@ -136,7 +136,13 @@ def frame_verdicts(
 
     Returns:
         One verdict per frame, with both frame checks evaluated for each.
+
+    Raises:
+        ValueError: If the floors were not measured on the same number of frames.
     """
+    measured = (len(floors.above_rms_floor), len(floors.rms_dbfs))
+    if measured != (len(framed.frames),) * 2:
+        raise ValueError(f"floors cover {measured} frames, the recording has {len(framed.frames)}")
     verdicts = []
     for index, row in enumerate(framed.frames):
         reasons = []
