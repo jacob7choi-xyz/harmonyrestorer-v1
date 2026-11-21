@@ -494,6 +494,41 @@ _RECORDING_WITHOUT_FRAMES = "evaluated_in_the_walk_before_admission_rejects"
 _DEGENERATE_SCOPE = "candidate_features_only"
 _TIMEOUT_ABORT = "WORKER_TIMEOUT"
 _WORKER_TIMEOUT = "harness_setting_exceeding_it_aborts"
+# Fields read by the selection walk, the duplicate screen, and the eligibility floors whose
+# JSON type the loader must fix, because _build checks only key names. Each tuple names
+# the attributes of one section that must be exactly that type.
+_MFCC_INT_FIELDS = (
+    "sample_rate",
+    "n_mfcc",
+    "hop_length",
+    "alignment_stride_frames",
+    "min_overlap_frames",
+    "n_fft",
+    "win_length",
+    "n_mels",
+    "dct_type",
+    "zscore_ddof",
+)
+_MFCC_FLOAT_FIELDS = (
+    "alignment_search_s",
+    "power",
+    "fmin",
+    "fmax",
+    "db_ref",
+    "db_amin",
+    "db_top_db",
+    "lifter",
+)
+_MFCC_BOOL_FIELDS = ("center", "htk")
+_CALIBRATION_INT_FIELDS = ("positives_n", "negatives_n", "same_session_takes_n")
+_CALIBRATION_FLOAT_FIELDS = ("positives_min", "negatives_max", "same_session_takes_min")
+_FRAMING_INT_FIELDS = (
+    "frame_duration_s",
+    "frame_samples",
+    "hop_samples",
+    "first_frame_start_sample",
+)
+_DECODE_INT_FIELDS = ("max_source_bytes", "max_identity_stream_bytes")
 
 # A positive paired effect must favour OpGAN for every metric, so the effect
 # expression follows from the metric's direction instead of being chosen per metric.
@@ -2703,6 +2738,53 @@ def _validate_gates(gates: PublicationGates) -> None:
         )
 
 
+def _typed_fields(protocol: Protocol) -> list[tuple[str, object, type]]:
+    """Each numeric field the walk, the screen, or the eligibility floors read, with its type."""
+    sel, dd = protocol.selection, protocol.duplicate_detection
+    decode = protocol.canonicalisation.decode
+    fields: list[tuple[str, object, type]] = [
+        ("selection.seed", sel.seed, int),
+        ("selection.acquisition_retries", sel.acquisition_retries, int),
+        ("eligibility.recording_rms_dbfs_min", protocol.eligibility.recording_rms_dbfs_min, float),
+        ("eligibility.frame_rms_dbfs_min", protocol.eligibility.frame_rms_dbfs_min, float),
+        ("duplicate_detection.flag_threshold", dd.flag_threshold, float),
+        (
+            "canonicalisation.resample.target_sample_rate",
+            protocol.canonicalisation.resample.target_sample_rate,
+            int,
+        ),
+    ]
+    fields += [(f"selection.partitions.{n}", c, int) for n, c in sel.partitions.items()]
+    fields += [("selection.permanent_failure_codes", c, int) for c in sel.permanent_failure_codes]
+    for section, value, names, kind in (
+        ("duplicate_detection.mfcc", dd.mfcc, _MFCC_INT_FIELDS, int),
+        ("duplicate_detection.mfcc", dd.mfcc, _MFCC_FLOAT_FIELDS, float),
+        ("duplicate_detection.mfcc", dd.mfcc, _MFCC_BOOL_FIELDS, bool),
+        ("duplicate_detection.calibration", dd.calibration, _CALIBRATION_INT_FIELDS, int),
+        ("duplicate_detection.calibration", dd.calibration, _CALIBRATION_FLOAT_FIELDS, float),
+        ("framing", protocol.framing, _FRAMING_INT_FIELDS, int),
+        ("canonicalisation.decode", decode, _DECODE_INT_FIELDS, int),
+    ):
+        fields += [(f"{section}.{name}", getattr(value, name), kind) for name in names]
+    return fields
+
+
+def _validate_numeric_types(protocol: Protocol) -> None:
+    """Each listed field must be exactly its type, so JSON cannot change the arithmetic.
+
+    type() rather than isinstance(), because isinstance(True, int) is true: a seed of true
+    would walk as seed 1, and a minimum overlap of true would score a one-frame overlap.
+    A float where an int is meant changes integer arithmetic or fails late, and an int
+    where a float is meant is refused too, so each field has one accepted spelling.
+    """
+    for name, value, kind in _typed_fields(protocol):
+        if type(value) is not kind:
+            raise ProtocolSchemaError(
+                f"{name} holds the wrong JSON type: must be {kind.__name__}, got {value!r} of "
+                f"type {type(value).__name__}; the loader does not convert types"
+            )
+
+
 def _validate(protocol: Protocol) -> None:
     """Run every section validator against the parsed protocol."""
     if protocol.protocol_version != SUPPORTED_PROTOCOL_VERSION:
@@ -2710,6 +2792,7 @@ def _validate(protocol: Protocol) -> None:
             f"unsupported protocol_version {protocol.protocol_version}; this module implements "
             f"v{SUPPORTED_PROTOCOL_VERSION}"
         )
+    _validate_numeric_types(protocol)
     _validate_amends(protocol.amends)
     _validate_environment(protocol.environment)
     _validate_canonicalisation(protocol.canonicalisation)

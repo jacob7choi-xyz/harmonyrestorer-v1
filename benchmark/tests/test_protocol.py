@@ -2744,3 +2744,57 @@ class TestRulesV10LeftOpen:
         path = variant(tmp_path, lambda d: d[section].update({field: "decided_later"}))
         with pytest.raises(ProtocolValueError, match=message):
             _load_from_path(path)
+
+
+def _set_path(data: dict[str, Any], dotted: str, value: object) -> None:
+    """Set the value at a dotted path in a parsed protocol, for a typed-field variant."""
+    *parents, leaf = dotted.split(".")
+    for key in parents:
+        data = data[key]
+    data[leaf] = value
+
+
+class TestNumericFieldsHaveOneType:
+    """The loader checks key names only, so a field's JSON type is checked on its own."""
+
+    @pytest.mark.parametrize(
+        ("dotted", "value"),
+        [
+            pytest.param("selection.seed", True, id="seed_true_walks_as_seed_1"),
+            pytest.param("selection.seed", 20260726.0, id="seed_float_fails_late"),
+            pytest.param("selection.partitions.test", 30.0, id="partition_float"),
+            pytest.param("selection.partitions.demo", True, id="partition_true_is_one_slot"),
+            pytest.param("selection.acquisition_retries", True, id="retries_true_is_one"),
+            pytest.param("selection.permanent_failure_codes", [401.0], id="status_float"),
+            pytest.param("eligibility.recording_rms_dbfs_min", False, id="rms_floor_false_is_0"),
+            pytest.param("eligibility.frame_rms_dbfs_min", -45, id="frame_floor_int"),
+            pytest.param("duplicate_detection.flag_threshold", True, id="threshold_true"),
+            pytest.param(
+                "duplicate_detection.mfcc.min_overlap_frames", True, id="overlap_true_is_one"
+            ),
+            pytest.param("duplicate_detection.mfcc.min_overlap_frames", 100.5, id="overlap_float"),
+            pytest.param(
+                "duplicate_detection.mfcc.alignment_search_s", 5, id="search_int_not_float"
+            ),
+            pytest.param("duplicate_detection.mfcc.center", 1, id="center_int_not_bool"),
+            pytest.param(
+                "duplicate_detection.calibration.positives_n", 435.0, id="calibration_n_float"
+            ),
+            pytest.param(
+                "duplicate_detection.calibration.negatives_max", 0, id="calibration_bound_int"
+            ),
+            pytest.param("framing.frame_samples", 32000.0, id="frame_samples_float"),
+            pytest.param(
+                "canonicalisation.decode.max_source_bytes", 536870912.0, id="byte_bound_float"
+            ),
+            pytest.param(
+                "canonicalisation.resample.target_sample_rate", 16000.0, id="target_rate_float"
+            ),
+        ],
+    )
+    def test_a_field_of_another_type_is_refused(
+        self, tmp_path: Path, dotted: str, value: object
+    ) -> None:
+        path = variant(tmp_path, lambda d: _set_path(d, dotted, value))
+        with pytest.raises(ProtocolSchemaError, match="holds the wrong JSON type"):
+            _load_from_path(path)
