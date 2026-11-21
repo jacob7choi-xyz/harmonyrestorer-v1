@@ -84,6 +84,12 @@ SUPERSEDED_ARTIFACTS = {
     "docs/benchmark-protocol-v6.md": (
         "a096a77852bcd7bd3c2dc553421c1b301e1fff3063942304168c980188ca5709"  # pragma: allowlist secret
     ),
+    "benchmark/protocols/v7.json": (
+        "872e44cd525f3f627ad8681116a2ffd21f7abff068d0426cefcf861b993563d2"  # pragma: allowlist secret
+    ),
+    "docs/benchmark-protocol-v7.md": (
+        "acc707badbcc4c14c02025986f9ae88db17a6db1c42f36b210f6e1ab3bb91453"  # pragma: allowlist secret
+    ),
 }
 
 
@@ -110,7 +116,7 @@ class TestRealProtocol:
     """The checked-in config must load and describe itself accurately."""
 
     def test_it_loads(self) -> None:
-        assert load_protocol().protocol_version == 7
+        assert load_protocol().protocol_version == 8
 
     def test_digest_is_of_the_exact_file_bytes(self) -> None:
         """The provenance claim is 'these bytes governed this run', so the digest
@@ -234,8 +240,8 @@ class TestVersionCommitments:
     """Protocol promises are enforced at load, so weakening one requires a version bump."""
 
     def test_unsupported_version(self, tmp_path: Path) -> None:
-        path = variant(tmp_path, lambda d: d.update({"protocol_version": 8}))
-        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 8"):
+        path = variant(tmp_path, lambda d: d.update({"protocol_version": 9}))
+        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 9"):
             _load_from_path(path)
 
     def test_composite_score_cannot_be_enabled(self, tmp_path: Path) -> None:
@@ -518,7 +524,7 @@ class TestOnlyOneApprovedConfiguration:
             d["aggregation"]["bootstrap"]["iterations"] = 50_000
 
         parsed = _load_from_path(variant(tmp_path, alternate))
-        assert parsed.protocol_version == 7
+        assert parsed.protocol_version == 8
         assert parsed.selection.seed == 999
 
         approved = load_protocol()
@@ -533,9 +539,9 @@ class TestAmendmentChain:
 
     def test_chain_names_the_immediately_superseded_artifacts(self) -> None:
         amends = load_protocol().amends
-        assert amends.protocol_version == 6
-        assert amends.protocol_path == "benchmark/protocols/v6.json"
-        assert amends.document_path == "docs/benchmark-protocol-v6.md"
+        assert amends.protocol_version == 7
+        assert amends.protocol_path == "benchmark/protocols/v7.json"
+        assert amends.document_path == "docs/benchmark-protocol-v7.md"
 
     def test_recorded_digests_match_the_archived_files(self) -> None:
         amends = load_protocol().amends
@@ -575,14 +581,14 @@ class TestAmendmentChain:
 
     def test_the_predecessor_must_be_the_immediately_previous_version(self, tmp_path: Path) -> None:
         path = variant(tmp_path, lambda d: d["amends"].update({"protocol_version": 0}))
-        with pytest.raises(ProtocolValueError, match=r"amends\.protocol_version must be 6"):
+        with pytest.raises(ProtocolValueError, match=r"amends\.protocol_version must be 7"):
             _load_from_path(path)
 
     def test_the_superseded_config_is_not_loadable_as_current(self) -> None:
         """Proof the version bump is real rather than cosmetic: the archived v1 file
         still parses, and the current validator refuses it."""
-        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 6"):
-            _load_from_path(REPO_ROOT / "benchmark" / "protocols" / "v6.json")
+        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 7"):
+            _load_from_path(REPO_ROOT / "benchmark" / "protocols" / "v7.json")
 
 
 class TestFrozenTransform:
@@ -2416,3 +2422,80 @@ class TestRulesV6LeftOpen:
         path = variant(tmp_path, lambda d: d["system_execution"].update({field: "ABC"}))
         with pytest.raises(ProtocolValueError, match=rf"system_execution\.{field} must be 64"):
             _load_from_path(path)
+
+
+class TestRulesV7LeftOpen:
+    """The runner duties v8 defines: workers, exit mapping, and the capacity measurement."""
+
+    def test_the_real_protocol_states_each_rule(self) -> None:
+        runner = load_protocol().runner
+        assert runner.model_digest_mismatch_abort == "ENVIRONMENT_MISMATCH"
+        assert runner.capacity_abort == "ENVIRONMENT_CAPACITY_FAILURE"
+        assert runner.other_worker_death_abort == "INTERNAL_CANONICALISATION_ERROR"
+        assert runner.capacity_fixture.measured_peak_footprint_bytes == 4883025856
+        assert runner.capacity_fixture.memory_metric == "lifetime_max_phys_footprint"
+
+    def test_every_runner_abort_is_an_abort_code(self) -> None:
+        """A worker failure must never be representable as a source verdict."""
+        protocol = load_protocol()
+        runner = protocol.runner
+        for code in (
+            runner.model_digest_mismatch_abort,
+            runner.capacity_abort,
+            runner.other_worker_death_abort,
+        ):
+            assert code in protocol.source_outcomes.abort_reasons
+            assert code not in protocol.source_outcomes.ineligible_reasons
+
+    @pytest.mark.parametrize(
+        "field",
+        [
+            "worker",
+            "model_digest_mismatch_abort",
+            "capacity_exit",
+            "capacity_abort",
+            "other_worker_death_abort",
+            "peak_memory_per_source",
+        ],
+    )
+    def test_each_runner_rule_is_closed(self, tmp_path: Path, field: str) -> None:
+        path = variant(tmp_path, lambda d: d["runner"].update({field: "SOURCE_DECODE_REJECTED"}))
+        with pytest.raises(ProtocolValueError, match=rf"runner\.{field} must be"):
+            _load_from_path(path)
+
+    @pytest.mark.parametrize(
+        ("change", "message"),
+        [
+            ({"subtype": "PCM_8"}, "not an admitted source format"),
+            ({"channels": 3}, "outside the admitted channel range"),
+            ({"sample_rate": 15999}, "outside the admitted domain"),
+            ({"frames": 0}, "outside the admitted domain"),
+            ({"frames": 201326593}, "decodes above max_decoded_bytes"),
+            ({"sample_rate": 55000}, "longer than max_source_duration_s"),
+            ({"generator": "noise"}, "generator must be"),
+            ({"measured_peak_footprint_bytes": 6442450945}, "refutes the budget"),
+            (
+                {"measured_peak_footprint_bytes": 0},
+                "measured_peak_footprint_bytes must be positive",
+            ),
+            ({"memory_metric": "ru_maxrss"}, "memory_metric must be"),
+            ({"measured_on": "linux_x86_64"}, "must be the reference platform"),
+            ({"measured_min_peak_footprint_bytes": 4883025857}, "at most the largest"),
+            ({"measured_min_peak_footprint_bytes": 0}, "smallest peak must be positive"),
+            ({"measured_runs": 1}, "measured_runs must be at least 2"),
+        ],
+    )
+    def test_the_capacity_fixture_must_be_admitted_and_within_budget(
+        self, tmp_path: Path, change: dict[str, Any], message: str
+    ) -> None:
+        path = variant(tmp_path, lambda d: d["runner"]["capacity_fixture"].update(change))
+        with pytest.raises(ProtocolValueError, match=message):
+            _load_from_path(path)
+
+    def test_the_fixture_sits_exactly_at_the_decoded_bound(self) -> None:
+        """Mono at max_decoded_bytes, the shape that maximises the projection."""
+        protocol = load_protocol()
+        fixture = protocol.runner.capacity_fixture
+
+        assert fixture.channels == 1
+        assert fixture.frames * 8 == protocol.canonicalisation.decode.max_decoded_bytes

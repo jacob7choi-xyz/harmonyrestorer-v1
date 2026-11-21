@@ -1,20 +1,22 @@
-# Benchmark protocol v7
+# Benchmark protocol v8
 
 Frozen before candidate identities are selected, downloaded for evaluation,
 auditioned, or scored. The source collection has already been inspected in general
 terms; what has not happened is any decision about which recordings enter the
 benchmark.
 
-> **Note:** v7 amends v6, which amended v5, which amended v4, which amended v3, which
-> amended v2, which amended v1, all before any evaluation ran. The operational values
-> live in `benchmark/protocols/v7.json`, which is normative; this document explains them and
+> **Note:** v8 amends v7, which amended v6, which amended v5, which amended v4, which
+> amended v3, which amended v2, which amended v1, all before any evaluation ran. The
+> operational values live in `benchmark/protocols/v8.json`, which is normative; this
+> document explains them and
 > its numbers are illustrative. Superseded versions are preserved unmodified, as
 > [benchmark-protocol-v1.md](benchmark-protocol-v1.md),
 > [benchmark-protocol-v2.md](benchmark-protocol-v2.md),
 > [benchmark-protocol-v3.md](benchmark-protocol-v3.md),
 > [benchmark-protocol-v4.md](benchmark-protocol-v4.md),
-> [benchmark-protocol-v5.md](benchmark-protocol-v5.md), and
-> [benchmark-protocol-v6.md](benchmark-protocol-v6.md) with their configs, so an
+> [benchmark-protocol-v5.md](benchmark-protocol-v5.md),
+> [benchmark-protocol-v6.md](benchmark-protocol-v6.md), and
+> [benchmark-protocol-v7.md](benchmark-protocol-v7.md) with their configs, so an
 > artifact recording an older `protocol_version` stays interpretable. See
 > [Amendment](#amendment) for what changed and why.
 
@@ -358,8 +360,9 @@ load; raising it multiplies the requirement and is a protocol change.
 > exact execution path, and recovering an operating-system or container out-of-memory
 > kill from the worker's exit status are obligations on the implementation. A kill of
 > that kind terminates the process before any structured record can be written, so
-> `except MemoryError` cannot be the only path to `ENVIRONMENT_CAPACITY_FAILURE`. None
-> of this is enforced today and the protocol does not claim it is.
+> `except MemoryError` cannot be the only path to `ENVIRONMENT_CAPACITY_FAILURE`. v8
+> defines the worker model and the exit mapping and records the peak measurement (see
+> [Runner](#runner)); no runner exists yet, so none of it is enforced today.
 
 A source that sits inside every frozen bound but that this machine cannot allocate for
 is a capacity failure, not an ineligible source. It aborts under
@@ -892,6 +895,55 @@ scipy 1.17.1, audio-separator 0.44.2, and torch 2.14.1. `uv.lock` resolves torch
 2.14.1 on macOS and to the CPU build 2.14.1+cpu elsewhere, and the check accepts exactly
 those two builds; runs execute only on the reference platform, where the build is 2.14.1.
 
+## Runner
+
+Frozen in `v8.json` under `runner`. These are duties on the code that runs sources, which
+the loader cannot carry out; no runner exists yet.
+
+- **One child process per source, one at a time.** A worker that dies cannot take a
+  record with it, so the parent decides what its death means.
+- **A model file that does not match its frozen digest** aborts with
+  `ENVIRONMENT_MISMATCH`.
+- **A worker that catches `MemoryError` and reports it, or that is killed by `SIGKILL`,**
+  aborts with `ENVIRONMENT_CAPACITY_FAILURE`. The `SIGKILL` rule assumes the system kills
+  an out-of-memory worker with `SIGKILL`: a real out-of-memory kill was not triggered
+  before v8 was frozen, and only a `SIGKILL` a process sent itself was observed. A manual
+  `kill -9` is recorded the same way. Either way the run aborts and no source receives a
+  verdict, so only the abort's label depends on it.
+- **Any other death of the worker,** such as a segmentation fault or an exit without a
+  record, aborts with `INTERNAL_CANONICALISATION_ERROR` naming the source. It is never
+  recorded as a verdict on that source: a crash the runner cannot attribute is not
+  charged to the recording.
+- **Each worker's peak memory footprint is recorded per source.**
+
+On the reference platform, before v8 was frozen, a worker's failures reached its parent
+as follows: `SIGKILL` as return code -9, a segmentation fault as -11, and an uncaught
+`MemoryError` as status 1, the same as any other uncaught exception. That last is why the
+worker has to catch `MemoryError` and report it.
+
+**The capacity fixture.** The admitted source that maximises the projection is mono, so
+the downmix is a full copy of the decoded array, decoded at `max_decoded_bytes`, and long
+enough for the 3600 s cap to leave its rate at 55,926 Hz: 201,326,592 frames of 24-bit
+FLAC carrying two tones, generated in code. The metric is the lifetime peak memory
+footprint a fresh process reports through `proc_pid_rusage` after acquisition,
+inspection, decode, and canonicalisation; it agreed with `/usr/bin/time -l` to within
+about 16 KB in a check at 1 GB and 3 GB. Over five runs on `darwin_arm64` the footprint
+was between 4,881,993,664 and 4,883,025,856 bytes. The largest is 75.8 percent of the
+6 GiB budget and about 963 MiB above that source's projection, within the 1024 MiB
+allowance v5 set for the interpreter and temporaries. It is an observation, not an upper
+bound. The peak resident set size was not used: it does not count memory the system has
+compressed, and over the same five runs it varied between 3,627,614,208 and
+4,944,855,040 bytes. The fixture's FLAC is 191,367,147 bytes. A near-incompressible mono
+source of 510,537,464 bytes, close to the source byte bound, decoded to 1.36 GB; it was
+measured once and by resident set only, at 4,517,314,560 bytes. A source at both bounds
+at once was not measured.
+
+> **Note:** the budget is measured, not imposed. On the reference platform `setrlimit`
+> refused `RLIMIT_AS` at 1, 6, 8, and 64 GiB ("current limit exceeds maximum limit"), so
+> a worker's memory cannot be capped at the budget through it. The runner therefore
+> records each worker's peak footprint rather than capping it, and the measurement holds
+> for this platform only.
+
 ## Metric conditioning
 
 Frozen before results exist, because "alignment fix" is otherwise indistinguishable
@@ -1209,6 +1261,16 @@ defect discovered after results exist invalidates those results rather than
 retroactively changing the rules that produced them. Superseded versions stay in the
 tree rather than being replaced, and each version names its predecessor by digest;
 the loader recomputes those digests, so the chain is checked rather than asserted.
+
+### v7 to v8
+
+v4 to v7 placed four duties on the runner without defining them: which abort a model
+digest mismatch records, how a worker's exit maps to an abort, which fixture the peak
+memory measurement uses, and what that measurement showed. v8 defines all four (see
+[Runner](#runner)) and replaces the resource bound note's "not yet measured" with the
+measurement. The measurements used synthetic sources on the reference platform only. No
+candidate universe had been enumerated, and no candidate audio had been acquired or
+inspected.
 
 ### v6 to v7
 

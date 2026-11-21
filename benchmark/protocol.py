@@ -1,6 +1,6 @@
 """Immutable, validated access to the frozen benchmark protocol.
 
-Two things share the authority here, with different jobs. `benchmark/protocols/v7.json`
+Two things share the authority here, with different jobs. `benchmark/protocols/v8.json`
 holds the frozen values a run executes against; its digest is what establishes *which*
 values those are. This module defines what counts as a *well-formed* protocol, which is
 why the gate set, the supported version, the transform vocabulary, and the
@@ -64,9 +64,9 @@ logger = logging.getLogger(__name__)
 # Private so that production code has no supported affordance for reading the file
 # itself. `load_protocol` is the way in.
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_PROTOCOL_PATH = _REPO_ROOT / "benchmark" / "protocols" / "v7.json"
+_PROTOCOL_PATH = _REPO_ROOT / "benchmark" / "protocols" / "v8.json"
 
-SUPPORTED_PROTOCOL_VERSION = 7
+SUPPORTED_PROTOCOL_VERSION = 8
 
 # Which protocol v2 supersedes, and the artifacts it supersedes, as historical facts
 # rather than as arithmetic. `SUPPORTED_PROTOCOL_VERSION - 1` would encode a universal
@@ -74,9 +74,9 @@ SUPPORTED_PROTOCOL_VERSION = 7
 # governance model promises. The paths are frozen here so the config cannot redirect
 # the amendment chain at another file whose digest it also records, and so a relative
 # path out of the tree is not reachable at all.
-_PREDECESSOR_VERSION = 6
-_PREDECESSOR_PROTOCOL_PATH = "benchmark/protocols/v6.json"
-_PREDECESSOR_DOCUMENT_PATH = "docs/benchmark-protocol-v6.md"
+_PREDECESSOR_VERSION = 7
+_PREDECESSOR_PROTOCOL_PATH = "benchmark/protocols/v7.json"
+_PREDECESSOR_DOCUMENT_PATH = "docs/benchmark-protocol-v7.md"
 
 # Closed vocabularies for the frozen LSD transform. Each admits exactly one value. The
 # fields exist so an independent implementer reads each convention from the
@@ -421,6 +421,14 @@ _ENGINES = "shipped_backend_engines_one_denoise_call_per_frame"
 _INPUT_FORMAT = "wav_float_16000_mono"
 _OUTPUT_READ = "soundfile_float64"
 _MODEL_IDENTITY_CHECK = "runner_must_compare_each_digest_with_the_file_the_engine_loads"
+_RUNNER_WORKER = "one_child_process_per_source_one_at_a_time"
+_CAPACITY_EXIT = "worker_reports_caught_memoryerror_or_worker_killed_by_sigkill"
+_MODEL_DIGEST_MISMATCH_ABORT = "ENVIRONMENT_MISMATCH"
+_CAPACITY_ABORT = "ENVIRONMENT_CAPACITY_FAILURE"
+_OTHER_WORKER_DEATH_ABORT = "INTERNAL_CANONICALISATION_ERROR"
+_CAPACITY_GENERATOR = "tones_0_3_at_440_hz_plus_0_2_at_1234_5_hz"
+_PEAK_MEMORY_PER_SOURCE = "lifetime_max_phys_footprint_recorded"
+_MEMORY_METRIC = "lifetime_max_phys_footprint"
 _GOLDEN_RUN_CHECK = "before_any_candidate_after_golden_fixtures_aborts_golden_fixture_failure"
 
 # A positive paired effect must favour OpGAN for every metric, so the effect
@@ -464,6 +472,7 @@ _ROOT_KEYS = frozenset(
         "duplicate_detection",
         "conditioning",
         "system_execution",
+        "runner",
         "metrics",
         "scoring",
         "reporting",
@@ -720,6 +729,39 @@ class SystemExecution:
     uvr_mdx_model_data_sha256: str
     model_identity_check: str
     model_identity_note: str
+
+
+@dataclass(frozen=True)
+class CapacityFixture:
+    """The admitted source the peak memory measurement uses, and the peak it measured."""
+
+    container: str
+    subtype: str
+    sample_rate: int
+    channels: int
+    frames: int
+    generator: str
+    memory_metric: str
+    measured_peak_footprint_bytes: int
+    measured_min_peak_footprint_bytes: int
+    measured_runs: int
+    measured_on: str
+
+
+@dataclass(frozen=True)
+class Runner:
+    """Duties on the code that runs sources: workers, exit mapping, and capacity."""
+
+    note: str
+    worker: str
+    model_digest_mismatch_abort: str
+    capacity_exit: str
+    capacity_abort: str
+    other_worker_death_abort: str
+    worker_exit_note: str
+    capacity_fixture: CapacityFixture
+    capacity_note: str
+    peak_memory_per_source: str
 
 
 @dataclass(frozen=True)
@@ -1126,6 +1168,7 @@ class Protocol:
     duplicate_detection: DuplicateDetection
     conditioning: Conditioning
     system_execution: SystemExecution
+    runner: Runner
     metrics: Metrics
     scoring: Scoring
     reporting: Reporting
@@ -1343,6 +1386,14 @@ def _parse(data: Mapping[str, Any], digest: str, source: Path) -> Protocol:
         ),
         duplicate_detection=_parse_duplicate_detection(data["duplicate_detection"]),
         conditioning=_build(Conditioning, data["conditioning"], "conditioning"),
+        runner=_build(
+            Runner,
+            data["runner"],
+            "runner",
+            capacity_fixture=_build(
+                CapacityFixture, data["runner"]["capacity_fixture"], "runner.capacity_fixture"
+            ),
+        ),
         system_execution=_build(
             SystemExecution,
             data["system_execution"],
@@ -1885,6 +1936,66 @@ def _validate_system_execution(se: SystemExecution) -> None:
         raise ProtocolValueError("system_execution.torch_versions must not be empty")
 
 
+def _validate_runner(runner: Runner, canon: Canonicalisation, reference_platform: str) -> None:
+    """The worker model and the exit-to-abort mapping are closed; the fixture is admitted."""
+    for name, stated, frozen in (
+        ("worker", runner.worker, _RUNNER_WORKER),
+        (
+            "model_digest_mismatch_abort",
+            runner.model_digest_mismatch_abort,
+            _MODEL_DIGEST_MISMATCH_ABORT,
+        ),
+        ("capacity_exit", runner.capacity_exit, _CAPACITY_EXIT),
+        ("capacity_abort", runner.capacity_abort, _CAPACITY_ABORT),
+        ("other_worker_death_abort", runner.other_worker_death_abort, _OTHER_WORKER_DEATH_ABORT),
+        ("peak_memory_per_source", runner.peak_memory_per_source, _PEAK_MEMORY_PER_SOURCE),
+    ):
+        if stated != frozen:
+            raise ProtocolValueError(
+                f"runner.{name} must be {frozen!r}, got {stated!r}; which abort a failure "
+                "records decides whether a source is ever charged with it"
+            )
+    _validate_capacity_fixture(runner.capacity_fixture, canon, reference_platform)
+
+
+def _validate_capacity_fixture(
+    fixture: CapacityFixture, canon: Canonicalisation, reference_platform: str
+) -> None:
+    """The fixture must be a source the protocol admits, measured within the budget."""
+    decode = canon.decode
+    at = "runner.capacity_fixture"
+    if (fixture.container, fixture.subtype) not in decode.source_formats:
+        raise ProtocolValueError(f"{at} format is not an admitted source format")
+    if not canon.downmix.channels_min <= fixture.channels <= canon.downmix.channels_max:
+        raise ProtocolValueError(f"{at}.channels is outside the admitted channel range")
+    if fixture.sample_rate < canon.source_validation.min_sample_rate or fixture.frames <= 0:
+        raise ProtocolValueError(f"{at} rate or frames is outside the admitted domain")
+    if fixture.frames * fixture.channels * 8 > decode.max_decoded_bytes:
+        raise ProtocolValueError(f"{at} decodes above max_decoded_bytes")
+    if fixture.frames > decode.max_source_duration_s * fixture.sample_rate:
+        raise ProtocolValueError(f"{at} is longer than max_source_duration_s")
+    if fixture.generator != _CAPACITY_GENERATOR:
+        raise ProtocolValueError(f"{at}.generator must be {_CAPACITY_GENERATOR!r}")
+    if fixture.memory_metric != _MEMORY_METRIC:
+        raise ProtocolValueError(
+            f"{at}.memory_metric must be {_MEMORY_METRIC!r}; the resident set varied by more "
+            "than a gigabyte between runs on one input"
+        )
+    if not 0 < fixture.measured_peak_footprint_bytes <= decode.max_projected_live_bytes:
+        raise ProtocolValueError(
+            f"{at}.measured_peak_footprint_bytes must be positive and within "
+            "max_projected_live_bytes; a measured peak above the budget refutes the budget"
+        )
+    if not 0 < fixture.measured_min_peak_footprint_bytes <= fixture.measured_peak_footprint_bytes:
+        raise ProtocolValueError(f"{at} smallest peak must be positive and at most the largest")
+    if fixture.measured_runs < 2:
+        raise ProtocolValueError(
+            f"{at}.measured_runs must be at least 2; the peak varies between runs on one input"
+        )
+    if fixture.measured_on != reference_platform:
+        raise ProtocolValueError(f"{at}.measured_on must be the reference platform")
+
+
 def _validate_selection(sel: Selection) -> None:
     """Every partition must claim at least one slot and the walk must terminate."""
     if sel.seed < 0:
@@ -2369,6 +2480,11 @@ def _validate(protocol: Protocol) -> None:
     _validate_duplicate_detection(protocol.duplicate_detection)
     _validate_conditioning(protocol.conditioning)
     _validate_system_execution(protocol.system_execution)
+    _validate_runner(
+        protocol.runner,
+        protocol.canonicalisation,
+        protocol.golden_fixtures.reference_platform,
+    )
     _verify_execution_environment(protocol)
     _validate_metrics(protocol.metrics)
     _validate_scoring(protocol.scoring)
