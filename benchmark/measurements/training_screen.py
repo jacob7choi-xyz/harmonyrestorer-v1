@@ -153,14 +153,18 @@ def transformed(
     if name == "gain_minus_6_db":
         scaled: npt.NDArray[np.float64] = waveform * 10.0 ** (GAIN_DB / 20.0)
         return scaled
+    down = _resampled(waveform, rate, ROUND_TRIP_RATE, protocol)
+    return _resampled(down, ROUND_TRIP_RATE, rate, protocol)
+
+
+def _resampled(
+    waveform: npt.NDArray[np.float64], orig_sr: int, target_sr: int, protocol: Protocol
+) -> npt.NDArray[np.float64]:
+    """Resample with the frozen resampler's settings, the ones canonicalisation uses."""
     resample = protocol.canonicalisation.resample
-    down = librosa.resample(
-        waveform, orig_sr=rate, target_sr=ROUND_TRIP_RATE, res_type=resample.res_type,
-        fix=resample.fix, scale=resample.scale, axis=resample.axis,
-    )  # fmt: skip
     return np.asarray(
         librosa.resample(
-            down, orig_sr=ROUND_TRIP_RATE, target_sr=rate, res_type=resample.res_type,
+            waveform, orig_sr=orig_sr, target_sr=target_sr, res_type=resample.res_type,
             fix=resample.fix, scale=resample.scale, axis=resample.axis,
         ),
         dtype=np.float64,
