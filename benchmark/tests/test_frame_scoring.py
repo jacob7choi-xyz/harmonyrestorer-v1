@@ -60,7 +60,7 @@ class TestScoreOutput:
     def test_a_short_output_within_tolerance_is_scored_on_the_common_length(
         self, protocol: Protocol
     ) -> None:
-        """UVR returned 130 samples fewer on every 32,000-sample frame measured before v7."""
+        """UVR returned 130 samples fewer on each of the 23 degraded frames measured before v7."""
         reference = reference_frame(music(), 1.0)
         estimate = reference[:-130]
 

@@ -19,9 +19,10 @@ ineligible for every metric when any primary metric cannot score it as a clean r
 Each metric's refusals are defined in `benchmark.metrics`, and the checks it applies to an
 estimate (one-dimensional, non-empty, finite, equal length) are ones the reference itself
 passes or fails identically. Calling each primary metric with the frame as both reference
-and estimate therefore raises exactly when the frame is not a valid reference, and the
-refusal rules stay in one place rather than being restated here. The frame checked is the
-unscaled canonical frame, as v7 keeps eligibility on the unscaled waveform.
+and estimate therefore raises when the frame as cut is not a valid reference, as the
+checks in `benchmark.metrics` stand, and the refusal rules stay in one place rather than
+being restated here. The frame checked is the unscaled canonical frame, as v7 keeps
+eligibility on the unscaled waveform.
 
 This decides eligibility for the frame as cut, and no more. The reference that is later
 scored is that frame times the training-level gain, possibly truncated by conditioning, and
