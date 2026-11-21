@@ -1,19 +1,20 @@
-# Benchmark protocol v6
+# Benchmark protocol v7
 
 Frozen before candidate identities are selected, downloaded for evaluation,
 auditioned, or scored. The source collection has already been inspected in general
 terms; what has not happened is any decision about which recordings enter the
 benchmark.
 
-> **Note:** v6 amends v5, which amended v4, which amended v3, which amended v2, which
-> amended v1, all before any evaluation ran. The operational values live in
-> `benchmark/protocols/v6.json`, which is normative; this document explains them and
+> **Note:** v7 amends v6, which amended v5, which amended v4, which amended v3, which
+> amended v2, which amended v1, all before any evaluation ran. The operational values
+> live in `benchmark/protocols/v7.json`, which is normative; this document explains them and
 > its numbers are illustrative. Superseded versions are preserved unmodified, as
 > [benchmark-protocol-v1.md](benchmark-protocol-v1.md),
 > [benchmark-protocol-v2.md](benchmark-protocol-v2.md),
 > [benchmark-protocol-v3.md](benchmark-protocol-v3.md),
-> [benchmark-protocol-v4.md](benchmark-protocol-v4.md), and
-> [benchmark-protocol-v5.md](benchmark-protocol-v5.md) with their configs, so an
+> [benchmark-protocol-v4.md](benchmark-protocol-v4.md),
+> [benchmark-protocol-v5.md](benchmark-protocol-v5.md), and
+> [benchmark-protocol-v6.md](benchmark-protocol-v6.md) with their configs, so an
 > artifact recording an older `protocol_version` stays interpretable. See
 > [Amendment](#amendment) for what changed and why.
 
@@ -813,35 +814,95 @@ difference as a property of the audio.
 Frames are cut only after partition assignment, so every derived artifact inherits
 its recording's partition and siblings cannot cross the boundary.
 
-Degradation is procedurally synthesized, not sampled: `tape_hiss`,
-`vinyl_crackle`, and `mains_hum` generate from a seeded `np.random.Generator` with
-no asset library. There is therefore no noise-source pool to be disjoint from, and
-a benchmark seed distinct from the training seed produces genuinely fresh
-realizations of the same generative process rather than replays.
+Degradation is procedurally synthesized, not sampled, so there is no noise-source
+pool to be disjoint from. The process is the one that generated the training pairs:
+`benchmark/degradation.py`, a port of `dataset/noise.py` at commit `d8993b2`. The
+current `dataset/noise.py` is not that process (see [v5 to v6](#v5-to-v6)). The evidence
+that the port is training's process:
 
-Frozen for the run: degradation implementation version, types, SNR distribution,
-framing and overlap, resampling behaviour, channel handling, sample rate, and
-seeds. Every generated sample carries `source_track_id`, `partition`,
-`frame_index`, `degradation_id`, and `seed`.
+- On a seeded sample of 400 unclipped training pairs with crackle and hum off, the
+  added hiss peaked at `sqrt(signal_power / snr_linear)` to float32 rounding (median
+  relative error 8.3e-8, maximum 1.7e-6), which is `d8993b2`'s unit-peak scaling
+  (`benchmark/measurements/hiss_peak.py`).
+- The training hiss's median spectral slope matched the port's: pink -1.000 against
+  -0.999, brown -1.934 against -1.936 (`benchmark/measurements/hiss_colour.py`).
+- Given the same random stream, every ported primitive and the composite were
+  bit-identical to `d8993b2` in 500 of 500 comparisons, and the parameter draws matched
+  for 200 of 200 seeds (`benchmark/measurements/d8993b2_equivalence.py`).
 
-> **Note:** v6 does not yet freeze these values, and `v6.json` has no degradation
-> section. The benchmark degradation is to reproduce the process that generated the
-> training pairs, which differs from the current `dataset/noise.py` (see
-> [v5 to v6](#v5-to-v6)). That process is to be ported and checked against the
-> training pairs first, and a later amendment freezes it before any candidate is
-> acquired. The training noise was drawn without a recorded seed, so no benchmark seed
-> can be shown to differ from it.
+Frozen in `v7.json` under `degradation`:
+
+- **Process and ranges.** Every frame always gets tape hiss (SNR uniform over 5 to 30 dB
+  as recorded, pink or brown) and a low-pass rolloff (4 to 8 kHz). Vinyl crackle, mains
+  hum, and tape saturation are each on with training's probability (0.5, 0.3, 0.4), with
+  training's ranges. The recorded SNR is nominal: training's hiss scaling made the added
+  hiss quieter than it.
+- **Seed and draws.** The run seed is 20261122. Each frame draws from its own generator,
+  seeded from the run seed, the eight 32-bit words of its recording's canonical digest,
+  and its frame index, first the parameters and then the hiss, crackle, and hum samples.
+  Training recorded no seed, so this seed cannot be shown to differ from training's; what
+  it fixes is that the benchmark's draws are reproducible.
+- **One degraded copy per frame.** More copies would multiply each frame's weight in the
+  scored population.
+- **Training level.** Training normalised each recording to a peak of 0.95 before
+  cutting frames, and crackle and hum are added at fixed amplitudes. Each frame is
+  therefore multiplied by `0.95 / peak`, where `peak` is the largest absolute sample of
+  its complete canonical waveform, before it is degraded. Systems receive the degraded
+  frame at that level, and the metrics compare their output with the canonical frame
+  times the same gain. Eligibility, the frame identifier, and the loudness floors stay
+  on the unscaled canonical waveform.
+- **Golden digest.** Frame 0 of the analytic golden fixture, degraded with seed 2 (the
+  smallest seed whose draws turn on saturation, crackle, and hum), has a frozen SHA-256
+  over its float32 samples. It is asserted on the reference platform only, as the
+  resampler fixture is. A run must recompute it after the golden fixtures and before any
+  candidate, and a mismatch aborts with `GOLDEN_FIXTURE_FAILURE`.
+
+Each degraded frame is to be recorded with its recording's logical source identifier,
+its partition, its frame index, and its seed. The record's schema belongs to the runner
+and is not frozen here.
+
+## System execution
+
+Frozen in `v7.json` under `system_execution`. Each degraded frame is written as a 16 kHz
+mono float WAV and passed to each system's shipped backend engine with one `denoise`
+call; the output WAV is read as float64. OpGAN is the checkpoint whose SHA-256
+`backend/app/config.py` pins. UVR is `UVR-DeNoise.pth` through audio-separator. Before
+any candidate, the runner must compare the digest of each file an engine loads with the
+frozen digests: the OpGAN checkpoint, the UVR model, and the two UVR parameter files. No
+runner exists yet.
+
+Before v7 was frozen, both engines were run on 23 degraded float WAV frames built from
+synthetic tones and training clean frames. Every call succeeded, both returned 16 kHz
+mono 16-bit WAV, OpGAN returned exactly as many samples as it was given, and UVR
+returned 130 fewer on every frame.
+
+> **Note:** this describes the shipped engines on training-format input, not the
+> product's full upload path. Float input bypasses the product's ffmpeg decode to 16-bit
+> PCM, and the product decodes UVR uploads at 44.1 kHz where here both engines receive
+> 16 kHz frames.
+
+> **Note:** audio-separator 0.44.2 ships no integrity hash for `UVR-DeNoise.pth`, and it
+> downloads the model's parameter files from the `main` branch of the
+> `TRvlvr/application_data` GitHub repository when it loads the model. The three UVR
+> digests were recorded on first download, on 2026-11-20, and are pinned from then on;
+> nothing upstream lets them be checked against an earlier source.
+
+The versions the systems and the degradation run on are pinned and checked at load:
+scipy 1.17.1, audio-separator 0.44.2, and torch 2.14.1. `uv.lock` resolves torch to
+2.14.1 on macOS and to the CPU build 2.14.1+cpu elsewhere, and the check accepts exactly
+those two builds; runs execute only on the reference platform, where the build is 2.14.1.
 
 ## Metric conditioning
 
 Frozen before results exist, because "alignment fix" is otherwise indistinguishable
 from shifting outputs until the metric improves.
 
-- Metrics computed at 16 kHz mono, on waveforms produced by
-  [Canonicalisation](#canonicalisation), which pins every step of getting there.
-  Metric libraries frozen: numpy 2.3.5 and soundfile 0.14.0. v6 drops the legacy
-  PESQ and STOI diagnostics, so `pesq` and `pystoi` are no longer metric libraries
-  here, and no benchmark module outside the tests imports scipy. Exact versions are
+- Metrics computed at 16 kHz mono. The reference is a frame of the waveform produced by
+  [Canonicalisation](#canonicalisation), which pins every step of getting there,
+  multiplied by the training-level gain described under [Degradation](#degradation).
+  Metric libraries frozen: numpy 2.3.5 and soundfile 0.14.0. v6 dropped the legacy
+  PESQ and STOI diagnostics, so `pesq` and `pystoi` are not metric libraries here.
+  scipy is pinned for the degradation rather than for the metrics. Exact versions are
   recorded per run
 - Clean reference and system output are compared at equal length. Where they differ
   by at most **160 samples (10 ms at 16 kHz)**, the longer is front-aligned and
@@ -854,7 +915,9 @@ exactly length-preserving: its chunking reconstructs the input sample count, and
 182 s file was verified to return 2,913,083 samples against 2,913,083 expected. UVR
 is not: it resamples 16 kHz to 44.1 kHz and back, and polyphase resampling does not
 round-trip, previously observed as a 128-sample deficit on a 32,000-sample frame, which is the
-same 2-second 16 kHz unit this benchmark scores.
+same 2-second 16 kHz unit this benchmark scores. Before v7 was frozen, the shipped UVR
+engine returned 130 samples fewer on each of 23 degraded 32,000-sample frames, which
+leaves a margin of 30 samples under this bound.
 160 covers that observed mechanism with margin and is far too small for a system to
 escape being scored on a missing tail.
 - **No cross-correlation alignment search is performed.** Outputs are compared at
@@ -1146,6 +1209,37 @@ defect discovered after results exist invalidates those results rather than
 retroactively changing the rules that produced them. Superseded versions stay in the
 tree rather than being replaced, and each version names its predecessor by digest;
 the loader recomputes those digests, so the chain is checked rather than asserted.
+
+### v6 to v7
+
+v6 deferred degradation until the process that generated the training pairs was ported
+and checked, and left open how systems receive input and which files they are. Before
+v7 was frozen, the port was checked against the training pairs and against `d8993b2`
+(see [Degradation](#degradation)), and both engines were run on 23 degraded frames built
+from synthetic tones and training clean frames (see [System execution](#system-execution)).
+No candidate universe had been enumerated, and no candidate audio had been acquired or
+inspected.
+
+**Frozen.** The degradation process, ranges, run seed, per-frame seed derivation, draw
+order, one copy per frame, training level, and a golden digest; system execution through
+the shipped engines with float WAV input and float64 output; the OpGAN checkpoint digest
+and the three UVR file digests; and pins for scipy, torch, and audio-separator, checked
+at load with the existing package check, where torch's pin names the two builds
+`uv.lock` resolves.
+
+> **Note:** v7 sets two run-time obligations on a runner that does not exist yet:
+> recompute the degradation golden after the golden fixtures and before any candidate,
+> and compare each model file an engine loads with its frozen digest. Until a runner does
+> both, the pinned digests are recorded rather than enforced at run time.
+
+**Corrections to the v6 document.** v6 said no benchmark module outside the tests
+imports scipy. `benchmark/degradation.py` does, for the rolloff filter, so scipy is now
+pinned. v6 said metrics are computed on waveforms produced by canonicalisation; under v7
+the reference is that waveform times the training-level gain.
+
+**Disclosures.** The run seed cannot be shown to differ from training's, which recorded
+none. The UVR digests are trust on first use. The engines are measured on training-format
+input, which bypasses the product's decode.
 
 ### v5 to v6
 

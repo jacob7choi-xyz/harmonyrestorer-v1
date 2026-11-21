@@ -33,12 +33,14 @@ without any benchmark change.
 frames, and crackle and hum are added at fixed amplitudes, so their loudness relative to
 the music depends on that scale. A frame is degraded here after the same scaling, using
 the peak of its complete canonical waveform, and the result is returned at that level
-with the gain, so the caller decides the level a system sees. The protocol does not yet
-freeze this process; nothing here is called by a run.
+with the gain. Protocol v7 freezes this process, its ranges, its seed, and that level
+(its `degradation` section, read through `load_protocol`), and requires that systems
+receive the frame at training level. Nothing in a run calls this module yet.
 """
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import math
 import struct
@@ -48,15 +50,19 @@ import numpy as np
 import numpy.typing as npt
 from scipy.signal import butter, lfilter
 
+from benchmark.canonicalisation import CanonicalWaveform
+from benchmark.framing import frame
+from benchmark.golden_fixture import canonical_fixture
+from benchmark.protocol import Protocol, TrainingNoiseRanges
+
 __all__ = [
-    "D8993B2_RANGES",
     "DegradationParams",
     "DegradedFrame",
-    "TrainingNoiseRanges",
     "apply_degradation",
     "degrade_frame",
     "draw_params",
     "frame_seed",
+    "golden_degraded_sha256",
     "high_freq_rolloff",
     "mains_hum",
     "tape_hiss",
@@ -74,48 +80,6 @@ _HUM_HARMONIC_EXPONENT = 1.5
 _ROLLOFF_ORDER = 4
 _SATURATION_GAIN_PER_DRIVE = 4.0
 _HISS_COLORS = ("pink", "brown")
-
-
-@dataclass(frozen=True)
-class TrainingNoiseRanges:
-    """The parameter distributions of training's `random_degradation`.
-
-    A `(low, high)` pair is drawn with `Generator.uniform`. An effect behind a threshold is
-    enabled when `Generator.random()` exceeds it. `headroom` is the peak each recording was
-    scaled to before its frames were cut.
-    """
-
-    hiss_snr_db: tuple[float, float]
-    hiss_colors: tuple[str, ...]
-    rolloff_hz: tuple[float, float]
-    crackle_threshold: float
-    crackle_density: tuple[float, float]
-    crackle_amplitude: tuple[float, float]
-    hum_threshold: float
-    hum_amplitude: tuple[float, float]
-    hum_freqs: tuple[float, ...]
-    saturation_threshold: float
-    saturation_drive: tuple[float, float]
-    headroom: float
-
-
-# Training's distributions: random_degradation's ranges and thresholds at d8993b2, and the
-# 0.95 peak preprocess.normalize scaled each recording to. The one copy in the code until a
-# protocol amendment freezes these values in the protocol file.
-D8993B2_RANGES = TrainingNoiseRanges(
-    hiss_snr_db=(5.0, 30.0),
-    hiss_colors=("pink", "brown"),
-    rolloff_hz=(4000.0, 8000.0),
-    crackle_threshold=0.5,
-    crackle_density=(0.0002, 0.002),
-    crackle_amplitude=(0.01, 0.1),
-    hum_threshold=0.7,
-    hum_amplitude=(0.005, 0.05),
-    hum_freqs=(50.0, 60.0),
-    saturation_threshold=0.6,
-    saturation_drive=(0.1, 0.6),
-    headroom=0.95,
-)
 
 
 @dataclass(frozen=True)
@@ -336,3 +300,30 @@ def degrade_frame(
     degraded.flags.writeable = False
     logger.debug("Degraded %d samples at gain %.6f with %s", frame.size, gain, params)
     return DegradedFrame(degraded=degraded, gain=gain, params=params)
+
+
+def golden_degraded_sha256(protocol: Protocol) -> str:
+    """Recompute the degradation golden's digest on this runtime.
+
+    The golden fixture named by `degradation.golden` is canonicalised, cut into frames, and
+    the named frame degraded with the golden's seed and the waveform's own peak. The digest
+    covers the degraded float32 samples as little-endian bytes.
+
+    Raises:
+        ValueError: If the golden fixture does not canonicalise, which the golden fixture
+            precondition reports first.
+    """
+    golden = protocol.degradation.golden
+    fixture = next(f for f in protocol.golden_fixtures.fixtures if f.name == golden.fixture)
+    waveform = canonical_fixture(fixture, protocol.canonicalisation)
+    if not isinstance(waveform, CanonicalWaveform):
+        raise ValueError(f"golden fixture {fixture.name} did not canonicalise: {waveform}")
+    frames = frame(waveform, protocol.framing).frames
+    result = degrade_frame(
+        frames[golden.frame_index],
+        recording_peak=float(np.max(np.abs(waveform.samples))),
+        sample_rate=protocol.canonicalisation.resample.target_sample_rate,
+        ranges=protocol.degradation.ranges,
+        seed=frame_seed(golden.seed, waveform.sha256, golden.frame_index),
+    )
+    return hashlib.sha256(result.degraded.astype("<f4").tobytes()).hexdigest()

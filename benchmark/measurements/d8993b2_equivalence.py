@@ -23,6 +23,7 @@ import numpy as np
 import numpy.typing as npt
 
 from benchmark import degradation as port
+from benchmark.protocol import load_protocol
 
 _COMMIT = "d8993b2"
 _LENGTH, _RATE = 32000, 16000
@@ -90,7 +91,7 @@ def compare_composite(old: ModuleType, seed: int) -> list[tuple[str, bool]]:
     """`apply_degradation` with every effect on, all off, and two mixes."""
     signal = np.random.RandomState(1000 + seed).uniform(-0.9, 0.9, _LENGTH).astype(np.float32)
     draws = np.random.RandomState(2000 + seed)
-    ranges = port.D8993B2_RANGES
+    ranges = load_protocol().degradation.ranges
     results: list[tuple[str, bool]] = []
     for crackle, hum, sat in (
         (True, True, True),
@@ -130,7 +131,7 @@ def compare_draws(old: ModuleType) -> int:
         for seed in range(_DRAW_SEEDS):
             setattr(np.random, "default_rng", lambda *_, s=seed: real(s))  # noqa: B010
             _, theirs = old.random_degradation(np.zeros(_LENGTH, dtype=np.float32), _RATE)
-            ours = port.draw_params(real(seed), port.D8993B2_RANGES)
+            ours = port.draw_params(real(seed), load_protocol().degradation.ranges)
             fields = port.DegradationParams.__dataclass_fields__
             matched += all(getattr(theirs, field) == getattr(ours, field) for field in fields)
     finally:

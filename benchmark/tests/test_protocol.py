@@ -78,6 +78,12 @@ SUPERSEDED_ARTIFACTS = {
     "docs/benchmark-protocol-v5.md": (
         "ea46cc7a2d123097967db4c95b33e3d6b1e671aa9ffba6d88228ae7578c1e1b9"  # pragma: allowlist secret
     ),
+    "benchmark/protocols/v6.json": (
+        "5979bec3cb976d7b9d824fcb102affbbbeba65ae998be094cae3a2e8cb6f4406"  # pragma: allowlist secret
+    ),
+    "docs/benchmark-protocol-v6.md": (
+        "a096a77852bcd7bd3c2dc553421c1b301e1fff3063942304168c980188ca5709"  # pragma: allowlist secret
+    ),
 }
 
 
@@ -104,7 +110,7 @@ class TestRealProtocol:
     """The checked-in config must load and describe itself accurately."""
 
     def test_it_loads(self) -> None:
-        assert load_protocol().protocol_version == 6
+        assert load_protocol().protocol_version == 7
 
     def test_digest_is_of_the_exact_file_bytes(self) -> None:
         """The provenance claim is 'these bytes governed this run', so the digest
@@ -228,8 +234,8 @@ class TestVersionCommitments:
     """Protocol promises are enforced at load, so weakening one requires a version bump."""
 
     def test_unsupported_version(self, tmp_path: Path) -> None:
-        path = variant(tmp_path, lambda d: d.update({"protocol_version": 7}))
-        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 7"):
+        path = variant(tmp_path, lambda d: d.update({"protocol_version": 8}))
+        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 8"):
             _load_from_path(path)
 
     def test_composite_score_cannot_be_enabled(self, tmp_path: Path) -> None:
@@ -512,7 +518,7 @@ class TestOnlyOneApprovedConfiguration:
             d["aggregation"]["bootstrap"]["iterations"] = 50_000
 
         parsed = _load_from_path(variant(tmp_path, alternate))
-        assert parsed.protocol_version == 6
+        assert parsed.protocol_version == 7
         assert parsed.selection.seed == 999
 
         approved = load_protocol()
@@ -527,9 +533,9 @@ class TestAmendmentChain:
 
     def test_chain_names_the_immediately_superseded_artifacts(self) -> None:
         amends = load_protocol().amends
-        assert amends.protocol_version == 5
-        assert amends.protocol_path == "benchmark/protocols/v5.json"
-        assert amends.document_path == "docs/benchmark-protocol-v5.md"
+        assert amends.protocol_version == 6
+        assert amends.protocol_path == "benchmark/protocols/v6.json"
+        assert amends.document_path == "docs/benchmark-protocol-v6.md"
 
     def test_recorded_digests_match_the_archived_files(self) -> None:
         amends = load_protocol().amends
@@ -569,14 +575,14 @@ class TestAmendmentChain:
 
     def test_the_predecessor_must_be_the_immediately_previous_version(self, tmp_path: Path) -> None:
         path = variant(tmp_path, lambda d: d["amends"].update({"protocol_version": 0}))
-        with pytest.raises(ProtocolValueError, match=r"amends\.protocol_version must be 5"):
+        with pytest.raises(ProtocolValueError, match=r"amends\.protocol_version must be 6"):
             _load_from_path(path)
 
     def test_the_superseded_config_is_not_loadable_as_current(self) -> None:
         """Proof the version bump is real rather than cosmetic: the archived v1 file
         still parses, and the current validator refuses it."""
-        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 5"):
-            _load_from_path(REPO_ROOT / "benchmark" / "protocols" / "v5.json")
+        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 6"):
+            _load_from_path(REPO_ROOT / "benchmark" / "protocols" / "v6.json")
 
 
 class TestFrozenTransform:
@@ -1916,9 +1922,13 @@ class TestCanonicalisationLibrariesAreEnforced:
     but unchecked would let a different library produce artifacts under this protocol's
     name. Only the Python packages are enforced: the lockfile makes those deterministic,
     while native libsndfile and libsoxr vary by platform and are recorded as provenance.
+    Since v7 the same holds for scipy, which filters the degraded input, and for torch and
+    audio-separator, which run the two systems.
     """
 
-    @pytest.mark.parametrize("package", ["soundfile", "librosa", "soxr"])
+    @pytest.mark.parametrize(
+        "package", ["soundfile", "librosa", "soxr", "scipy", "torch", "audio-separator"]
+    )
     def test_a_substituted_package_version_refuses_to_load(
         self, monkeypatch: pytest.MonkeyPatch, package: str
     ) -> None:
@@ -1931,7 +1941,9 @@ class TestCanonicalisationLibrariesAreEnforced:
         with pytest.raises(ProtocolEnvironmentError, match=f"protocol pins {package} "):
             load_protocol()
 
-    @pytest.mark.parametrize("package", ["soundfile", "librosa", "soxr"])
+    @pytest.mark.parametrize(
+        "package", ["soundfile", "librosa", "soxr", "scipy", "torch", "audio-separator"]
+    )
     def test_a_missing_package_refuses_to_load(
         self, monkeypatch: pytest.MonkeyPatch, package: str
     ) -> None:
@@ -2276,3 +2288,131 @@ class TestRulesV5LeftOpen:
         every_code = [code for vocabulary in vocabularies for code in vocabulary]
 
         assert len(every_code) == len(set(every_code))
+
+
+class TestRulesV6LeftOpen:
+    """Degradation and system execution, which v7 freezes."""
+
+    def test_the_real_protocol_states_each_rule(self) -> None:
+        protocol = load_protocol()
+        assert protocol.degradation.seed == 20261122
+        assert protocol.degradation.copies_per_frame == 1
+        assert protocol.degradation.ranges.hum_freqs == (50.0, 60.0)
+        assert protocol.system_execution.uvr_model == "UVR-DeNoise.pth"
+
+    def test_the_opgan_digest_is_the_backend_pin(self) -> None:
+        """Two copies of one value, checked to agree; the backend's is what the engine loads."""
+        from app.config import OPGAN_CHECKPOINT_SHA256
+
+        assert load_protocol().system_execution.opgan_checkpoint_sha256 == OPGAN_CHECKPOINT_SHA256
+
+    def test_integer_ranges_load_as_floats(self, tmp_path: Path) -> None:
+        """The port's draws use these values as given, so their type is fixed at load."""
+
+        def as_ints(d: dict[str, Any]) -> None:
+            d["degradation"]["ranges"]["hum_freqs"] = [50, 60]
+            d["degradation"]["ranges"]["hiss_snr_db"] = [5, 30]
+
+        parsed = _load_from_path(variant(tmp_path, as_ints))
+
+        ranges = parsed.degradation.ranges
+        assert all(type(f) is float for f in (*ranges.hum_freqs, *ranges.hiss_snr_db))
+
+    @pytest.mark.parametrize(
+        "field", ["process", "frame_seed", "draw_order", "level", "golden_run_check"]
+    )
+    def test_each_degradation_rule_is_closed(self, tmp_path: Path, field: str) -> None:
+        path = variant(tmp_path, lambda d: d["degradation"].update({field: "other"}))
+        with pytest.raises(ProtocolValueError, match=rf"degradation\.{field} must be"):
+            _load_from_path(path)
+
+    def test_the_locked_linux_torch_build_is_accepted(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """uv.lock resolves torch 2.14.1+cpu off macOS, where CI runs the benchmark tests."""
+        real = importlib.metadata.version
+
+        def linux_torch(name: str) -> str:
+            return "2.14.1+cpu" if name == "torch" else real(name)
+
+        monkeypatch.setattr(importlib.metadata, "version", linux_torch)
+
+        assert load_protocol().system_execution.torch_versions == ("2.14.1", "2.14.1+cpu")
+
+    def test_another_torch_build_is_refused(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        real = importlib.metadata.version
+
+        def cuda_torch(name: str) -> str:
+            return "2.14.1+cu124" if name == "torch" else real(name)
+
+        monkeypatch.setattr(importlib.metadata, "version", cuda_torch)
+        with pytest.raises(ProtocolEnvironmentError, match=r"pins torch 2\.14\.1 or 2\.14\.1\+cpu"):
+            load_protocol()
+
+    def test_torch_builds_cannot_be_empty(self, tmp_path: Path) -> None:
+        path = variant(tmp_path, lambda d: d["system_execution"].update({"torch_versions": []}))
+        with pytest.raises(ProtocolValueError, match="torch_versions must not be empty"):
+            _load_from_path(path)
+
+    def test_one_copy_per_frame(self, tmp_path: Path) -> None:
+        """More copies would multiply each frame's weight in the scored population."""
+        path = variant(tmp_path, lambda d: d["degradation"].update({"copies_per_frame": 5}))
+        with pytest.raises(ProtocolValueError, match="copies_per_frame must be 1"):
+            _load_from_path(path)
+
+    @pytest.mark.parametrize(
+        ("change", "message"),
+        [
+            ({"fixture": "missing"}, "is not a golden fixture"),
+            ({"verified_on": "anywhere"}, "verified_on must be one of"),
+            ({"degraded_sha256": "0" * 63}, "64 lowercase hex"),
+            ({"seed": -1}, "must be >= 0"),
+        ],
+    )
+    def test_the_golden_must_be_well_formed(
+        self, tmp_path: Path, change: dict[str, Any], message: str
+    ) -> None:
+        path = variant(tmp_path, lambda d: d["degradation"]["golden"].update(change))
+        with pytest.raises(ProtocolValueError, match=message):
+            _load_from_path(path)
+
+    @pytest.mark.parametrize(
+        ("change", "message"),
+        [
+            ({"hiss_snr_db": [30.0, 5.0]}, "low < high"),
+            ({"rolloff_hz": [6000.0, 6000.0]}, "low < high"),
+            ({"saturation_drive": [0.1]}, "low < high"),
+            ({"hum_threshold": 1.5}, r"must lie in \[0, 1\]"),
+            ({"hiss_colors": ["brown", "pink"]}, "hiss_colors must be"),
+            ({"hum_freqs": []}, "hum_freqs must not be empty"),
+            ({"headroom": 0.0}, r"headroom must lie in \(0, 1\]"),
+        ],
+    )
+    def test_the_ranges_must_be_sane(
+        self, tmp_path: Path, change: dict[str, Any], message: str
+    ) -> None:
+        path = variant(tmp_path, lambda d: d["degradation"]["ranges"].update(change))
+        with pytest.raises(ProtocolValueError, match=message):
+            _load_from_path(path)
+
+    @pytest.mark.parametrize(
+        "field", ["engines", "input_format", "output_read", "model_identity_check"]
+    )
+    def test_each_execution_rule_is_closed(self, tmp_path: Path, field: str) -> None:
+        path = variant(tmp_path, lambda d: d["system_execution"].update({field: "other"}))
+        with pytest.raises(ProtocolValueError, match=rf"system_execution\.{field} must be"):
+            _load_from_path(path)
+
+    @pytest.mark.parametrize(
+        "field",
+        [
+            "opgan_checkpoint_sha256",
+            "uvr_model_sha256",
+            "uvr_vr_model_data_sha256",
+            "uvr_mdx_model_data_sha256",
+        ],
+    )
+    def test_each_model_digest_is_full(self, tmp_path: Path, field: str) -> None:
+        path = variant(tmp_path, lambda d: d["system_execution"].update({field: "ABC"}))
+        with pytest.raises(ProtocolValueError, match=rf"system_execution\.{field} must be 64"):
+            _load_from_path(path)
