@@ -9,6 +9,7 @@ import dataclasses
 import hashlib
 import json
 import sys
+from collections import Counter
 from pathlib import Path
 
 import librosa
@@ -30,9 +31,12 @@ from benchmark.measurements.training_pairs import (
     spectral_slope,
 )
 from benchmark.measurements.training_screen import (
+    TRANSFORMS,
+    Corpus,
     Degenerate,
     load_recording,
     offsets,
+    report,
     similarity,
     transformed,
     unit_features,
@@ -355,3 +359,18 @@ class TestTrainingScreen:
         )
         assert isinstance(loaded, str)
         assert "SOURCE_HASH_MISMATCH" in loaded
+
+    def test_a_run_in_which_every_recording_failed_still_reports_the_failures(
+        self, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """No positive and no pair is scored, so there is no minimum or maximum to print."""
+        corpus = Corpus(
+            [], {}, [], {t: [] for t in TRANSFORMS}, Counter(), {"a.flac": "decode gave X"}
+        )
+
+        report(corpus, [], load_protocol())
+
+        printed = capsys.readouterr().out
+        assert "failed a.flac: decode gave X" in printed
+        assert "min=none" in printed
+        assert "negatives: n=0, unscored=0, max=none" in printed

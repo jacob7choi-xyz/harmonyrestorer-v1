@@ -256,40 +256,54 @@ def negatives(corpus: Corpus, protocol: Protocol) -> list[tuple[float | None, st
 
 
 def report(corpus: Corpus, pairs: list[tuple[float | None, str, str]], protocol: Protocol) -> None:
-    """Print the calibration beside protocol v1's, and every fact the amendment will need."""
-    screen = protocol.duplicate_detection
+    """Print the calibration beside protocol v1's, and every fact the amendment will need.
+
+    Prints `none` for a minimum or maximum over no scores rather than raising, so a run in
+    which every recording failed still reports its failures.
+    """
     print(f"\nrecordings loaded: {len(corpus.names)}; failed: {len(corpus.failures)}")
     for name, why in corpus.failures.items():
         print(f"  failed {name}: {why}")
     collisions = [d for d, n in Counter(corpus.decoded.values()).items() if n > 1]
     print(f"decoded-PCM digest collisions: {len(collisions)}")
     print(f"degenerate cases: {dict(corpus.degenerate)}")
-    for transform, scores in corpus.positives.items():
-        known = [s for s in scores if s is not None]
-        unscored = len(scores) - len(known)
-        print(f"positives {transform}: n={len(scores)}, unscored={unscored}, min={min(known):.4f}")
-        lowest = sorted((s, n) for s, n in zip(scores, corpus.names, strict=True) if s is not None)
-        for score, name in lowest[:LOWEST_POSITIVES]:
-            print(f"  {score:.4f}  {name}")
-    scored = sorted(((s, a, b) for s, a, b in pairs if s is not None), reverse=True)
-    values = np.array([p[0] for p in scored])
-    print(f"negatives: n={len(pairs)}, unscored={len(pairs) - len(scored)}, max={values.max():.4f}")
-    print(
-        "negatives quantiles 0.5/0.99/0.999: "
-        + " ".join(f"{q:.4f}" for q in np.quantile(values, [0.5, 0.99, 0.999]))
-    )
-    print(
-        f"negatives at or above the {screen.flag_threshold} threshold: {int((values >= screen.flag_threshold).sum())}"
-    )
-    print(f"top {TOP_PAIRS} negative pairs:")
-    for score, first, second in scored[:TOP_PAIRS]:
-        print(f"  {score:.4f}  {first}  |  {second}")
-    cal = screen.calibration
+    _report_positives(corpus)
+    _report_negatives(pairs, protocol)
+    cal = protocol.duplicate_detection.calibration
     print(
         f"protocol v1: positives min {cal.positives_min} (n={cal.positives_n}), negatives max "
         f"{cal.negatives_max} (n={cal.negatives_n}), same-session max "
         f"{cal.same_session_negatives_max} (n={cal.same_session_negatives_n})"
     )
+
+
+def _report_positives(corpus: Corpus) -> None:
+    """Each transform's count, unscored count, minimum, and lowest-scoring recordings."""
+    for transform, scores in corpus.positives.items():
+        lowest = sorted((s, n) for s, n in zip(scores, corpus.names, strict=True) if s is not None)
+        unscored = len(scores) - len(lowest)
+        least = f"{lowest[0][0]:.4f}" if lowest else "none"
+        print(f"positives {transform}: n={len(scores)}, unscored={unscored}, min={least}")
+        for score, name in lowest[:LOWEST_POSITIVES]:
+            print(f"  {score:.4f}  {name}")
+
+
+def _report_negatives(pairs: list[tuple[float | None, str, str]], protocol: Protocol) -> None:
+    """The negatives' count, maximum, quantiles, threshold count, and highest pairs."""
+    threshold = protocol.duplicate_detection.flag_threshold
+    scored = sorted(((s, a, b) for s, a, b in pairs if s is not None), reverse=True)
+    unscored = len(pairs) - len(scored)
+    if not scored:
+        print(f"negatives: n={len(pairs)}, unscored={unscored}, max=none")
+        return
+    values = np.array([p[0] for p in scored])
+    print(f"negatives: n={len(pairs)}, unscored={unscored}, max={values.max():.4f}")
+    quantiles = np.quantile(values, [0.5, 0.99, 0.999])
+    print("negatives quantiles 0.5/0.99/0.999: " + " ".join(f"{q:.4f}" for q in quantiles))
+    print(f"negatives at or above the {threshold} threshold: {int((values >= threshold).sum())}")
+    print(f"top {TOP_PAIRS} negative pairs:")
+    for score, first, second in scored[:TOP_PAIRS]:
+        print(f"  {score:.4f}  {first}  |  {second}")
 
 
 def main() -> None:
