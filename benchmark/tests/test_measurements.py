@@ -113,3 +113,44 @@ class TestQuantities:
         assert not bit_identical(a, a.view(np.int32))
         assert not bit_identical(a, a.reshape(2, 2))
         assert not bit_identical(a, a + np.float32(1e-7))
+
+
+class TestEngineCall:
+    """One engine call is recorded, whether it returns a WAV or raises a job failure."""
+
+    def test_a_successful_call_records_format_and_length(self, tmp_path: Path) -> None:
+        from benchmark.measurements.engine_smoke import call
+
+        class Shorter:
+            def denoise(self, input_path: Path) -> Path:
+                out = tmp_path / "out.wav"
+                sf.write(out, np.zeros(FRAME - 130, dtype=np.float32), RATE, subtype="PCM_16")
+                return out
+
+        result = call(Shorter(), tmp_path / "frame.wav")
+
+        assert result.error is None
+        assert (result.rate, result.subtype, result.channels) == (RATE, "PCM_16", 1)
+        assert result.length_difference == -130
+
+    def test_a_job_failure_is_recorded_not_raised(self, tmp_path: Path) -> None:
+        from benchmark.measurements.engine_smoke import call
+
+        class Failing:
+            def denoise(self, input_path: Path) -> Path:
+                raise RuntimeError("no denoised stem")
+
+        result = call(Failing(), tmp_path / "frame.wav")
+
+        assert result.error == "RuntimeError: no denoised stem"
+
+    def test_an_unexpected_exception_stops_the_measurement(self, tmp_path: Path) -> None:
+        """Only the engines' failure types are recorded; anything else is a harness defect."""
+        from benchmark.measurements.engine_smoke import call
+
+        class Broken:
+            def denoise(self, input_path: Path) -> Path:
+                raise KeyError("bug")
+
+        with pytest.raises(KeyError):
+            call(Broken(), tmp_path / "frame.wav")

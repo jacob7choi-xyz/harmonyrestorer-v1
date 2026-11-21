@@ -6,4 +6,5 @@ does not run them. Each prints its result. Run them from the repository root, fo
 out on purpose: it removes the working directory from the import path, so `-m` could not
 find the `benchmark` package. Run this way, the only code imported from the working
 directory is this repository's own.
+`engine_smoke` also imports the backend, so it runs with `PYTHONPATH=backend`.
 """
