@@ -1,6 +1,6 @@
 """Immutable, validated access to the frozen benchmark protocol.
 
-Two things share the authority here, with different jobs. `benchmark/protocols/v9.json`
+Two things share the authority here, with different jobs. `benchmark/protocols/v10.json`
 holds the frozen values a run executes against; its digest is what establishes *which*
 values those are. This module defines what counts as a *well-formed* protocol, which is
 why the gate set, the supported version, the transform vocabulary, and the
@@ -64,9 +64,9 @@ logger = logging.getLogger(__name__)
 # Private so that production code has no supported affordance for reading the file
 # itself. `load_protocol` is the way in.
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_PROTOCOL_PATH = _REPO_ROOT / "benchmark" / "protocols" / "v9.json"
+_PROTOCOL_PATH = _REPO_ROOT / "benchmark" / "protocols" / "v10.json"
 
-SUPPORTED_PROTOCOL_VERSION = 9
+SUPPORTED_PROTOCOL_VERSION = 10
 
 # Which protocol v2 supersedes, and the artifacts it supersedes, as historical facts
 # rather than as arithmetic. `SUPPORTED_PROTOCOL_VERSION - 1` would encode a universal
@@ -74,9 +74,9 @@ SUPPORTED_PROTOCOL_VERSION = 9
 # governance model promises. The paths are frozen here so the config cannot redirect
 # the amendment chain at another file whose digest it also records, and so a relative
 # path out of the tree is not reachable at all.
-_PREDECESSOR_VERSION = 8
-_PREDECESSOR_PROTOCOL_PATH = "benchmark/protocols/v8.json"
-_PREDECESSOR_DOCUMENT_PATH = "docs/benchmark-protocol-v8.md"
+_PREDECESSOR_VERSION = 9
+_PREDECESSOR_PROTOCOL_PATH = "benchmark/protocols/v9.json"
+_PREDECESSOR_DOCUMENT_PATH = "docs/benchmark-protocol-v9.md"
 
 # Closed vocabularies for the frozen LSD transform. Each admits exactly one value. The
 # fields exist so an independent implementer reads each convention from the
@@ -472,6 +472,15 @@ _REFERENCE_REFUSED = "harness_failure"
 _ENGINE_PROCESS = "in_process_each_engine_built_once_after_run_preconditions"
 _NATIVE_CRASH = "run_invalid_no_publication_artifact"
 _PROGRESS_MARKER = "atomic_marker_before_each_denoise_call"
+_PERMANENT_FAILURE_CODES = (401, 403, 404, 410, 451)
+_TRANSIENT_FAILURE = "every_fetch_failure_except_permanent_failure_codes"
+_RETRIES_EXHAUSTED = "run_invalid_nothing_published"
+_RETRIES_EXHAUSTED_CODE = "ACQUISITION_RETRIES_EXHAUSTED"
+_ADJUDICATION_RECORD_MATCH = (
+    "candidate_and_every_flagged_reference_by_identifier_raw_sha256_decoded_pcm_sha256"
+)
+_ADJUDICATION_UNMATCHED = "walk_halts_awaiting_adjudication_nothing_published"
+_ADJUDICATION_ADMITS = "only_when_every_flagged_reference_is_a_different_performance"
 
 # A positive paired effect must favour OpGAN for every metric, so the effect
 # expression follows from the metric's direction instead of being chosen per metric.
@@ -923,6 +932,10 @@ class Selection:
     predicate_order: tuple[str, ...]
     rejection_codes: tuple[str, ...]
     predicate_order_note: str
+    transient_failure: str
+    retries_exhausted: str
+    retries_exhausted_code: str
+    retries_exhausted_note: str
 
 
 @dataclass(frozen=True)
@@ -1019,6 +1032,10 @@ class DuplicateDetection:
     different_performer: str
     adjudication_evidence: str
     adjudication_note: str
+    adjudication_record_match: str
+    adjudication_unmatched: str
+    adjudication_admits: str
+    adjudication_record_note: str
 
 
 @dataclass(frozen=True)
@@ -2138,7 +2155,9 @@ def _validate_selection_walk(sel: Selection) -> None:
 
     The filter sets `n`, which with the seed fixes the walk, so it is closed for the same
     reason the ordering is. The partition order must name every partition once, and the
-    check order and rejection codes decide which predicate the audit trail names.
+    check order and rejection codes decide which predicate the audit trail names. Which
+    fetch failures are transient, and what exhausted retries do, are closed because a
+    skipped candidate would let network conditions choose the test set.
     """
     for name, stated, frozen in (
         ("candidate_filter", sel.candidate_filter, _CANDIDATE_FILTER),
@@ -2148,6 +2167,10 @@ def _validate_selection_walk(sel: Selection) -> None:
         ("partition_order", sel.partition_order, _PARTITION_ORDER),
         ("predicate_order", sel.predicate_order, _PREDICATE_ORDER),
         ("rejection_codes", sel.rejection_codes, _REJECTION_CODES),
+        ("permanent_failure_codes", sel.permanent_failure_codes, _PERMANENT_FAILURE_CODES),
+        ("transient_failure", sel.transient_failure, _TRANSIENT_FAILURE),
+        ("retries_exhausted", sel.retries_exhausted, _RETRIES_EXHAUSTED),
+        ("retries_exhausted_code", sel.retries_exhausted_code, _RETRIES_EXHAUSTED_CODE),
     ):
         if stated != frozen:
             raise ProtocolValueError(
@@ -2333,6 +2356,9 @@ def _validate_adjudication(dd: DuplicateDetection) -> None:
         ("same_session_take", dd.same_session_take, _SAME_SESSION_TAKE),
         ("different_performer", dd.different_performer, _DIFFERENT_PERFORMER),
         ("adjudication_evidence", dd.adjudication_evidence, _ADJUDICATION_EVIDENCE),
+        ("adjudication_record_match", dd.adjudication_record_match, _ADJUDICATION_RECORD_MATCH),
+        ("adjudication_unmatched", dd.adjudication_unmatched, _ADJUDICATION_UNMATCHED),
+        ("adjudication_admits", dd.adjudication_admits, _ADJUDICATION_ADMITS),
     ):
         if stated != frozen:
             raise ProtocolValueError(

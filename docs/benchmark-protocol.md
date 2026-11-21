@@ -1,14 +1,14 @@
-# Benchmark protocol v9
+# Benchmark protocol v10
 
 Frozen before candidate identities are selected, downloaded for evaluation,
 auditioned, or scored. The source collection has already been inspected in general
 terms; what has not happened is any decision about which recordings enter the
 benchmark.
 
-> **Note:** v9 amends v8, which amended v7, which amended v6, which amended v5, which
-> amended v4, which amended v3, which amended v2, which amended v1, all before any
-> evaluation ran. The
-> operational values live in `benchmark/protocols/v9.json`, which is normative; this
+> **Note:** v10 amends v9, which amended v8, which amended v7, which amended v6, which
+> amended v5, which amended v4, which amended v3, which amended v2, which amended v1, all
+> before any evaluation ran. The
+> operational values live in `benchmark/protocols/v10.json`, which is normative; this
 > document explains them and
 > its numbers are illustrative. Superseded versions are preserved unmodified, as
 > [benchmark-protocol-v1.md](benchmark-protocol-v1.md),
@@ -17,8 +17,9 @@ benchmark.
 > [benchmark-protocol-v4.md](benchmark-protocol-v4.md),
 > [benchmark-protocol-v5.md](benchmark-protocol-v5.md),
 > [benchmark-protocol-v6.md](benchmark-protocol-v6.md),
-> [benchmark-protocol-v7.md](benchmark-protocol-v7.md), and
-> [benchmark-protocol-v8.md](benchmark-protocol-v8.md) with their configs, so an
+> [benchmark-protocol-v7.md](benchmark-protocol-v7.md),
+> [benchmark-protocol-v8.md](benchmark-protocol-v8.md), and
+> [benchmark-protocol-v9.md](benchmark-protocol-v9.md) with their configs, so an
 > artifact recording an older `protocol_version` stays interpretable. See
 > [Amendment](#amendment) for what changed and why.
 
@@ -139,6 +140,22 @@ likely to raise:
   and the candidate is admitted. The benchmark measures unseen recordings, not unseen
   pieces.
 
+From v10, a recorded adjudication applies to a flagged candidate only when it names the
+candidate by its source identifier, raw digest, and decoded-PCM digest, names every
+reference recording the screen flagged it against by the same three values (a training
+recording by its manifest file name), and answers for each of those references. Without
+such a record the walk halts, awaiting adjudication, and nothing is published; the answers
+are recorded with their evidence and the walk is run again from the start. A record that
+names any recording with a different identifier or digest does not apply, so an answer is
+never reused for bytes it was not given for. The candidate is admitted only
+when every flagged reference is answered as a different performance. Otherwise the
+training corpus is considered before earlier admissions, and within the first of those
+groups with another answer, a same-performance answer is recorded as that group's
+`SCREEN_SAME_PERFORMANCE_*` code and an uncertain answer as `SCREEN_UNCERTAIN`, same
+performance taking precedence. A screen answer that is itself uncertain, from degenerate
+features or too little overlap, excludes the candidate as `SCREEN_UNCERTAIN` without
+adjudication, because no answer could admit it.
+
 Recorded per candidate: source identifier, byte size, both hashes, maximum
 aligned-MFCC similarity against the training corpus and against earlier admissions, and
 any adjudication with its evidence. Composer,
@@ -170,10 +187,24 @@ discretionary branch.
 
 Acquisition failures do not determine membership. A transient failure (network,
 timeout, 5xx) retries the same candidate three times with exponential backoff and
-does not advance the walk. Only a permanent source condition (404, 410, or a file
-that cannot be decoded) excludes a candidate, and it is logged with its cause. A 404 or
+does not advance the walk. Only a permanent source condition (404, 410, from v10 also
+401, 403, or 451, or a file that cannot be decoded) excludes a candidate, and it is
+logged with its cause. A 404 or
 410 is recorded as `CANDIDATE_PERMANENTLY_UNAVAILABLE`; a file that cannot be decoded
 carries its source-ineligible code.
+
+From v10, a 401, 403, or 451 is also permanent and is recorded as
+`CANDIDATE_PERMANENTLY_UNAVAILABLE` with its status. The run cannot fetch a file whose
+access is refused, and treating the refusal as transient would make every run invalid for
+as long as it lasts. A refusal can be lifted or differ between accounts, so the logged
+status records why the file was excluded. Every other fetch failure is transient: a
+network error, a timeout, a 5xx, any other HTTP status, and a transfer that ends short.
+"Three times" means three retries after the first attempt, so at most four attempts are
+made. If every attempt fails transiently, the run is invalid under
+`ACQUISITION_RETRIES_EXHAUSTED` and nothing is published. Skipping the candidate instead
+would let network conditions choose the test set. The wait between attempts is a harness
+setting rather than a protocol value, because it cannot change which candidates are
+admitted.
 
 The candidate universe is enumerated once and frozen to
 `benchmark/manifests/candidate_universe.json` with its own digest, recording the
@@ -1318,6 +1349,22 @@ defect discovered after results exist invalidates those results rather than
 retroactively changing the rules that produced them. Superseded versions stay in the
 tree rather than being replaced, and each version names its predecessor by digest;
 the loader recomputes those digests, so the chain is checked rather than asserted.
+
+### v9 to v10
+
+v9 said a transient fetch failure is retried three times and does not advance the walk,
+but not what happens when the retries run out, nor which failures count as transient
+beyond a network error, a timeout, or a 5xx. It said a flagged candidate is adjudicated by
+a person, but not how a recorded decision is matched to the candidate, what the walk does
+while a decision is pending, or which code a candidate flagged against several references
+is recorded under. v10 defines them (see
+[Identity and disjointness](#identity-and-disjointness) and [Selection](#selection)):
+401, 403, and 451 join 404 and 410 as permanent, every other fetch failure is transient,
+exhausted retries make the run invalid, and a recorded adjudication applies only to the
+identifiers and digests it names, with the walk halting until one exists. No candidate
+universe had been enumerated by the benchmark, and no candidate audio had been acquired or
+inspected, when v10 was frozen. The Internet Archive item's file listing was read by
+`dataset/acquire.py` when the training recordings were downloaded.
 
 ### v8 to v9
 
