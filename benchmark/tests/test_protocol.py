@@ -96,6 +96,12 @@ SUPERSEDED_ARTIFACTS = {
     "docs/benchmark-protocol-v8.md": (
         "5d3db26cc3d14b400dd9a1040f3f723f17f33047e0280050ff25c567e3f787e9"  # pragma: allowlist secret
     ),
+    "benchmark/protocols/v9.json": (
+        "86780852bee3b72dafc22e21bc87e8e94e1b0e416eb6956e1abb493843571374"  # pragma: allowlist secret
+    ),
+    "docs/benchmark-protocol-v9.md": (
+        "985d00e8c8c38fc2c5cf9b37a4c50bb7370d175c33c438944f14931623a13ac2"  # pragma: allowlist secret
+    ),
 }
 
 
@@ -122,7 +128,7 @@ class TestRealProtocol:
     """The checked-in config must load and describe itself accurately."""
 
     def test_it_loads(self) -> None:
-        assert load_protocol().protocol_version == 9
+        assert load_protocol().protocol_version == 10
 
     def test_digest_is_of_the_exact_file_bytes(self) -> None:
         """The provenance claim is 'these bytes governed this run', so the digest
@@ -246,8 +252,8 @@ class TestVersionCommitments:
     """Protocol promises are enforced at load, so weakening one requires a version bump."""
 
     def test_unsupported_version(self, tmp_path: Path) -> None:
-        path = variant(tmp_path, lambda d: d.update({"protocol_version": 10}))
-        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 10"):
+        path = variant(tmp_path, lambda d: d.update({"protocol_version": 11}))
+        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 11"):
             _load_from_path(path)
 
     def test_composite_score_cannot_be_enabled(self, tmp_path: Path) -> None:
@@ -530,7 +536,7 @@ class TestOnlyOneApprovedConfiguration:
             d["aggregation"]["bootstrap"]["iterations"] = 50_000
 
         parsed = _load_from_path(variant(tmp_path, alternate))
-        assert parsed.protocol_version == 9
+        assert parsed.protocol_version == 10
         assert parsed.selection.seed == 999
 
         approved = load_protocol()
@@ -545,9 +551,9 @@ class TestAmendmentChain:
 
     def test_chain_names_the_immediately_superseded_artifacts(self) -> None:
         amends = load_protocol().amends
-        assert amends.protocol_version == 8
-        assert amends.protocol_path == "benchmark/protocols/v8.json"
-        assert amends.document_path == "docs/benchmark-protocol-v8.md"
+        assert amends.protocol_version == 9
+        assert amends.protocol_path == "benchmark/protocols/v9.json"
+        assert amends.document_path == "docs/benchmark-protocol-v9.md"
 
     def test_recorded_digests_match_the_archived_files(self) -> None:
         amends = load_protocol().amends
@@ -587,14 +593,14 @@ class TestAmendmentChain:
 
     def test_the_predecessor_must_be_the_immediately_previous_version(self, tmp_path: Path) -> None:
         path = variant(tmp_path, lambda d: d["amends"].update({"protocol_version": 0}))
-        with pytest.raises(ProtocolValueError, match=r"amends\.protocol_version must be 8"):
+        with pytest.raises(ProtocolValueError, match=r"amends\.protocol_version must be 9"):
             _load_from_path(path)
 
     def test_the_superseded_config_is_not_loadable_as_current(self) -> None:
         """Proof the version bump is real rather than cosmetic: the archived v1 file
         still parses, and the current validator refuses it."""
-        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 8"):
-            _load_from_path(REPO_ROOT / "benchmark" / "protocols" / "v8.json")
+        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 9"):
+            _load_from_path(REPO_ROOT / "benchmark" / "protocols" / "v9.json")
 
 
 class TestFrozenTransform:
@@ -2617,4 +2623,59 @@ class TestRulesV8LeftOpen:
     ) -> None:
         path = variant(tmp_path, lambda d: d["duplicate_detection"]["mfcc"].update(change))
         with pytest.raises(ProtocolValueError, match=message):
+            _load_from_path(path)
+
+
+class TestRulesV9LeftOpen:
+    """What v10 defines: exhausted fetch retries and how a recorded adjudication applies."""
+
+    def test_the_real_protocol_states_each_rule(self) -> None:
+        protocol = load_protocol()
+        selection, screen = protocol.selection, protocol.duplicate_detection
+        assert selection.permanent_failure_codes == (401, 403, 404, 410, 451)
+        assert selection.transient_failure == "every_fetch_failure_except_permanent_failure_codes"
+        assert selection.retries_exhausted == "run_invalid_nothing_published"
+        assert selection.retries_exhausted_code == "ACQUISITION_RETRIES_EXHAUSTED"
+        assert screen.adjudication_unmatched == "walk_halts_awaiting_adjudication_nothing_published"
+        assert screen.adjudication_admits == (
+            "only_when_every_flagged_reference_is_a_different_performance"
+        )
+
+    def test_the_exhausted_retries_code_means_nothing_else(self) -> None:
+        """It names a run abort, so it must not collide with any code a candidate can get."""
+        protocol = load_protocol()
+        others = {
+            *protocol.selection.rejection_codes,
+            *protocol.source_outcomes.ineligible_reasons,
+            *protocol.source_outcomes.abort_reasons,
+            *protocol.eligibility.recording_ineligible_reasons,
+            *protocol.eligibility.frame_ineligible_reasons,
+            protocol.selection.permanent_unavailability_code,
+        }
+        assert protocol.selection.retries_exhausted_code not in others
+
+    @pytest.mark.parametrize(
+        ("section", "field", "message"),
+        [
+            ("selection", "transient_failure", r"selection\.transient_failure must be"),
+            ("selection", "retries_exhausted", r"selection\.retries_exhausted must be"),
+            ("selection", "retries_exhausted_code", r"selection\.retries_exhausted_code must"),
+            ("duplicate_detection", "adjudication_record_match", r"\.adjudication_record_match"),
+            ("duplicate_detection", "adjudication_unmatched", r"\.adjudication_unmatched must"),
+            ("duplicate_detection", "adjudication_admits", r"\.adjudication_admits must be"),
+        ],
+    )
+    def test_each_rule_is_closed(
+        self, tmp_path: Path, section: str, field: str, message: str
+    ) -> None:
+        path = variant(tmp_path, lambda d: d[section].update({field: "decided_later"}))
+        with pytest.raises(ProtocolValueError, match=message):
+            _load_from_path(path)
+
+    def test_the_permanent_statuses_are_closed(self, tmp_path: Path) -> None:
+        """Back at v9's two statuses, a refused file would invalidate every run instead."""
+        path = variant(
+            tmp_path, lambda d: d["selection"].update({"permanent_failure_codes": [404, 410]})
+        )
+        with pytest.raises(ProtocolValueError, match=r"selection\.permanent_failure_codes must"):
             _load_from_path(path)
