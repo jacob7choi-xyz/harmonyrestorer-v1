@@ -440,3 +440,17 @@ class TestLogSpectralDistance:
         silence = np.zeros(UNIT_SAMPLES)
         with pytest.raises(metrics.MetricInputError, match="no energy"):
             metrics.log_spectral_distance(silence, silence, LSD)
+
+
+class TestPrimaryMetricsTable:
+    """The table callers score from names exactly the protocol's primary metrics."""
+
+    def test_the_table_is_the_protocol_list_in_order(self) -> None:
+        assert tuple(metrics.PRIMARY_METRICS) == METRICS.primary
+
+    def test_each_entry_is_the_metric_its_configuration_section_names(self) -> None:
+        assert metrics.PRIMARY_METRICS["reconstruction_snr"] is metrics.reconstruction_snr
+        assert metrics.PRIMARY_METRICS["si_snr"] is metrics.si_snr
+        assert metrics.PRIMARY_METRICS["log_spectral_distance"] is metrics.log_spectral_distance
+        for name in metrics.PRIMARY_METRICS:
+            assert hasattr(METRICS, name)

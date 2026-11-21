@@ -36,7 +36,10 @@ to be unreachable for admitted references, and is rejected independently of that
 
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
+from typing import Any
 
 import numpy as np
 
@@ -308,3 +311,17 @@ def log_spectral_distance(
 
     per_frame = np.sqrt(np.mean((clean_db - restored_db) ** 2, axis=1))
     return MetricResult(value=float(np.mean(per_frame)), capped=False)
+
+
+PrimaryMetric = Callable[[np.ndarray, np.ndarray, Any], MetricResult]
+
+# Each primary metric by the name the protocol's `metrics.primary` uses, which is also the
+# name of its configuration section, so a caller scores every primary metric in protocol
+# order from one place rather than keeping its own copy of this table.
+PRIMARY_METRICS: Mapping[str, PrimaryMetric] = MappingProxyType(
+    {
+        "reconstruction_snr": reconstruction_snr,
+        "si_snr": si_snr,
+        "log_spectral_distance": log_spectral_distance,
+    }
+)
