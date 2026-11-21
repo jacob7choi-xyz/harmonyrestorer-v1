@@ -14,6 +14,7 @@ from benchmark.selection import (
     SelectionError,
     TrainingIdentities,
     exclusions,
+    is_candidate,
     training_filename,
     training_identities,
     walk_order,
@@ -157,3 +158,40 @@ class TestTrainingIdentities:
     ) -> None:
         with pytest.raises(SelectionError):
             training_identities(manifest, decoded)
+
+
+class TestCandidateFilter:
+    """v9's filter: the final path component's suffix, lowercased, is .flac."""
+
+    def test_the_protocol_names_the_filter_this_module_implements(self) -> None:
+        filter_token = load_protocol().selection.candidate_filter
+        assert filter_token == "final_path_component_suffix_lowercased_is_flac"
+
+    @pytest.mark.parametrize(
+        ("path", "expected"),
+        [
+            ("Bach/Goldberg/01.flac", True),
+            ("Bach/01.FLAC", True),
+            ("Bach/01.flac.txt", False),
+            ("Bach.flac/01.mp3", False),
+            ("Bach/flac", False),
+        ],
+        ids=["nested", "upper_case", "other_final_suffix", "flac_directory", "no_suffix"],
+    )
+    def test_only_the_final_component_s_suffix_decides(self, path: str, expected: bool) -> None:
+        assert is_candidate(path) is expected
+
+    def test_every_training_recording_passes_the_filter(self) -> None:
+        """The universe counts them; rule 1 removes them before any fetch."""
+        prefix = f"{ITEM}__"
+        for entry in json.loads(MANIFEST.read_text())["recordings"]:
+            assert is_candidate(entry["filename"].removeprefix(prefix)), entry["filename"]
+
+
+class TestRejectionCodes:
+    """The rules against training carry v9's codes, in the protocol's order."""
+
+    def test_the_codes_are_the_protocol_s_training_codes_in_rule_order(self) -> None:
+        codes = load_protocol().selection.rejection_codes
+        training = tuple(code for code in codes if code.startswith("TRAINING_"))
+        assert tuple(ExclusionRule) == training
