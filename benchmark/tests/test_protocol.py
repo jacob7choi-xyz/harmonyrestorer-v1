@@ -90,6 +90,12 @@ SUPERSEDED_ARTIFACTS = {
     "docs/benchmark-protocol-v7.md": (
         "acc707badbcc4c14c02025986f9ae88db17a6db1c42f36b210f6e1ab3bb91453"  # pragma: allowlist secret
     ),
+    "benchmark/protocols/v8.json": (
+        "09eda50d288cfb9b8ae29bacbc1176d437387d52f888e010db72cab69ba8783c"  # pragma: allowlist secret
+    ),
+    "docs/benchmark-protocol-v8.md": (
+        "5d3db26cc3d14b400dd9a1040f3f723f17f33047e0280050ff25c567e3f787e9"  # pragma: allowlist secret
+    ),
 }
 
 
@@ -116,7 +122,7 @@ class TestRealProtocol:
     """The checked-in config must load and describe itself accurately."""
 
     def test_it_loads(self) -> None:
-        assert load_protocol().protocol_version == 8
+        assert load_protocol().protocol_version == 9
 
     def test_digest_is_of_the_exact_file_bytes(self) -> None:
         """The provenance claim is 'these bytes governed this run', so the digest
@@ -137,8 +143,8 @@ class TestRealProtocol:
 
     def test_threshold_sits_inside_its_own_calibration_evidence(self) -> None:
         dd = load_protocol().duplicate_detection
-        ceiling = max(dd.calibration.negatives_max, dd.calibration.same_session_negatives_max)
-        assert ceiling < dd.flag_threshold < dd.calibration.positives_min
+        floor = min(dd.calibration.positives_min, dd.calibration.same_session_takes_min)
+        assert dd.calibration.negatives_max < dd.flag_threshold < floor
 
     def test_unknown_metric_name_is_rejected(self) -> None:
         with pytest.raises(ProtocolValueError, match="not a configured primary metric"):
@@ -240,8 +246,8 @@ class TestVersionCommitments:
     """Protocol promises are enforced at load, so weakening one requires a version bump."""
 
     def test_unsupported_version(self, tmp_path: Path) -> None:
-        path = variant(tmp_path, lambda d: d.update({"protocol_version": 9}))
-        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 9"):
+        path = variant(tmp_path, lambda d: d.update({"protocol_version": 10}))
+        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 10"):
             _load_from_path(path)
 
     def test_composite_score_cannot_be_enabled(self, tmp_path: Path) -> None:
@@ -524,7 +530,7 @@ class TestOnlyOneApprovedConfiguration:
             d["aggregation"]["bootstrap"]["iterations"] = 50_000
 
         parsed = _load_from_path(variant(tmp_path, alternate))
-        assert parsed.protocol_version == 8
+        assert parsed.protocol_version == 9
         assert parsed.selection.seed == 999
 
         approved = load_protocol()
@@ -539,9 +545,9 @@ class TestAmendmentChain:
 
     def test_chain_names_the_immediately_superseded_artifacts(self) -> None:
         amends = load_protocol().amends
-        assert amends.protocol_version == 7
-        assert amends.protocol_path == "benchmark/protocols/v7.json"
-        assert amends.document_path == "docs/benchmark-protocol-v7.md"
+        assert amends.protocol_version == 8
+        assert amends.protocol_path == "benchmark/protocols/v8.json"
+        assert amends.document_path == "docs/benchmark-protocol-v8.md"
 
     def test_recorded_digests_match_the_archived_files(self) -> None:
         amends = load_protocol().amends
@@ -581,14 +587,14 @@ class TestAmendmentChain:
 
     def test_the_predecessor_must_be_the_immediately_previous_version(self, tmp_path: Path) -> None:
         path = variant(tmp_path, lambda d: d["amends"].update({"protocol_version": 0}))
-        with pytest.raises(ProtocolValueError, match=r"amends\.protocol_version must be 7"):
+        with pytest.raises(ProtocolValueError, match=r"amends\.protocol_version must be 8"):
             _load_from_path(path)
 
     def test_the_superseded_config_is_not_loadable_as_current(self) -> None:
         """Proof the version bump is real rather than cosmetic: the archived v1 file
         still parses, and the current validator refuses it."""
-        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 7"):
-            _load_from_path(REPO_ROOT / "benchmark" / "protocols" / "v7.json")
+        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 8"):
+            _load_from_path(REPO_ROOT / "benchmark" / "protocols" / "v8.json")
 
 
 class TestFrozenTransform:
@@ -2499,3 +2505,116 @@ class TestRulesV7LeftOpen:
 
         assert fixture.channels == 1
         assert fixture.frames * 8 == protocol.canonicalisation.decode.max_decoded_bytes
+
+
+class TestRulesV8LeftOpen:
+    """What v9 defines: candidates, partitions, the screen, adjudication, and execution."""
+
+    def test_the_real_protocol_states_each_rule(self) -> None:
+        protocol = load_protocol()
+        selection, screen = protocol.selection, protocol.duplicate_detection
+        assert selection.candidate_filter == "final_path_component_suffix_lowercased_is_flac"
+        assert selection.partition_order == ("test", "demo", "test_reserve", "development_reserve")
+        assert screen.flag_threshold == 0.3
+        assert (screen.calibration.positives_min, screen.calibration.positives_n) == (0.755, 435)
+        assert (screen.calibration.negatives_max, screen.calibration.negatives_n) == (0.1435, 10439)
+        assert screen.calibration.same_session_takes_min == 0.4832
+        assert screen.different_performer == "admitted"
+        assert protocol.aggregation.bootstrap.recording_order == "test_partition_admission_order"
+        assert protocol.system_execution.native_crash == "run_invalid_no_publication_artifact"
+
+    def test_the_partitions_fill_exactly_the_slots_the_walk_stops_at(self) -> None:
+        selection = load_protocol().selection
+        assert [selection.partitions[name] for name in selection.partition_order] == [30, 6, 6, 6]
+
+    def test_no_rejection_code_reuses_another_section_s_code(self) -> None:
+        """The audit trail names the predicate responsible, so one code means one thing."""
+        protocol = load_protocol()
+        others = {
+            *protocol.source_outcomes.ineligible_reasons,
+            *protocol.source_outcomes.abort_reasons,
+            *protocol.eligibility.recording_ineligible_reasons,
+            *protocol.eligibility.frame_ineligible_reasons,
+            protocol.selection.permanent_unavailability_code,
+        }
+        assert not others & set(protocol.selection.rejection_codes)
+        assert len(set(protocol.selection.rejection_codes)) == 8
+
+    @pytest.mark.parametrize(
+        ("section", "field", "message"),
+        [
+            ("selection", "candidate_filter", r"selection\.candidate_filter must be"),
+            ("selection", "identifier_comparison", r"selection\.identifier_comparison must be"),
+            ("selection", "partition_assignment", r"selection\.partition_assignment must be"),
+            ("selection", "short_universe", r"selection\.short_universe must be"),
+            ("duplicate_detection", "screen_scope", r"duplicate_detection\.screen_scope must"),
+            ("duplicate_detection", "same_session_take", r"\.same_session_take must be"),
+            ("duplicate_detection", "different_performer", r"\.different_performer must be"),
+            ("duplicate_detection", "adjudication_evidence", r"\.adjudication_evidence must"),
+            ("scoring", "reference", r"scoring\.reference must be"),
+            ("scoring", "reference_refused_after_conditioning", r"\.reference_refused_after"),
+            ("system_execution", "engine_process", r"system_execution\.engine_process must"),
+            ("system_execution", "native_crash", r"system_execution\.native_crash must be"),
+            ("system_execution", "progress_marker", r"system_execution\.progress_marker must"),
+        ],
+    )
+    def test_each_rule_is_closed(
+        self, tmp_path: Path, section: str, field: str, message: str
+    ) -> None:
+        path = variant(tmp_path, lambda d: d[section].update({field: "decided_later"}))
+        with pytest.raises(ProtocolValueError, match=message):
+            _load_from_path(path)
+
+    @pytest.mark.parametrize("field", ["partition_order", "predicate_order", "rejection_codes"])
+    def test_each_ordered_list_is_closed(self, tmp_path: Path, field: str) -> None:
+        """Reversed, each list holds the same names in an order that changes its meaning."""
+        path = variant(tmp_path, lambda d: d["selection"][field].reverse())
+        with pytest.raises(ProtocolValueError, match=rf"selection\.{field} must be"):
+            _load_from_path(path)
+
+    def test_a_partition_without_a_place_in_the_order_is_rejected(self, tmp_path: Path) -> None:
+        path = variant(tmp_path, lambda d: d["selection"]["partitions"].update({"extra": 1}))
+        with pytest.raises(ProtocolValueError, match="must name exactly the partitions"):
+            _load_from_path(path)
+
+    def test_the_recording_order_is_closed(self, tmp_path: Path) -> None:
+        path = variant(
+            tmp_path,
+            lambda d: d["aggregation"]["bootstrap"].update({"recording_order": "walk_order"}),
+        )
+        with pytest.raises(ProtocolValueError, match=r"bootstrap\.recording_order must be"):
+            _load_from_path(path)
+
+    @pytest.mark.parametrize(
+        "change",
+        [{"same_session_takes_min": 0.25}, {"negatives_max": 0.35}],
+        ids=["takes_below_threshold", "negatives_above_threshold"],
+    )
+    def test_the_threshold_must_flag_takes_and_pass_every_other_pair(
+        self, tmp_path: Path, change: dict[str, Any]
+    ) -> None:
+        path = variant(tmp_path, lambda d: d["duplicate_detection"]["calibration"].update(change))
+        with pytest.raises(ProtocolValueError, match="outside its own evidence"):
+            _load_from_path(path)
+
+    @pytest.mark.parametrize(
+        ("change", "message"),
+        [
+            ({"window": "hamming"}, r"mfcc\.window must be"),
+            ({"mel_basis_dtype": "float64"}, r"mfcc\.mel_basis_dtype must be"),
+            ({"input": "decoded_source"}, r"mfcc\.input must be"),
+            ({"degenerate_features": "zero"}, r"mfcc\.degenerate_features must be"),
+            ({"win_length": 4096}, "win_length in"),
+            ({"n_mels": 0}, "n_mels must be positive"),
+            ({"fmax": 9000.0}, "fmax <= sample_rate / 2"),
+            ({"db_top_db": 0.0}, "db_top_db must be positive"),
+            ({"dct_type": 4}, "dct_type in 1-3"),
+            ({"zscore_ddof": 2}, "zscore_ddof 0 or 1"),
+        ],
+    )
+    def test_the_screen_s_features_are_stated_and_usable(
+        self, tmp_path: Path, change: dict[str, Any], message: str
+    ) -> None:
+        path = variant(tmp_path, lambda d: d["duplicate_detection"]["mfcc"].update(change))
+        with pytest.raises(ProtocolValueError, match=message):
+            _load_from_path(path)

@@ -39,7 +39,7 @@ identical output: all 145 files matched the manifest and canonicalised; no two s
 decoded-PCM digest; no zero-variance coefficient or zero-norm frame occurred. Positives:
 trim minimum 0.9856, gain minimum 1.0000, 8 kHz round trip minimum 0.7550 (the Peer Gynt
 "In the Hall of the Mountain King" recording), n=145 each. Negatives: 10,440 pairs, median
-0.0239, 99.9th percentile 0.1112, maximum 0.4832, none at or above the 0.50 threshold. That
+0.0239, 99.9th percentile 0.1112, maximum 0.4832, none at or above v8's 0.50 threshold. That
 maximum is a pair of files whose names identify one Brahms Symphony No. 2 movement and end
 `take1` and `take2`; the next highest pair is 0.1435. The identification is from the file
 names only, and the files were not listened to. If they are two takes, as the names indicate,
@@ -256,7 +256,7 @@ def negatives(corpus: Corpus, protocol: Protocol) -> list[tuple[float | None, st
 
 
 def report(corpus: Corpus, pairs: list[tuple[float | None, str, str]], protocol: Protocol) -> None:
-    """Print the calibration beside protocol v1's, and every fact the amendment will need.
+    """Print the calibration beside the loaded protocol's, and every fact an amendment needs.
 
     Prints `none` for a minimum or maximum over no scores rather than raising, so a run in
     which every recording failed still reports its failures.
@@ -271,9 +271,9 @@ def report(corpus: Corpus, pairs: list[tuple[float | None, str, str]], protocol:
     _report_negatives(pairs, protocol)
     cal = protocol.duplicate_detection.calibration
     print(
-        f"protocol v1: positives min {cal.positives_min} (n={cal.positives_n}), negatives max "
-        f"{cal.negatives_max} (n={cal.negatives_n}), same-session max "
-        f"{cal.same_session_negatives_max} (n={cal.same_session_negatives_n})"
+        f"protocol v{protocol.protocol_version}: positives min {cal.positives_min} "
+        f"(n={cal.positives_n}), negatives max {cal.negatives_max} (n={cal.negatives_n}), "
+        f"same-session takes min {cal.same_session_takes_min} (n={cal.same_session_takes_n})"
     )
 
 
