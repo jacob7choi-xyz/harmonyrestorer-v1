@@ -102,6 +102,12 @@ SUPERSEDED_ARTIFACTS = {
     "docs/benchmark-protocol-v9.md": (
         "985d00e8c8c38fc2c5cf9b37a4c50bb7370d175c33c438944f14931623a13ac2"  # pragma: allowlist secret
     ),
+    "benchmark/protocols/v10.json": (
+        "30c4d3f489c28e6e37992a976597dd1200d938b669d2af45c270d2fddfb2de18"  # pragma: allowlist secret
+    ),
+    "docs/benchmark-protocol-v10.md": (
+        "2d57bd4b362027bec245f521e3a87646841ebeebff477e1ed47a58979a4d88a9"  # pragma: allowlist secret
+    ),
 }
 
 
@@ -128,7 +134,7 @@ class TestRealProtocol:
     """The checked-in config must load and describe itself accurately."""
 
     def test_it_loads(self) -> None:
-        assert load_protocol().protocol_version == 10
+        assert load_protocol().protocol_version == 11
 
     def test_digest_is_of_the_exact_file_bytes(self) -> None:
         """The provenance claim is 'these bytes governed this run', so the digest
@@ -252,8 +258,8 @@ class TestVersionCommitments:
     """Protocol promises are enforced at load, so weakening one requires a version bump."""
 
     def test_unsupported_version(self, tmp_path: Path) -> None:
-        path = variant(tmp_path, lambda d: d.update({"protocol_version": 11}))
-        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 11"):
+        path = variant(tmp_path, lambda d: d.update({"protocol_version": 12}))
+        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 12"):
             _load_from_path(path)
 
     def test_composite_score_cannot_be_enabled(self, tmp_path: Path) -> None:
@@ -536,7 +542,7 @@ class TestOnlyOneApprovedConfiguration:
             d["aggregation"]["bootstrap"]["iterations"] = 50_000
 
         parsed = _load_from_path(variant(tmp_path, alternate))
-        assert parsed.protocol_version == 10
+        assert parsed.protocol_version == 11
         assert parsed.selection.seed == 999
 
         approved = load_protocol()
@@ -551,9 +557,9 @@ class TestAmendmentChain:
 
     def test_chain_names_the_immediately_superseded_artifacts(self) -> None:
         amends = load_protocol().amends
-        assert amends.protocol_version == 9
-        assert amends.protocol_path == "benchmark/protocols/v9.json"
-        assert amends.document_path == "docs/benchmark-protocol-v9.md"
+        assert amends.protocol_version == 10
+        assert amends.protocol_path == "benchmark/protocols/v10.json"
+        assert amends.document_path == "docs/benchmark-protocol-v10.md"
 
     def test_recorded_digests_match_the_archived_files(self) -> None:
         amends = load_protocol().amends
@@ -593,14 +599,14 @@ class TestAmendmentChain:
 
     def test_the_predecessor_must_be_the_immediately_previous_version(self, tmp_path: Path) -> None:
         path = variant(tmp_path, lambda d: d["amends"].update({"protocol_version": 0}))
-        with pytest.raises(ProtocolValueError, match=r"amends\.protocol_version must be 9"):
+        with pytest.raises(ProtocolValueError, match=r"amends\.protocol_version must be 10"):
             _load_from_path(path)
 
     def test_the_superseded_config_is_not_loadable_as_current(self) -> None:
         """Proof the version bump is real rather than cosmetic: the archived v1 file
         still parses, and the current validator refuses it."""
-        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 9"):
-            _load_from_path(REPO_ROOT / "benchmark" / "protocols" / "v9.json")
+        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 10"):
+            _load_from_path(REPO_ROOT / "benchmark" / "protocols" / "v10.json")
 
 
 class TestFrozenTransform:
@@ -2678,4 +2684,117 @@ class TestRulesV9LeftOpen:
             tmp_path, lambda d: d["selection"].update({"permanent_failure_codes": [404, 410]})
         )
         with pytest.raises(ProtocolValueError, match=r"selection\.permanent_failure_codes must"):
+            _load_from_path(path)
+
+
+class TestRulesV10LeftOpen:
+    """What v11 defines: identifier syntax, the listing check, oversize files, and timeouts."""
+
+    def test_the_real_protocol_states_each_rule(self) -> None:
+        protocol = load_protocol()
+        selection = protocol.selection
+        assert selection.predicate_order[0] == "identifier_syntax"
+        assert selection.identifier_syntax_code == "CANDIDATE_IDENTIFIER_MALFORMED"
+        assert selection.listing_mismatch_code == "CANDIDATE_LISTING_MISMATCH"
+        assert protocol.eligibility.recording_without_eligible_frames == (
+            "evaluated_in_the_walk_before_admission_rejects"
+        )
+        assert protocol.duplicate_detection.degenerate_scope == "candidate_features_only"
+        assert protocol.runner.timeout_abort == "WORKER_TIMEOUT"
+        assert "WORKER_TIMEOUT" in protocol.source_outcomes.abort_reasons
+
+    def test_each_new_code_means_one_thing(self) -> None:
+        """The audit trail names the check responsible, so no two checks may share a code."""
+        protocol = load_protocol()
+        selection = protocol.selection
+        codes = [
+            *selection.rejection_codes,
+            *protocol.source_outcomes.ineligible_reasons,
+            *protocol.source_outcomes.abort_reasons,
+            *protocol.eligibility.recording_ineligible_reasons,
+            *protocol.eligibility.frame_ineligible_reasons,
+            selection.permanent_unavailability_code,
+            selection.retries_exhausted_code,
+            selection.identifier_syntax_code,
+            selection.listing_mismatch_code,
+        ]
+        assert len(set(codes)) == len(codes)
+
+    def test_a_timeout_is_never_recorded_as_a_capacity_failure(self) -> None:
+        runner = load_protocol().runner
+        assert runner.timeout_abort != runner.capacity_abort
+
+    @pytest.mark.parametrize(
+        ("section", "field", "message"),
+        [
+            ("selection", "identifier_syntax", r"selection\.identifier_syntax must be"),
+            ("selection", "identifier_syntax_code", r"selection\.identifier_syntax_code must"),
+            ("selection", "listing_check", r"selection\.listing_check must be"),
+            ("selection", "listing_mismatch_code", r"selection\.listing_mismatch_code must be"),
+            ("selection", "oversize_fetch", r"selection\.oversize_fetch must be"),
+            ("eligibility", "recording_without_eligible_frames", r"\.recording_without_eligible"),
+            ("duplicate_detection", "degenerate_scope", r"\.degenerate_scope must be"),
+            ("runner", "timeout_abort", r"runner\.timeout_abort must be"),
+            ("runner", "worker_timeout", r"runner\.worker_timeout must be"),
+        ],
+    )
+    def test_each_rule_is_closed(
+        self, tmp_path: Path, section: str, field: str, message: str
+    ) -> None:
+        path = variant(tmp_path, lambda d: d[section].update({field: "decided_later"}))
+        with pytest.raises(ProtocolValueError, match=message):
+            _load_from_path(path)
+
+
+def _set_path(data: dict[str, Any], dotted: str, value: object) -> None:
+    """Set the value at a dotted path in a parsed protocol, for a typed-field variant."""
+    *parents, leaf = dotted.split(".")
+    for key in parents:
+        data = data[key]
+    data[leaf] = value
+
+
+class TestNumericFieldsHaveOneType:
+    """The loader checks key names only, so a field's JSON type is checked on its own."""
+
+    @pytest.mark.parametrize(
+        ("dotted", "value"),
+        [
+            pytest.param("selection.seed", True, id="seed_true_walks_as_seed_1"),
+            pytest.param("selection.seed", 20260726.0, id="seed_float_fails_late"),
+            pytest.param("selection.partitions.test", 30.0, id="partition_float"),
+            pytest.param("selection.partitions.demo", True, id="partition_true_is_one_slot"),
+            pytest.param("selection.acquisition_retries", True, id="retries_true_is_one"),
+            pytest.param("selection.permanent_failure_codes", [401.0], id="status_float"),
+            pytest.param("eligibility.recording_rms_dbfs_min", False, id="rms_floor_false_is_0"),
+            pytest.param("eligibility.frame_rms_dbfs_min", -45, id="frame_floor_int"),
+            pytest.param("duplicate_detection.flag_threshold", True, id="threshold_true"),
+            pytest.param(
+                "duplicate_detection.mfcc.min_overlap_frames", True, id="overlap_true_is_one"
+            ),
+            pytest.param("duplicate_detection.mfcc.min_overlap_frames", 100.5, id="overlap_float"),
+            pytest.param(
+                "duplicate_detection.mfcc.alignment_search_s", 5, id="search_int_not_float"
+            ),
+            pytest.param("duplicate_detection.mfcc.center", 1, id="center_int_not_bool"),
+            pytest.param(
+                "duplicate_detection.calibration.positives_n", 435.0, id="calibration_n_float"
+            ),
+            pytest.param(
+                "duplicate_detection.calibration.negatives_max", 0, id="calibration_bound_int"
+            ),
+            pytest.param("framing.frame_samples", 32000.0, id="frame_samples_float"),
+            pytest.param(
+                "canonicalisation.decode.max_source_bytes", 536870912.0, id="byte_bound_float"
+            ),
+            pytest.param(
+                "canonicalisation.resample.target_sample_rate", 16000.0, id="target_rate_float"
+            ),
+        ],
+    )
+    def test_a_field_of_another_type_is_refused(
+        self, tmp_path: Path, dotted: str, value: object
+    ) -> None:
+        path = variant(tmp_path, lambda d: _set_path(d, dotted, value))
+        with pytest.raises(ProtocolSchemaError, match="holds the wrong JSON type"):
             _load_from_path(path)

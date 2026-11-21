@@ -710,6 +710,14 @@ class TestAbortsAreADifferentThing:
         with pytest.raises(SourceOutcomeError, match="must name it"):
             RunAbortOutcome(reason=reason, detail="detail")
 
+    def test_a_worker_timeout_must_name_the_source_it_stopped(self) -> None:
+        """v11: the runner stops one worker, so the abort names that worker's source.
+
+        Stated directly rather than through the policy table, which the parametrized
+        tests read and so would follow a change to it."""
+        with pytest.raises(SourceOutcomeError, match="must name it"):
+            RunAbortOutcome(reason=AbortReason.WORKER_TIMEOUT, detail="detail")
+
     @pytest.mark.parametrize(
         "reason", [r for r, p in ABORT_SOURCE_CONTEXT.items() if p is SourceContextPolicy.OPTIONAL]
     )

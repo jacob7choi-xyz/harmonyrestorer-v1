@@ -1,14 +1,14 @@
-# Benchmark protocol v10
+# Benchmark protocol v11
 
 Frozen before candidate identities are selected, downloaded for evaluation,
 auditioned, or scored. The source collection has already been inspected in general
 terms; what has not happened is any decision about which recordings enter the
 benchmark.
 
-> **Note:** v10 amends v9, which amended v8, which amended v7, which amended v6, which
-> amended v5, which amended v4, which amended v3, which amended v2, which amended v1, all
-> before any evaluation ran. The
-> operational values live in `benchmark/protocols/v10.json`, which is normative; this
+> **Note:** v11 amends v10, which amended v9, which amended v8, which amended v7, which
+> amended v6, which amended v5, which amended v4, which amended v3, which amended v2, which
+> amended v1, all before any evaluation ran. The
+> operational values live in `benchmark/protocols/v11.json`, which is normative; this
 > document explains them and
 > its numbers are illustrative. Superseded versions are preserved unmodified, as
 > [benchmark-protocol-v1.md](benchmark-protocol-v1.md),
@@ -18,8 +18,9 @@ benchmark.
 > [benchmark-protocol-v5.md](benchmark-protocol-v5.md),
 > [benchmark-protocol-v6.md](benchmark-protocol-v6.md),
 > [benchmark-protocol-v7.md](benchmark-protocol-v7.md),
-> [benchmark-protocol-v8.md](benchmark-protocol-v8.md), and
-> [benchmark-protocol-v9.md](benchmark-protocol-v9.md) with their configs, so an
+> [benchmark-protocol-v8.md](benchmark-protocol-v8.md),
+> [benchmark-protocol-v9.md](benchmark-protocol-v9.md), and
+> [benchmark-protocol-v10.md](benchmark-protocol-v10.md) with their configs, so an
 > artifact recording an older `protocol_version` stays interpretable. See
 > [Amendment](#amendment) for what changed and why.
 
@@ -88,7 +89,11 @@ and no lifter), so a library upgrade that changes a default cannot change the sc
 offsets run over every multiple of the stride up to floor(5 * 16000 / 512) = 156 frames,
 about 4.99 s. A coefficient with zero variance over a recording, a frame vector with zero
 norm, or a comparison with too little overlap makes the screen's answer uncertain, which
-excludes the candidate.
+excludes the candidate. From v11, the degenerate-features rule applies to the candidate's
+own features. A reference's features are not checked, so a degenerate reference cannot make
+every candidate uncertain and block every run; a comparison with one is scored as usual.
+An admitted candidate has passed this check, and the duplicate-screen measurement found no
+degenerate features in the 145 training recordings.
 
 The threshold is calibrated, not chosen, on training recordings only, so that benchmark
 candidates can never become the detector's tuning set. v9 recalibrated it on all 145
@@ -142,8 +147,9 @@ likely to raise:
 
 From v10, a recorded adjudication applies to a flagged candidate only when it names the
 candidate by its source identifier, raw digest, and decoded-PCM digest, names every
-reference recording the screen flagged it against by the same three values (a training
-recording by its manifest file name), and answers for each of those references. Without
+reference recording the screen flagged it against by the same three values (from v11
+stated in full: a training recording by its manifest file name, its raw digest, and its
+decoded-PCM digest), and answers for each of those references. Without
 such a record the walk halts, awaiting adjudication, and nothing is published; the answers
 are recorded with their evidence and the walk is run again from the start. A record that
 names any recording with a different identifier or digest does not apply, so an answer is
@@ -178,10 +184,11 @@ discretionary branch.
    `numpy.random.Generator(PCG64(20260726)).permutation(n)` gives, where `n` is the
    size of the frozen universe. Identifiers are compared exactly as the listing gives
    them, with no Unicode normalisation or case folding
-3. Walk that order strictly. For each candidate, in this order: the first exclusion rule
-   (before any fetch); fetch; the raw digest; the source-outcome stages; the decoded-PCM
-   digest; the eligibility floors; the duplicate screen. The first check a candidate fails
-   is the predicate responsible
+3. Walk that order strictly. For each candidate, in this order: from v11, the identifier
+   syntax rule; the first exclusion rule (before any fetch); fetch; the raw digest; the
+   source-outcome stages; the decoded-PCM digest; the eligibility floors, which from v11
+   include `RECORDING_WITHOUT_ELIGIBLE_FRAMES`; the duplicate screen. The first check a
+   candidate fails is the predicate responsible
 4. Rejected candidates are skipped and the walk continues. There is no manual
    substitution and no reordering
 
@@ -205,6 +212,35 @@ made. If every attempt fails transiently, the run is invalid under
 would let network conditions choose the test set. The wait between attempts is a harness
 setting rather than a protocol value, because it cannot change which candidates are
 admitted.
+
+From v11, a source identifier must be the collection identifier, one slash, and a path
+whose slash-separated segments are each non-empty and neither `.` nor `..`, with no NUL,
+no backslash, and no character of Unicode general category Cc (control) or Cs (a lone
+surrogate, which cannot be encoded as UTF-8 for a record or a worker argument). A
+trailing slash leaves an empty last segment, and a leading slash in the path an empty
+first one, so both are malformed. A malformed identifier that passes the candidate filter stays in the universe,
+so `n` counts it, and is rejected as `CANDIDATE_IDENTIFIER_MALFORMED` at its position in
+the walk, before rule 1 and before any fetch. It never becomes a local path. The rule was
+written before the listing was read, so it cannot be fitted to the entries it excludes.
+
+From v11, the frozen universe records each file's size, md5, and sha1 as the listing gives
+them, and records a value as absent where the listing gives none. Whether this item's
+listing gives them was not checked when v11 was frozen; v4 recorded that the collection
+publishes no checksum. After each fetch attempt every recorded value is compared with the
+downloaded bytes, and the audit trail records which were compared. A mismatch, for example
+an error page served with status 200, is a transient failure of that attempt. If every
+attempt ends in a mismatch, the candidate is excluded as `CANDIDATE_LISTING_MISMATCH`, so
+a file whose listing is persistently wrong cannot block every run; if the attempts run out
+with any other transient failure among them, the run is invalid as above. md5 and sha1
+check that the transfer delivered the listed bytes; they are not evidence against
+deliberate tampering. The local SHA-256 remains the artifact's identity.
+
+From v11, a download stops once it exceeds `max_identity_stream_bytes`, and no raw digest
+is computed for it. The staged prefix still exceeds that bound, so the source-outcome
+stages exclude it as `SOURCE_EXCEEDS_MAX_BYTES` without reading it. The raw-digest rules
+are then decided by size: every training recording and every admitted candidate is at most
+`max_source_bytes`, and byte strings of different lengths are not the same bytes, so such a
+file matches none of them.
 
 The candidate universe is enumerated once and frozen to
 `benchmark/manifests/candidate_universe.json` with its own digest, recording the
@@ -583,9 +619,12 @@ precedence order. The first failure in that order is the primary reason, and any
 are recorded as supplemental. Both recording floors are always evaluated, and both frame
 checks are always evaluated, so neither verdict in a pair hides the other.
 `RECORDING_WITHOUT_ELIGIBLE_FRAMES` is evaluated only for a recording that cleared both
-recording floors, once its frames are cut after partition assignment, so it is never
-supplemental to a floor code. Such a recording keeps its partition position,
-contributes no frames, and is left out of the across-recording count.
+recording floors, so it is never supplemental to a floor code. From v11 it is evaluated in
+the walk's eligibility check, before admission, on the frames framing defines over the
+canonical waveform. A recording with no eligible frame is rejected and the walk continues,
+so every admitted recording has at least one eligible frame. Until v10 such a recording kept its partition position, contributed no frames,
+and was left out of the across-recording count; no reason for that choice was found in
+the v6 document or its commit message.
 
 Every candidate frame is recorded with its RMS and its verdict, not only the
 eligible ones. The population considered before filtering is then provable from the
@@ -657,7 +696,7 @@ by convention:
 | | Effect | Codes |
 |---|---|---|
 | Source-ineligible | recorded, published, run continues | the 13 codes below |
-| Abort | run stops, publication blocked | `SOURCE_HASH_MISMATCH`, `LOCAL_ARTIFACT_UNSTABLE`, `LOCAL_ARTIFACT_NOT_REGULAR_FILE`, `GOLDEN_FIXTURE_FAILURE`, `ENVIRONMENT_MISMATCH`, `ENVIRONMENT_CAPACITY_FAILURE`, `UNEXPECTED_IO_FAILURE`, `INTERNAL_CANONICALISATION_ERROR` |
+| Abort | run stops, publication blocked | `SOURCE_HASH_MISMATCH`, `LOCAL_ARTIFACT_UNSTABLE`, `LOCAL_ARTIFACT_NOT_REGULAR_FILE`, `GOLDEN_FIXTURE_FAILURE`, `ENVIRONMENT_MISMATCH`, `ENVIRONMENT_CAPACITY_FAILURE`, `UNEXPECTED_IO_FAILURE`, `INTERNAL_CANONICALISATION_ERROR`, `WORKER_TIMEOUT` (from v11) |
 
 Keeping them in separate closed vocabularies is what makes a harness failure not
 merely discouraged from becoming a source verdict but unable to be spelled as one.
@@ -886,8 +925,10 @@ difference as a property of the audio.
 
 ## Degradation
 
-Frames are cut only after partition assignment, so every derived artifact inherits
-its recording's partition and siblings cannot cross the boundary.
+Frames are cut for degradation and scoring only after partition assignment, so every
+derived artifact inherits its recording's partition and siblings cannot cross the
+boundary. From v11 the walk also checks each candidate's frames against the frame floors
+before admission, with the same geometry; that check produces no derived artifact.
 
 Degradation is procedurally synthesized, not sampled, so there is no noise-source
 pool to be disjoint from. The process is the one that generated the training pairs:
@@ -975,8 +1016,10 @@ those two builds; runs execute only on the reference platform, where the build i
 
 ## Runner
 
-Frozen in `v8.json` under `runner`. These are duties on the code that runs sources, which
-the loader cannot carry out; no runner exists yet.
+Frozen under `runner` since v8. These are duties on the code that runs sources, which
+the loader cannot carry out. `benchmark/runner.py` carries out the worker and exit duties,
+and `benchmark/run_preconditions.py` the model digest check; the v11 timeout is not
+enforced yet.
 
 - **One child process per source, one at a time.** A worker that dies cannot take a
   record with it, so the parent decides what its death means.
@@ -993,6 +1036,10 @@ the loader cannot carry out; no runner exists yet.
   recorded as a verdict on that source: a crash the runner cannot attribute is not
   charged to the recording.
 - **Each worker's peak memory footprint is recorded per source.**
+- **From v11, a worker that has not exited within the harness time bound** is stopped and
+  aborts the run with `WORKER_TIMEOUT` naming the source, never with
+  `ENVIRONMENT_CAPACITY_FAILURE`, which is about memory. The bound is a harness setting:
+  exceeding it aborts the run, so it cannot change which candidates are admitted.
 
 On the reference platform, before v8 was frozen, a worker's failures reached its parent
 as follows: `SIGKILL` as return code -9, a segmentation fault as -11, and an uncaught
@@ -1349,6 +1396,26 @@ defect discovered after results exist invalidates those results rather than
 retroactively changing the rules that produced them. Superseded versions stay in the
 tree rather than being replaced, and each version names its predecessor by digest;
 the loader recomputes those digests, so the chain is checked rather than asserted.
+
+### v10 to v11
+
+An audit of the code the selection walk will run found five things v10 left open, or
+decided at a cost to the number of scored recordings. Listing identifiers were not
+validated, so a malformed one could reach a local path. Downloaded bytes were not compared
+with the listing, so an error page served with status 200 would have been excluded as
+undecodable. Above `max_identity_stream_bytes` no raw digest exists, and the raw-digest
+rules did not say how to decide such a file. The runner had no abort code for a worker it
+stops on a time bound. An admitted recording with no eligible frame kept its slot, so the
+test partition could score fewer than 30 recordings. v11 adds the identifier syntax rule
+and `CANDIDATE_IDENTIFIER_MALFORMED`, the listing check and `CANDIDATE_LISTING_MISMATCH`,
+the size rule for oversize downloads, and `WORKER_TIMEOUT`, and moves
+`RECORDING_WITHOUT_ELIGIBLE_FRAMES` into the walk (see [Selection](#selection),
+[Eligibility](#eligibility), and [Runner](#runner)). It also states that the
+degenerate-features rule applies to the candidate's own features, and how an adjudication
+names a training reference. No candidate universe had been enumerated by the benchmark, and no
+candidate audio had been acquired or inspected, when v11 was frozen. The Internet Archive
+item's file listing was read by `dataset/acquire.py` when the training recordings were
+downloaded.
 
 ### v9 to v10
 
