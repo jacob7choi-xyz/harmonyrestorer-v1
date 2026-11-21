@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -16,6 +17,8 @@ import soundfile as sf
 from benchmark.degradation import high_freq_rolloff, tape_saturation
 from benchmark.measurements.capacity import parse_result, run_pipeline, write_tone_flac
 from benchmark.measurements.d8993b2_equivalence import bit_identical
+from benchmark.measurements.dead_worker_footprint import Ended
+from benchmark.measurements.dead_worker_footprint import run_case as run_footprint_case
 from benchmark.measurements.training_pairs import (
     expected_hiss_peak,
     hiss_free_signal,
@@ -207,3 +210,23 @@ class TestWorkerExits:
 
     def test_sigkill_is_minus_nine(self) -> None:
         assert run_case(CASES["sigkill"]).returncode == -9
+
+
+class TestDeadWorkerFootprint:
+    """The parent reads how a child ended, what it printed, and on macOS its footprint."""
+
+    def test_the_exit_code_and_output_are_returned(self) -> None:
+        ended = run_footprint_case("print('x')\nraise SystemExit(3)")
+        assert (ended.returncode, ended.stdout) == (3, "x")
+
+    @pytest.mark.skipif(sys.platform != "darwin", reason="footprint is macOS only")
+    def test_a_killed_child_has_a_footprint(self) -> None:
+        code = "import numpy as np, os, signal\na = np.ones(100_000_000 // 8)\nos.kill(os.getpid(), signal.SIGKILL)"
+        ended = run_footprint_case(code)
+        assert ended.returncode == -9
+        assert ended.footprint is not None
+        assert ended.footprint >= 100_000_000
+
+    @pytest.mark.skipif(sys.platform == "darwin", reason="footprint is read on macOS")
+    def test_no_footprint_is_claimed_off_macos(self) -> None:
+        assert run_footprint_case("pass") == Ended(0, None, "")
