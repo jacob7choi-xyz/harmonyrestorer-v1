@@ -30,7 +30,7 @@ def protocol() -> Protocol:
 
 
 def music(samples: int, seed: int = 0) -> npt.NDArray[np.float64]:
-    """Noise at about -16 dBFS: above the frame floor and scoreable by every metric."""
+    """Noise at about -17 dBFS (-16.8 at seed 0): above the frame floor and scoreable by every metric."""
     return np.random.default_rng(seed).uniform(-0.25, 0.25, samples)
 
 
@@ -118,7 +118,7 @@ class TestFrameVerdicts:
     def test_a_quiet_frame_that_metrics_accept_is_below_the_floor_only(
         self, protocol: Protocol
     ) -> None:
-        """About -56 dBFS: under the -45 dBFS floor and still scoreable by every metric."""
+        """About -65 dBFS (-64.8): under the -45 dBFS floor and still scoreable by every metric."""
         verdicts = verdicts_for([music(32000, 2) * 0.004], protocol)
         assert verdicts[0].reasons == (FrameReason.BELOW_RMS_FLOOR,)
         assert verdicts[0].unscoreable_by == ()

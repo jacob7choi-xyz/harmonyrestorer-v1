@@ -118,8 +118,10 @@ def bootstrap_means(estimands: Values, protocol: Protocol) -> Values:
     for iteration in range(config.iterations):
         draw = generator.integers(0, count, size=count)
         # One `mean` call per estimand, the literal form. Reducing the stacked matrix along
-        # an axis gave a different last bit for one row than reducing that row alone, so an
-        # estimand's interval would otherwise depend on which other estimands sit beside it.
+        # an axis gave one row a result one unit in the last place away from reducing that
+        # row alone (seen when test_the_intervals_are_linear_percentiles_of_the_shared_draws
+        # failed against the stacked form), so an estimand's interval would otherwise depend
+        # on which other estimands sit beside it.
         for row in range(estimands.shape[0]):
             means[row, iteration] = estimands[row][draw].mean()
     return means

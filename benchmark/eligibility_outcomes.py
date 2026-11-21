@@ -23,6 +23,12 @@ and estimate therefore raises exactly when the frame is not a valid reference, a
 refusal rules stay in one place rather than being restated here. The frame checked is the
 unscaled canonical frame, as v7 keeps eligibility on the unscaled waveform.
 
+This decides eligibility for the frame as cut, and no more. The reference that is later
+scored is that frame times the training-level gain, possibly truncated by conditioning, and
+a frame that passes here can still be refused there: a frame that is constant apart from its
+last 130 samples, scored against an output 130 samples shorter, is one. `frame_scoring`
+treats that case as a harness abort; no protocol version up to v8 names it.
+
 Every candidate frame gets a verdict, eligible or not, so the population before filtering
 is recorded rather than asserted.
 """
