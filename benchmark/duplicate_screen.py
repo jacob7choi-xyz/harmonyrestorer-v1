@@ -22,13 +22,17 @@ A coefficient with zero variance and a frame with zero norm are left at zero and
 the answer is uncertain, the references at or above `flag_threshold`, and the maximum
 similarity against each group for the audit trail. It reads no files: the caller computes the
 features and names each reference by the three values an adjudication record names it by.
+
+`adjudicate` turns a result and the recorded answers into admit, exclude under a screen code,
+or awaiting adjudication, following `duplicate_detection.adjudication_record_note`. Reading the
+records from disk, and halting the walk while one is awaited, belong to the walk.
 """
 
 from __future__ import annotations
 
 import logging
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Literal
@@ -254,3 +258,110 @@ def screen(
         flagged=tuple(flagged),
         unscored=tuple(unscored),
     )
+
+
+class ScreenCode(StrEnum):
+    """The screen's rejection codes, in the protocol's order."""
+
+    SAME_PERFORMANCE_TRAINING = "SCREEN_SAME_PERFORMANCE_TRAINING"
+    SAME_PERFORMANCE_ADMITTED = "SCREEN_SAME_PERFORMANCE_ADMITTED"
+    UNCERTAIN = "SCREEN_UNCERTAIN"
+
+
+class Answer(StrEnum):
+    """A person's answer for one flagged reference."""
+
+    SAME_PERFORMANCE = "same_performance"
+    DIFFERENT_PERFORMANCE = "different_performance"
+    UNCERTAIN = "uncertain"
+
+
+@dataclass(frozen=True)
+class AnswerSet:
+    """One adjudication record: the candidate it is for and an answer per reference.
+
+    A mapping cannot name a reference twice, so the reader of the record file must refuse a
+    record that does, rather than keep one of the answers.
+    """
+
+    candidate: RecordingIdentity
+    answers: Mapping[RecordingIdentity, Answer]
+
+
+class Decision(StrEnum):
+    """What the walk does with a screened candidate."""
+
+    ADMIT = "admit"
+    EXCLUDE = "exclude"
+    AWAITING_ADJUDICATION = "awaiting_adjudication"
+
+
+@dataclass(frozen=True)
+class ScreenDecision:
+    """The decision, and the code an exclusion is recorded under."""
+
+    decision: Decision
+    code: ScreenCode | None = None
+
+
+_SAME_PERFORMANCE_CODES = {
+    Group.TRAINING: ScreenCode.SAME_PERFORMANCE_TRAINING,
+    Group.ADMITTED: ScreenCode.SAME_PERFORMANCE_ADMITTED,
+}
+
+
+def _recorded_answers(
+    result: ScreenResult, candidate: RecordingIdentity, records: Sequence[AnswerSet]
+) -> Mapping[RecordingIdentity, Answer] | None:
+    """The answers of the records made for exactly this candidate and these flags, if any.
+
+    A record applies only when it names this candidate by all three values and names exactly
+    the flagged references by all three values: one missing, one extra, or one differing in
+    any value means it was not made for these bytes and these flags.
+
+    Raises:
+        ScreenError: If two records that apply give different answers.
+    """
+    flagged = {flag.identity for flag in result.flagged}
+    matching = [
+        record.answers
+        for record in records
+        if record.candidate == candidate and set(record.answers) == flagged
+    ]
+    if any(answers != matching[0] for answers in matching[1:]):
+        logger.error("Adjudication records for %s disagree", candidate.identifier)
+        raise ScreenError(f"adjudication records for {candidate.identifier} disagree")
+    return matching[0] if matching else None
+
+
+def adjudicate(
+    result: ScreenResult, candidate: RecordingIdentity, records: Sequence[AnswerSet]
+) -> ScreenDecision:
+    """Admit, exclude under a screen code, or wait for a person's answers.
+
+    An uncertain result excludes as SCREEN_UNCERTAIN without reading any record, because no
+    answer could admit it. A result with nothing flagged admits. Otherwise the candidate is
+    admitted only if a record that applies answers every flagged reference as a different
+    performance. If it does not, the training references are considered before the earlier
+    admissions: the first group with another answer decides, a same-performance answer giving
+    that group's code and an uncertain one SCREEN_UNCERTAIN, same performance first. With no
+    record that applies, the walk awaits adjudication.
+
+    Raises:
+        ScreenError: If two records that apply give different answers.
+    """
+    if result.uncertain:
+        return ScreenDecision(Decision.EXCLUDE, ScreenCode.UNCERTAIN)
+    if not result.flagged:
+        return ScreenDecision(Decision.ADMIT)
+    answers = _recorded_answers(result, candidate, records)
+    if answers is None:
+        logger.info("%s is flagged and awaits adjudication", candidate.identifier)
+        return ScreenDecision(Decision.AWAITING_ADJUDICATION)
+    for group in (Group.TRAINING, Group.ADMITTED):
+        given = {answers[flag.identity] for flag in result.flagged if flag.group is group}
+        if given - {Answer.DIFFERENT_PERFORMANCE}:
+            if Answer.SAME_PERFORMANCE in given:
+                return ScreenDecision(Decision.EXCLUDE, _SAME_PERFORMANCE_CODES[group])
+            return ScreenDecision(Decision.EXCLUDE, ScreenCode.UNCERTAIN)
+    return ScreenDecision(Decision.ADMIT)

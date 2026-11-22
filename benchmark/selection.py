@@ -28,8 +28,8 @@ Every rule is evaluated and every match is returned, so the audit trail can show
 grounds for an exclusion rather than the first.
 
 `ExclusionRule`'s values are v9's codes for the three rules against training. v9's codes
-for a match against an earlier admission, and for the duplicate screen, belong to the walk,
-which is not in this module.
+for a match against an earlier admission belong to the walk, which is not in this module;
+the duplicate screen's codes are in `benchmark.duplicate_screen`.
 """
 
 from __future__ import annotations

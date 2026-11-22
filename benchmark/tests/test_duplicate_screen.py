@@ -11,11 +11,19 @@ import numpy.typing as npt
 import pytest
 
 from benchmark.duplicate_screen import (
+    Answer,
+    AnswerSet,
+    Decision,
     Degenerate,
+    Flag,
     Group,
     RecordingIdentity,
     Reference,
+    ScreenCode,
+    ScreenDecision,
     ScreenError,
+    ScreenResult,
+    adjudicate,
     coefficients,
     offsets,
     screen,
@@ -232,3 +240,152 @@ class TestScreen:
         ref = reference("t.flac", good if side == "candidate" else features)
         with pytest.raises(ScreenError, match="float64"):
             screen(candidate, CLEAN, [ref], [], config)
+
+
+CANDIDATE = RecordingIdentity("item/c.flac", "c" * 64, "d" * 64)
+TRAINING_REF = RecordingIdentity("t.flac", "1" * 64, "2" * 64)
+SECOND_TRAINING_REF = RecordingIdentity("u.flac", "3" * 64, "4" * 64)
+ADMITTED_REF = RecordingIdentity("item/a.flac", "5" * 64, "6" * 64)
+SAME = Answer.SAME_PERFORMANCE
+DIFFERENT = Answer.DIFFERENT_PERFORMANCE
+UNSURE = Answer.UNCERTAIN
+
+
+def flagged(*flags: tuple[Group, RecordingIdentity]) -> ScreenResult:
+    """A certain result with these references flagged."""
+    return ScreenResult(
+        degenerate=CLEAN,
+        max_training=0.9,
+        max_admitted=None,
+        flagged=tuple(Flag(group, identity, 0.9) for group, identity in flags),
+        unscored=(),
+    )
+
+
+BOTH_GROUPS = flagged(
+    (Group.TRAINING, TRAINING_REF),
+    (Group.TRAINING, SECOND_TRAINING_REF),
+    (Group.ADMITTED, ADMITTED_REF),
+)
+
+
+def answers(t: Answer, u: Answer, a: Answer) -> AnswerSet:
+    """A record for CANDIDATE answering the three references of BOTH_GROUPS."""
+    return AnswerSet(CANDIDATE, {TRAINING_REF: t, SECOND_TRAINING_REF: u, ADMITTED_REF: a})
+
+
+class TestAdjudicate:
+    """From a screen result and the recorded answers to admit, exclude, or wait."""
+
+    def test_the_codes_are_the_protocol_s_screen_codes_in_order(self) -> None:
+        codes = load_protocol().selection.rejection_codes
+        assert tuple(ScreenCode) == tuple(code for code in codes if code.startswith("SCREEN_"))
+
+    def test_an_uncertain_result_is_excluded_whatever_a_record_says(self) -> None:
+        result = dataclasses.replace(
+            flagged((Group.TRAINING, TRAINING_REF)), unscored=(ADMITTED_REF,)
+        )
+        record = AnswerSet(CANDIDATE, {TRAINING_REF: DIFFERENT})
+        assert adjudicate(result, CANDIDATE, [record]) == ScreenDecision(
+            Decision.EXCLUDE, ScreenCode.UNCERTAIN
+        )
+
+    def test_nothing_flagged_admits_without_a_record(self) -> None:
+        assert adjudicate(flagged(), CANDIDATE, []) == ScreenDecision(Decision.ADMIT)
+
+    def test_a_flag_with_no_record_awaits_adjudication(self) -> None:
+        decision = adjudicate(flagged((Group.TRAINING, TRAINING_REF)), CANDIDATE, [])
+        assert decision == ScreenDecision(Decision.AWAITING_ADJUDICATION)
+
+    @pytest.mark.parametrize(
+        "record",
+        [
+            AnswerSet(
+                dataclasses.replace(CANDIDATE, decoded_pcm_sha256="e" * 64),
+                {TRAINING_REF: DIFFERENT, SECOND_TRAINING_REF: DIFFERENT, ADMITTED_REF: DIFFERENT},
+            ),
+            AnswerSet(CANDIDATE, {TRAINING_REF: DIFFERENT, SECOND_TRAINING_REF: DIFFERENT}),
+            AnswerSet(
+                CANDIDATE,
+                {
+                    TRAINING_REF: DIFFERENT,
+                    SECOND_TRAINING_REF: DIFFERENT,
+                    ADMITTED_REF: DIFFERENT,
+                    RecordingIdentity("v.flac", "7" * 64, "8" * 64): DIFFERENT,
+                },
+            ),
+            AnswerSet(
+                CANDIDATE,
+                {
+                    TRAINING_REF: DIFFERENT,
+                    SECOND_TRAINING_REF: DIFFERENT,
+                    dataclasses.replace(ADMITTED_REF, raw_sha256="9" * 64): DIFFERENT,
+                },
+            ),
+        ],
+        ids=[
+            "other_candidate_bytes",
+            "a_flag_unanswered",
+            "an_extra_reference",
+            "other_reference_bytes",
+        ],
+    )
+    def test_a_record_not_made_for_these_bytes_and_flags_does_not_apply(
+        self, record: AnswerSet
+    ) -> None:
+        """Every answer in each record is 'different', so applying it would admit."""
+        decision = adjudicate(BOTH_GROUPS, CANDIDATE, [record])
+        assert decision == ScreenDecision(Decision.AWAITING_ADJUDICATION)
+
+    @pytest.mark.parametrize(
+        ("record", "expected"),
+        [
+            (answers(DIFFERENT, DIFFERENT, DIFFERENT), ScreenDecision(Decision.ADMIT)),
+            (
+                answers(DIFFERENT, SAME, DIFFERENT),
+                ScreenDecision(Decision.EXCLUDE, ScreenCode.SAME_PERFORMANCE_TRAINING),
+            ),
+            (
+                answers(DIFFERENT, DIFFERENT, SAME),
+                ScreenDecision(Decision.EXCLUDE, ScreenCode.SAME_PERFORMANCE_ADMITTED),
+            ),
+            (
+                answers(UNSURE, DIFFERENT, SAME),
+                ScreenDecision(Decision.EXCLUDE, ScreenCode.UNCERTAIN),
+            ),
+            (
+                answers(UNSURE, SAME, DIFFERENT),
+                ScreenDecision(Decision.EXCLUDE, ScreenCode.SAME_PERFORMANCE_TRAINING),
+            ),
+            (
+                answers(DIFFERENT, DIFFERENT, UNSURE),
+                ScreenDecision(Decision.EXCLUDE, ScreenCode.UNCERTAIN),
+            ),
+        ],
+        ids=[
+            "all_different_admits",
+            "same_in_training",
+            "same_only_in_admitted",
+            "training_uncertain_decides_before_admitted_same",
+            "same_before_uncertain_within_a_group",
+            "uncertain_only_in_admitted",
+        ],
+    )
+    def test_a_record_that_applies_decides(
+        self, record: AnswerSet, expected: ScreenDecision
+    ) -> None:
+        assert adjudicate(BOTH_GROUPS, CANDIDATE, [record]) == expected
+
+    def test_the_record_that_applies_is_found_among_others(self) -> None:
+        stale = AnswerSet(CANDIDATE, {TRAINING_REF: DIFFERENT})
+        current = answers(DIFFERENT, SAME, DIFFERENT)
+        decision = adjudicate(BOTH_GROUPS, CANDIDATE, [stale, current, current])
+        assert decision == ScreenDecision(Decision.EXCLUDE, ScreenCode.SAME_PERFORMANCE_TRAINING)
+
+    def test_two_records_that_apply_and_disagree_are_refused(self) -> None:
+        with pytest.raises(ScreenError, match="disagree"):
+            adjudicate(
+                BOTH_GROUPS,
+                CANDIDATE,
+                [answers(DIFFERENT, DIFFERENT, DIFFERENT), answers(DIFFERENT, SAME, DIFFERENT)],
+            )
