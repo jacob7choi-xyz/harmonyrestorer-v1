@@ -17,19 +17,29 @@ A coefficient with zero variance and a frame with zero norm are left at zero and
 `Degenerate`; the protocol makes a candidate with either uncertain
 (`duplicate_detection.degenerate_scope`). These functions were first written for
 `benchmark.measurements.training_screen`, which calibrated the screen and now imports them.
+
+`screen` compares one candidate with every reference and reports what the walk needs: whether
+the answer is uncertain, the references at or above `flag_threshold`, and the maximum
+similarity against each group for the audit trail. It reads no files: the caller computes the
+features and names each reference by the three values an adjudication record names it by.
 """
 
 from __future__ import annotations
 
+import logging
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Literal
 
 import librosa
 import numpy as np
 import numpy.typing as npt
 
-from benchmark.protocol import MfccConfig
+from benchmark.protocol import DuplicateDetection, MfccConfig
+
+logger = logging.getLogger(__name__)
 
 Features = npt.NDArray[np.float64]
 
@@ -111,3 +121,136 @@ def similarity(a: Features, b: Features, lags: list[int], min_overlap: int) -> f
         if best is None or score > best:
             best = score
     return best
+
+
+class ScreenError(ValueError):
+    """Raised when the screen is given inputs it cannot answer for."""
+
+
+class Group(StrEnum):
+    """The two sets a candidate is screened against, in the order the protocol considers them."""
+
+    TRAINING = "training"
+    ADMITTED = "admitted"
+
+
+@dataclass(frozen=True)
+class RecordingIdentity:
+    """A recording as an adjudication record names it.
+
+    `identifier` is a training recording's manifest file name or a candidate's source
+    identifier (`duplicate_detection.adjudication_record_match`).
+    """
+
+    identifier: str
+    raw_sha256: str
+    decoded_pcm_sha256: str
+
+
+@dataclass(frozen=True)
+class Reference:
+    """A recording the candidate is compared with, and its features."""
+
+    identity: RecordingIdentity
+    features: Features
+
+
+@dataclass(frozen=True)
+class Flag:
+    """A reference the candidate scored at or above the flag threshold against."""
+
+    group: Group
+    identity: RecordingIdentity
+    score: float
+
+
+@dataclass(frozen=True)
+class ScreenResult:
+    """What the screen found for one candidate.
+
+    `max_training` and `max_admitted` are the highest similarities scored against each group,
+    for the audit trail; each is None when no comparison in that group was scored, which for
+    `max_admitted` includes a walk that has admitted nothing yet. `unscored` names the
+    references with too little overlap to score.
+    """
+
+    degenerate: Degenerate
+    max_training: float | None
+    max_admitted: float | None
+    flagged: tuple[Flag, ...]
+    unscored: tuple[RecordingIdentity, ...]
+
+    @property
+    def uncertain(self) -> bool:
+        """Degenerate candidate features, or a comparison with too little overlap."""
+        degenerate = self.degenerate.zero_variance_coefficients or self.degenerate.zero_norm_frames
+        return bool(degenerate or self.unscored)
+
+
+def _check_shape(features: Features, n_mfcc: int, what: str) -> None:
+    """Refuse features that are not (frames, n_mfcc) float64."""
+    if features.ndim != 2 or features.shape[1] != n_mfcc or features.dtype != np.float64:
+        logger.error("Screen refused %s features shaped %s", what, features.shape)
+        raise ScreenError(f"{what} features must be (frames, {n_mfcc}) float64")
+
+
+def _check_references(
+    training: Sequence[Reference], admitted: Sequence[Reference], n_mfcc: int
+) -> None:
+    """At least one training reference, every identity distinct, every shape usable.
+
+    With no training reference the screen would flag nothing and admit every candidate, so an
+    empty training set is refused rather than screened.
+    """
+    if not training:
+        logger.error("Screen refused an empty training set")
+        raise ScreenError("the screen needs the training references; none were given")
+    identities = [reference.identity for reference in (*training, *admitted)]
+    if len(set(identities)) != len(identities):
+        logger.error("Screen refused references that repeat an identity")
+        raise ScreenError("each reference must be a distinct recording")
+    for reference in (*training, *admitted):
+        _check_shape(reference.features, n_mfcc, reference.identity.identifier)
+
+
+def screen(
+    features: Features,
+    degenerate: Degenerate,
+    training: Sequence[Reference],
+    admitted: Sequence[Reference],
+    config: DuplicateDetection,
+) -> ScreenResult:
+    """Compare a candidate's features with every training reference, then every admission.
+
+    Every comparison is made even when the candidate's features are degenerate, so the audit
+    trail has both maxima. A score at or above `flag_threshold` flags the reference.
+
+    Raises:
+        ScreenError: If no training reference is given, two references are the same
+            recording, or any features are not (frames, n_mfcc) float64.
+    """
+    mfcc = config.mfcc
+    _check_shape(features, mfcc.n_mfcc, "candidate")
+    _check_references(training, admitted, mfcc.n_mfcc)
+    lags = offsets(mfcc)
+    flagged: list[Flag] = []
+    unscored: list[RecordingIdentity] = []
+    maxima: dict[Group, float | None] = {}
+    for group, references in ((Group.TRAINING, training), (Group.ADMITTED, admitted)):
+        best: float | None = None
+        for reference in references:
+            score = similarity(features, reference.features, lags, mfcc.min_overlap_frames)
+            if score is None:
+                unscored.append(reference.identity)
+                continue
+            best = score if best is None else max(best, score)
+            if score >= config.flag_threshold:
+                flagged.append(Flag(group, reference.identity, score))
+        maxima[group] = best
+    return ScreenResult(
+        degenerate=degenerate,
+        max_training=maxima[Group.TRAINING],
+        max_admitted=maxima[Group.ADMITTED],
+        flagged=tuple(flagged),
+        unscored=tuple(unscored),
+    )
