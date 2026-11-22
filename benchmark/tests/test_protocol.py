@@ -941,6 +941,20 @@ class TestCanonicalWaveformIsPinned:
         with pytest.raises(ProtocolValueError, match="name the same fact and disagree"):
             _load_from_path(path)
 
+    def test_the_screen_s_rate_must_be_the_canonical_rate(self, tmp_path: Path) -> None:
+        """The screen reads the canonical waveform, so its MFCC rate is that waveform's rate.
+
+        A rate below 16000 would put fmax (8000 Hz) above its Nyquist frequency and trip that
+        check instead, so the test would pass for another reason; 22050 isolates this one.
+        """
+
+        def rerate(d: dict[str, Any]) -> None:
+            d["duplicate_detection"]["mfcc"]["sample_rate"] = 22050
+
+        path = variant(tmp_path, rerate)
+        with pytest.raises(ProtocolValueError, match=r"mfcc\.sample_rate 22050 must equal"):
+            _load_from_path(path)
+
 
 class TestSourceDomainIsFrozenBeforeAcquisition:
     """The source contract is chosen now, before the candidate universe exists.
