@@ -31,8 +31,18 @@ Protocol v8's runner duties, for the canonicalisation stage:
 The worker's output goes to `worker.log` in its directory rather than to a pipe, so a long
 traceback cannot fill a pipe nobody is reading and stall the worker.
 
-> **Note:** There is no timeout. The protocol permits one and defines no abort code for
-> it, and stopping a slow worker with SIGKILL would be recorded as a capacity failure.
+A worker that runs past `timeout_s` is stopped and recorded as `WORKER_TIMEOUT` (protocol
+v11), not as a capacity failure, although it is stopped with SIGKILL: a timer sends the
+signal and records that it did, and a worker that then ends with -9 is a timeout. The timer
+is stopped in `wait_with_footprint`'s `before_reap` hook, while the exited worker is still
+unreaped, so it cannot signal a process that later reuses the pid. If the wait ends in an
+exception, the worker is killed and reaped before the exception propagates, unless the reap
+had already begun or the wait reported that the pid is not this process's child.
+
+> **Note:** A worker killed by SIGKILL for another reason, such as an out-of-memory kill,
+> is recorded as `WORKER_TIMEOUT` if the timer also fires before it is stopped, between the
+> worker's exit and the `before_reap` hook. Both codes abort the run and neither charges the
+> source, so only the abort's label depends on it.
 
 Nothing calls `run_canonicalisation` yet: candidate selection does not exist, so the caller
 supplies the candidates. No engine is loaded here, so the requirement that the model files
@@ -41,11 +51,15 @@ are checked before the UVR separator is built is not reached in this stage.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
+import math
+import os
 import signal
 import subprocess
 import sys
+import threading
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -151,16 +165,89 @@ def worker_command(candidate: Candidate, out_dir: Path) -> list[str]:
     return [*command, "--", str(candidate.path), candidate.logical_source_id, str(out_dir)]
 
 
-def _run_worker(command: list[str], out_dir: Path) -> tuple[int, int | None]:
-    """Start the worker, wait for it, and return its exit code and peak footprint."""
-    with (out_dir / WORKER_LOG).open("wb") as log:
-        child = subprocess.Popen(
-            command, cwd=_REPO_ROOT, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT
-        )
-    returncode, footprint = wait_with_footprint(child.pid)
+class _Watchdog:
+    """Sends SIGKILL to an unreaped worker once its time is up, unless stopped first."""
+
+    def __init__(self, pid: int, timeout_s: float) -> None:
+        """Arm the timer for *pid*."""
+        self._pid = pid
+        self._lock = threading.Lock()
+        self._stopped = False
+        self.fired = False
+        self._timer = threading.Timer(timeout_s, self._fire)
+        self._timer.daemon = True
+        self._timer.start()
+
+    def _fire(self) -> None:
+        """Kill the worker, if the caller has not stopped the timer yet."""
+        with self._lock:
+            if self._stopped:
+                return
+            os.kill(self._pid, signal.SIGKILL)
+            self.fired = True
+
+    def stop(self) -> None:
+        """Prevent any later signal; once this returns, the timer never signals."""
+        with self._lock:
+            self._stopped = True
+        self._timer.cancel()
+
+
+def _end_unwaited(child: subprocess.Popen[bytes], error: BaseException) -> None:
+    """Kill and reap a worker the wait did not reap, unless the pid is not this process's child.
+
+    A ChildProcessError from the wait means the pid no longer names a child this process can
+    reap, so it may belong to another process and is not signalled.
+    """
+    if isinstance(error, ChildProcessError):
+        return
+    with contextlib.suppress(ProcessLookupError):
+        os.kill(child.pid, signal.SIGKILL)
+    with contextlib.suppress(ChildProcessError):
+        os.waitpid(child.pid, 0)
+    child.returncode = -signal.SIGKILL
+
+
+def _run_worker(
+    command: list[str], out_dir: Path, timeout_s: float
+) -> tuple[int, int | None, bool]:
+    """Start the worker, wait for it, and return its exit code, footprint, and timeout flag."""
+    child: subprocess.Popen[bytes] | None = None
+    watchdog: _Watchdog | None = None
+    reaping = False
+
+    def stop_before_reap() -> None:
+        nonlocal reaping
+        if watchdog is not None:
+            watchdog.stop()
+        reaping = True
+
+    try:
+        # Once Popen returns, an exception reaches the handler with the worker known, so a
+        # failed timer or an interrupt cannot leave it running. An interrupt inside Popen,
+        # after the child has started, is not covered: child is not yet bound.
+        with (out_dir / WORKER_LOG).open("wb") as log:
+            child = subprocess.Popen(
+                command,
+                cwd=_REPO_ROOT,
+                stdin=subprocess.DEVNULL,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+            )
+        watchdog = _Watchdog(child.pid, timeout_s)
+        returncode, footprint = wait_with_footprint(child.pid, before_reap=stop_before_reap)
+    except BaseException as error:
+        # broad: cleanup only, so an interrupt cannot leave the worker running; re-raised.
+        pid = None if child is None else child.pid
+        logger.error("Worker %s: run ended by %s before a result", pid, type(error).__name__)
+        if watchdog is not None:
+            watchdog.stop()
+        if child is not None and not reaping:
+            _end_unwaited(child, error)
+        raise
     # Reaped above; recording it stops Popen from waiting for the pid again.
     child.returncode = returncode
-    return returncode, footprint
+    return returncode, footprint, watchdog.fired and returncode == -signal.SIGKILL
 
 
 def _abort(reason: str, candidate: Candidate, detail: str, out_dir: Path) -> RunAbortOutcome:
@@ -255,10 +342,13 @@ def _names_other_bytes(outcome: SourceIneligibleOutcome, candidate: Candidate) -
 
 
 def _outcome(
-    candidate: Candidate, out_dir: Path, returncode: int, protocol: Protocol
+    candidate: Candidate, out_dir: Path, returncode: int, protocol: Protocol, *, timed_out: bool
 ) -> SourceOutcome:
     """Map how the worker ended, and what it left, to what the source became."""
     runner = protocol.runner
+    if timed_out:
+        detail = f"worker stopped by the timeout, ended with {returncode}"
+        return _abort(runner.timeout_abort, candidate, detail, out_dir)
     if returncode in (EXIT_MEMORY_ERROR, -signal.SIGKILL):
         detail = f"worker ended with {returncode}, a capacity exit"
         return _abort(runner.capacity_abort, candidate, detail, out_dir)
@@ -271,7 +361,7 @@ def _outcome(
     return reported
 
 
-def _check_inputs(candidate: Candidate, out_dir: Path) -> None:
+def _check_inputs(candidate: Candidate, out_dir: Path, timeout_s: float) -> None:
     """Refuse what the worker would read differently from this process, before it starts.
 
     The worker runs with the repository root as its working directory, so a relative path
@@ -291,6 +381,15 @@ def _check_inputs(candidate: Candidate, out_dir: Path) -> None:
     expected = candidate.expected_sha256
     if expected is not None and _record_digest(expected, "expected_sha256") is None:
         raise ValueError(f"expected digest is not 64 lowercase hex characters: {expected!r}")
+    _check_timeout(timeout_s)
+
+
+def _check_timeout(timeout_s: float) -> None:
+    """Refuse a timeout that is not a positive, finite number of seconds."""
+    if not isinstance(timeout_s, (int, float)) or isinstance(timeout_s, bool):
+        raise ValueError(f"timeout must be a number of seconds, got {timeout_s!r}")
+    if not (math.isfinite(timeout_s) and timeout_s > 0):
+        raise ValueError(f"timeout must be positive and finite, got {timeout_s!r}")
 
 
 def run_source(
@@ -298,6 +397,7 @@ def run_source(
     out_dir: Path,
     protocol: Protocol,
     *,
+    timeout_s: float,
     command: WorkerCommand = worker_command,
 ) -> SourceRun:
     """Run one candidate in a worker of its own and record what it became.
@@ -306,6 +406,7 @@ def run_source(
         candidate: The source to canonicalise.
         out_dir: A directory that does not exist yet, for the worker's files.
         protocol: The loaded protocol.
+        timeout_s: Seconds the worker may run before it is stopped, a harness setting.
         command: Builds the worker's command line; injected in tests.
 
     Returns:
@@ -313,13 +414,13 @@ def run_source(
 
     Raises:
         FileExistsError: If `out_dir` already exists.
-        ValueError: If a path is relative or the expected digest is malformed, checked
-            before anything is created or started.
+        ValueError: If a path is relative, the expected digest is malformed, or the timeout
+            is not a positive finite number, checked before anything is created or started.
     """
-    _check_inputs(candidate, out_dir)
+    _check_inputs(candidate, out_dir, timeout_s)
     out_dir.mkdir()
-    returncode, footprint = _run_worker(command(candidate, out_dir), out_dir)
-    outcome = _outcome(candidate, out_dir, returncode, protocol)
+    returncode, footprint, timed_out = _run_worker(command(candidate, out_dir), out_dir, timeout_s)
+    outcome = _outcome(candidate, out_dir, returncode, protocol, timed_out=timed_out)
     logger.info(
         "Source %s: %s, exit %d, peak footprint %s bytes",
         candidate.logical_source_id,
@@ -338,6 +439,7 @@ def run_canonicalisation(
     runtime_platform: str,
     opgan_checkpoint: Path,
     uvr_model_dir: Path,
+    timeout_s: float,
     command: WorkerCommand = worker_command,
 ) -> CanonicalisationRun:
     """Check the run preconditions, then canonicalise each candidate in turn.
@@ -349,16 +451,19 @@ def run_canonicalisation(
         runtime_platform: This runtime's platform, normally `platform_token()`.
         opgan_checkpoint: The checkpoint the OpGAN engine loads.
         uvr_model_dir: The directory audio-separator loads the UVR files from.
+        timeout_s: Seconds each worker may run before it is stopped.
         command: Builds each worker's command line; injected in tests.
 
     Returns:
         The sources run, in order, and the abort that stopped the run, if any.
 
     Raises:
-        ValueError: If `work_dir` is relative, checked before the preconditions run.
+        ValueError: If `work_dir` is relative or `timeout_s` is not a positive finite number,
+            checked before the preconditions run.
     """
     if not work_dir.is_absolute():
         raise ValueError(f"work directory must be absolute, got {work_dir}")
+    _check_timeout(timeout_s)
     abort = verify_run_preconditions(
         protocol,
         runtime_platform=runtime_platform,
@@ -369,7 +474,8 @@ def run_canonicalisation(
         return CanonicalisationRun(abort, ())
     runs: list[SourceRun] = []
     for index, candidate in enumerate(candidates):
-        run = run_source(candidate, work_dir / f"source-{index:06d}", protocol, command=command)
+        out_dir = work_dir / f"source-{index:06d}"
+        run = run_source(candidate, out_dir, protocol, timeout_s=timeout_s, command=command)
         runs.append(run)
         if isinstance(run.outcome, RunAbortOutcome):
             return CanonicalisationRun(run.outcome, tuple(runs))

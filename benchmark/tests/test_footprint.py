@@ -82,6 +82,25 @@ class TestPeakFootprintBytes:
         child.wait()
         assert peak_footprint_bytes(child.pid) is None
 
+
+class TestWaitWithoutReaping:
+    """Run on every platform, so CI on Linux exercises the `os.waitid` path."""
+
     def test_waiting_on_a_process_that_is_not_a_child_raises(self) -> None:
         with pytest.raises(ChildProcessError):
             _wait_without_reaping(os.getpid())
+
+    def test_before_reap_runs_while_the_exited_child_is_still_unreaped(self) -> None:
+        """The runner stops its timer here, so the pid cannot yet belong to anyone else."""
+        child = spawn("pass")
+        seen: list[int] = []
+
+        def check() -> None:
+            os.kill(child.pid, 0)  # raises ProcessLookupError once the child is reaped
+            seen.append(child.pid)
+
+        returncode, _ = wait_with_footprint(child.pid, before_reap=check)
+        child.returncode = returncode
+        assert seen == [child.pid]
+        with pytest.raises(ChildProcessError):
+            os.waitpid(child.pid, os.WNOHANG)

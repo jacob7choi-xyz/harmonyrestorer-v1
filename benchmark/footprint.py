@@ -18,8 +18,14 @@ the parent's reading was 1,589,248 to 1,605,632 bytes higher than the child's ow
 recorded footprints were read by the child itself, so a footprint read by the parent is not
 directly comparable with them.
 
-The footprint is read on macOS only; elsewhere these functions return None for it. Python
-does not expose `os.waitid` on macOS, so it is called through ctypes.
+The footprint is read on macOS only; elsewhere these functions return None for it. Where
+Python provides `os.waitid`, as CPython does on Linux, it is used to wait without reaping.
+The CPython 3.11.17 interpreter this was checked with on macOS has no `os.waitid`, so
+where it is missing libc's `waitid` is called through ctypes.
+
+`wait_with_footprint` calls `before_reap` while the exited child is still unreaped, so its
+pid cannot yet be given to another process. The runner stops its timeout timer there, so a
+timer that fires late cannot signal a process that reused the pid.
 """
 
 from __future__ import annotations
@@ -28,6 +34,7 @@ import ctypes
 import errno
 import os
 import sys
+from collections.abc import Callable
 
 __all__ = ["peak_footprint_bytes", "wait_with_footprint"]
 
@@ -87,6 +94,9 @@ def _wait_without_reaping(pid: int) -> None:
     Raises:
         OSError: If waitid fails for any reason but an interrupted call, which is retried.
     """
+    if hasattr(os, "waitid"):
+        os.waitid(os.P_PID, pid, os.WEXITED | os.WNOWAIT)
+        return
     libc = ctypes.CDLL(None, use_errno=True)
     siginfo = ctypes.create_string_buffer(_SIGINFO_BUFFER_BYTES)
     options = os.WEXITED | os.WNOWAIT
@@ -96,21 +106,27 @@ def _wait_without_reaping(pid: int) -> None:
             raise OSError(code, os.strerror(code))
 
 
-def wait_with_footprint(pid: int) -> tuple[int, int | None]:
+def wait_with_footprint(
+    pid: int, *, before_reap: Callable[[], None] | None = None
+) -> tuple[int, int | None]:
     """Wait for a child to exit, read its lifetime peak footprint, then reap it.
 
     The caller must not also wait for the child: this function reaps it.
 
     Args:
         pid: A child of this process.
+        before_reap: Called after the child has exited and before it is reaped, while its
+            pid still names it.
 
     Returns:
         The exit code in `subprocess` form (negative for a signal) and the footprint in
         bytes, or None for the footprint off macOS or when the read fails.
     """
     footprint = None
+    _wait_without_reaping(pid)
     if sys.platform == "darwin":
-        _wait_without_reaping(pid)
         footprint = peak_footprint_bytes(pid)
+    if before_reap is not None:
+        before_reap()
     _, status = os.waitpid(pid, 0)
     return os.waitstatus_to_exitcode(status), footprint

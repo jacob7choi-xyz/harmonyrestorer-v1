@@ -10,7 +10,12 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
+import os
+import signal
+import subprocess
 import sys
+import time
 import tracemalloc
 from pathlib import Path
 
@@ -44,6 +49,8 @@ from benchmark.source_outcome import (
 RATE = 16000
 SOURCE_ID = "item/tones.flac"
 RAW_SHA256 = "a" * 64
+# Generous, so only the timeout tests, which pass their own, can be stopped by it.
+TIMEOUT_S = 120.0
 
 
 @pytest.fixture(scope="module")
@@ -110,7 +117,8 @@ def run(
     candidate = Candidate(
         SOURCE_ID, path if path is not None else tmp_path / "unused.flac", expected_sha256
     )
-    return run_source(candidate, tmp_path / "source-000000", protocol, command=command)
+    out_dir = tmp_path / "source-000000"
+    return run_source(candidate, out_dir, protocol, timeout_s=TIMEOUT_S, command=command)
 
 
 def assert_aborts(source_run: runner.SourceRun, reason: AbortReason) -> None:
@@ -150,7 +158,9 @@ class TestAcceptedOutcomes:
         self, protocol: Protocol, tmp_path: Path, tone_flac: Path
     ) -> None:
         candidate = Candidate(SOURCE_ID, tone_flac, expected_sha256="0" * 64)
-        source_run = run_source(candidate, tmp_path / "source-000000", protocol)
+        source_run = run_source(
+            candidate, tmp_path / "source-000000", protocol, timeout_s=TIMEOUT_S
+        )
         assert source_run.returncode == 0
         assert_aborts(source_run, AbortReason.SOURCE_HASH_MISMATCH)
 
@@ -428,6 +438,7 @@ class TestRunCanonicalisation:
             runtime_platform="darwin_arm64",
             opgan_checkpoint=tmp_path / "final.pt",
             uvr_model_dir=tmp_path,
+            timeout_s=TIMEOUT_S,
             command=command,
         )
 
@@ -527,7 +538,7 @@ class TestInputsCheckedBeforeStarting:
         candidate = Candidate(SOURCE_ID, path, expected)
         command = script(f"Path({str(marker)!r}).touch()")
         with pytest.raises(ValueError, match=r"must be absolute|64 lowercase hex"):
-            run_source(candidate, out_dir, protocol, command=command)
+            run_source(candidate, out_dir, protocol, timeout_s=TIMEOUT_S, command=command)
         assert not marker.exists()
         assert not out_dir.exists()
 
@@ -543,6 +554,7 @@ class TestInputsCheckedBeforeStarting:
                 runtime_platform="unused",
                 opgan_checkpoint=tmp_path / "missing.pt",
                 uvr_model_dir=tmp_path / "missing",
+                timeout_s=TIMEOUT_S,
             )
         assert not work_dir.exists()
         assert not (tmp_path / "missing").exists()
@@ -564,6 +576,7 @@ class TestInputsCheckedBeforeStarting:
                 Candidate(source_id, path),
                 out_dir,
                 protocol,
+                timeout_s=TIMEOUT_S,
                 command=script("pass"),
             )
         assert not out_dir.exists()
@@ -574,6 +587,163 @@ class TestInputsCheckedBeforeStarting:
         """Without `--` before the positionals, the worker's parser would exit 2 on it."""
         candidate = Candidate("-item/tones.flac", tone_flac)
         out_dir = tmp_path / "source-000000"
-        source_run = run_source(candidate, out_dir, protocol)
+        source_run = run_source(candidate, out_dir, protocol, timeout_s=TIMEOUT_S)
         assert source_run.returncode == 0
         assert isinstance(source_run.outcome, CanonicalFile)
+
+
+class TestTimeout:
+    """A worker past its time is stopped and recorded as a timeout, never as capacity."""
+
+    def test_a_worker_past_its_time_is_a_timeout_naming_the_source(
+        self, protocol: Protocol, tmp_path: Path
+    ) -> None:
+        candidate = Candidate(SOURCE_ID, tmp_path / "unused.flac")
+        command = script("import time\ntime.sleep(60)")
+        started = time.monotonic()
+        source_run = run_source(
+            candidate, tmp_path / "source-000000", protocol, timeout_s=0.5, command=command
+        )
+        assert time.monotonic() - started < 30
+        assert source_run.returncode == -signal.SIGKILL
+        assert_aborts(source_run, AbortReason.WORKER_TIMEOUT)
+
+    def test_a_worker_that_kills_itself_is_still_a_capacity_exit(
+        self, protocol: Protocol, tmp_path: Path
+    ) -> None:
+        """SIGKILL alone is capacity; only the timer's own kill is a timeout."""
+        command = script("import os, signal\nos.kill(os.getpid(), signal.SIGKILL)")
+        assert_aborts(run(protocol, tmp_path, command), AbortReason.ENVIRONMENT_CAPACITY_FAILURE)
+
+    @pytest.mark.parametrize("timeout_s", [0.0, -1.0, math.inf, math.nan, True])
+    def test_a_timeout_that_is_not_a_positive_number_is_refused_before_starting(
+        self, protocol: Protocol, tmp_path: Path, timeout_s: float
+    ) -> None:
+        candidate = Candidate(SOURCE_ID, tmp_path / "unused.flac")
+        out_dir = tmp_path / "source-000000"
+        with pytest.raises(ValueError, match="timeout must be"):
+            run_source(candidate, out_dir, protocol, timeout_s=timeout_s, command=script("pass"))
+        assert not out_dir.exists()
+
+    def test_an_interrupted_wait_kills_and_reaps_the_worker(
+        self, protocol: Protocol, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Ctrl+C while waiting must not leave the worker running or unreaped."""
+        pids: list[int] = []
+
+        def interrupted(pid: int, *, before_reap: object = None) -> tuple[int, int | None]:
+            pids.append(pid)
+            raise KeyboardInterrupt
+
+        monkeypatch.setattr(runner, "wait_with_footprint", interrupted)
+        candidate = Candidate(SOURCE_ID, tmp_path / "unused.flac")
+        command = script("import time\ntime.sleep(60)")
+        started = time.monotonic()
+        with pytest.raises(KeyboardInterrupt):
+            run_source(
+                candidate, tmp_path / "source-000000", protocol, timeout_s=60.0, command=command
+            )
+        # Killed, not waited out: the worker would otherwise sleep for 60 s.
+        assert time.monotonic() - started < 30
+        with pytest.raises(ChildProcessError):
+            os.waitpid(pids[0], os.WNOHANG)
+
+    def test_a_timer_that_reaches_its_kill_after_being_stopped_sends_nothing(
+        self, tmp_path: Path
+    ) -> None:
+        """The race `stop` closes: the timer thread can be past its wait when stop runs."""
+        child = subprocess.Popen([sys.executable, "-c", "import time\ntime.sleep(60)"])
+        try:
+            watchdog = runner._Watchdog(child.pid, 60.0)
+            watchdog.stop()
+            watchdog._fire()
+            assert not watchdog.fired
+            assert child.poll() is None
+        finally:
+            child.kill()
+            child.wait()
+
+    def test_a_fired_timer_on_a_worker_that_exited_normally_is_not_a_timeout(
+        self, protocol: Protocol, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A timer can fire on an exited, unreaped worker; only an exit by SIGKILL is a timeout."""
+
+        class AlwaysFired:
+            fired = True
+
+            def __init__(self, pid: int, timeout_s: float) -> None:
+                del pid, timeout_s
+
+            def stop(self) -> None:
+                return None
+
+        monkeypatch.setattr(runner, "_Watchdog", AlwaysFired)
+        assert_aborts(
+            run(protocol, tmp_path, script("pass")), AbortReason.INTERNAL_CANONICALISATION_ERROR
+        )
+
+    def test_a_timer_that_fails_to_start_does_not_leave_the_worker_running(
+        self, protocol: Protocol, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The worker exists before the timer does, so a failed timer must still end it."""
+        pids: list[int] = []
+
+        class FailingWatchdog:
+            def __init__(self, pid: int, timeout_s: float) -> None:
+                del timeout_s
+                pids.append(pid)
+                raise RuntimeError("no thread for the timer")
+
+        monkeypatch.setattr(runner, "_Watchdog", FailingWatchdog)
+        candidate = Candidate(SOURCE_ID, tmp_path / "unused.flac")
+        command = script("import time\ntime.sleep(60)")
+        started = time.monotonic()
+        with pytest.raises(RuntimeError, match="no thread"):
+            run_source(
+                candidate, tmp_path / "source-000000", protocol, timeout_s=60.0, command=command
+            )
+        assert time.monotonic() - started < 30
+        with pytest.raises(ChildProcessError):
+            os.waitpid(pids[0], os.WNOHANG)
+
+    def test_a_wait_that_reports_no_such_child_signals_nothing(
+        self, protocol: Protocol, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A ChildProcessError means the pid may belong to another process, so no kill."""
+        pids: list[int] = []
+        signalled: list[int] = []
+        real_kill = os.kill
+
+        def no_such_child(pid: int, *, before_reap: object = None) -> tuple[int, int | None]:
+            pids.append(pid)
+            raise ChildProcessError
+
+        monkeypatch.setattr(runner, "wait_with_footprint", no_such_child)
+        monkeypatch.setattr(runner.os, "kill", lambda pid, sig: signalled.append(pid))
+        candidate = Candidate(SOURCE_ID, tmp_path / "unused.flac")
+        command = script("import time\ntime.sleep(60)")
+        try:
+            with pytest.raises(ChildProcessError):
+                run_source(
+                    candidate, tmp_path / "source-000000", protocol, timeout_s=60.0, command=command
+                )
+            assert signalled == []
+        finally:
+            real_kill(pids[0], signal.SIGKILL)
+            os.waitpid(pids[0], 0)
+
+    @pytest.mark.parametrize("timeout_s", [0.0, math.nan])
+    def test_run_canonicalisation_checks_the_timeout_before_the_preconditions(
+        self, protocol: Protocol, tmp_path: Path, timeout_s: float
+    ) -> None:
+        """Checked up front, so an empty run or a failed precondition cannot hide it."""
+        with pytest.raises(ValueError, match="timeout must be"):
+            run_canonicalisation(
+                protocol,
+                [],
+                work_dir=tmp_path,
+                runtime_platform="unused",
+                opgan_checkpoint=tmp_path / "missing.pt",
+                uvr_model_dir=tmp_path / "missing",
+                timeout_s=timeout_s,
+            )
