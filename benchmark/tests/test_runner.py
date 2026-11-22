@@ -747,3 +747,15 @@ class TestTimeout:
                 uvr_model_dir=tmp_path / "missing",
                 timeout_s=timeout_s,
             )
+
+
+class TestWallTime:
+    """The time each worker took, which a later timeout bound is chosen from."""
+
+    def test_the_wall_time_covers_the_worker_s_run(
+        self, protocol: Protocol, tmp_path: Path
+    ) -> None:
+        started = time.monotonic()
+        source_run = run(protocol, tmp_path, script("import time\ntime.sleep(0.5)"))
+        elapsed = time.monotonic() - started
+        assert 0.5 <= source_run.wall_seconds <= elapsed
