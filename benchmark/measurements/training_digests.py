@@ -45,6 +45,7 @@ from benchmark.protocol import Protocol, load_protocol
 from benchmark.runner import Candidate, CanonicalFile, run_source, worker_command
 from benchmark.source_outcome import RunAbortOutcome
 from benchmark.training_corpus import DecodedRecord, TrainingRecording, decoded_manifest_bytes
+from benchmark.training_references import TrainingReferenceError, staged_candidates
 
 logger = logging.getLogger(__name__)
 
@@ -65,22 +66,6 @@ def check_decoder(protocol: Protocol) -> None:
         raise GenerationError(
             f"libsndfile is {sf.__libsndfile_version__}, the protocol records {recorded}"
         )
-
-
-def staged_candidates(training: Sequence[TrainingRecording], raw_dir: Path) -> list[Candidate]:
-    """One candidate per training file, its size checked against the manifest first."""
-    if not raw_dir.is_absolute():
-        raise GenerationError(f"raw directory must be absolute, got {raw_dir}")
-    candidates = []
-    for recording in training:
-        path = raw_dir / recording.filename
-        size = path.lstat().st_size if path.exists() else None
-        if size != recording.bytes:
-            raise GenerationError(
-                f"{recording.filename}: {size} bytes, manifest says {recording.bytes}"
-            )
-        candidates.append(Candidate(recording.filename, path, recording.sha256))
-    return candidates
 
 
 def digest_one(
@@ -121,7 +106,10 @@ def generate(
     abort = check(protocol, runtime_platform=platform_token())
     if abort is not None:
         raise GenerationError(f"golden fixtures failed: {abort.reason}: {abort.detail}")
-    candidates = staged_candidates(training, raw_dir)
+    try:
+        candidates = staged_candidates(training, raw_dir)
+    except TrainingReferenceError as error:
+        raise GenerationError(str(error)) from error
     results = []
     for index, candidate in enumerate(candidates):
         out_dir = work_dir / f"source-{index:06d}"
