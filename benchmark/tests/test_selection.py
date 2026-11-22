@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
 import numpy as np
 import pytest
 
@@ -19,9 +16,19 @@ from benchmark.selection import (
     training_identities,
     walk_order,
 )
+from benchmark.training_corpus import load_training_manifest
 
 ITEM = "MusopenCollectionAsFlac"
-MANIFEST = Path(__file__).resolve().parents[1] / "manifests" / "training_corpus.json"
+
+
+def manifest_entries() -> list[dict[str, object]]:
+    """The training manifest's entries, as checked by `benchmark.training_corpus`."""
+    return [
+        {"filename": r.filename, "bytes": r.bytes, "sha256": r.sha256}
+        for r in load_training_manifest()
+    ]
+
+
 TRAINING = TrainingIdentities(
     filenames=frozenset({f"{ITEM}__Bach_Goldberg_01-Aria.flac"}),
     raw_sha256=frozenset({"a" * 64}),
@@ -71,7 +78,7 @@ class TestTrainingFilename:
         `dataset/acquire.py` wrote. The manifest does not record the original paths, so the
         slash replacement itself is checked by the nested-path test above, not here."""
         prefix = f"{ITEM}__"
-        for entry in json.loads(MANIFEST.read_text())["recordings"]:
+        for entry in manifest_entries():
             name = entry["filename"]
             assert name.startswith(prefix), name
             assert training_filename(f"{ITEM}/{name.removeprefix(prefix)}", ITEM) == name
@@ -130,7 +137,7 @@ class TestTrainingIdentities:
     """Built from the frozen training manifest."""
 
     def test_the_manifest_gives_every_name_and_digest(self) -> None:
-        recordings = json.loads(MANIFEST.read_text())["recordings"]
+        recordings = manifest_entries()
         decoded = {entry["filename"]: f"{index:064x}" for index, entry in enumerate(recordings)}
         identities = training_identities(recordings, decoded)
         assert len(identities.filenames) == len(identities.raw_sha256) == 145
@@ -184,7 +191,7 @@ class TestCandidateFilter:
     def test_every_training_recording_passes_the_filter(self) -> None:
         """The universe counts them; rule 1 removes them before any fetch."""
         prefix = f"{ITEM}__"
-        for entry in json.loads(MANIFEST.read_text())["recordings"]:
+        for entry in manifest_entries():
             assert is_candidate(entry["filename"].removeprefix(prefix)), entry["filename"]
 
 
