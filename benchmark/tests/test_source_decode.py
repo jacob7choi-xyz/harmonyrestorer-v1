@@ -13,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import io
 import logging
+import tracemalloc
 from collections.abc import Callable
 
 import numpy as np
@@ -317,3 +318,41 @@ class TestWaveformViolations:
             IneligibleReason.NONFINITE_SOURCE,
             IneligibleReason.INVALID_SOURCE_AMPLITUDE,
         )
+
+
+class TestDecodedPcmDigest:
+    """The decoded-PCM digest rule 3 compares, computed in one place."""
+
+    def test_it_is_the_digest_of_the_samples_as_little_endian_float64(self) -> None:
+        decoded = np.random.default_rng(1).uniform(-1, 1, (FRAMES, 2))
+        expected = hashlib.sha256(decoded.astype("<f8").tobytes(order="C")).hexdigest()
+        assert source_decode.decoded_pcm_sha256(decoded) == expected
+
+    def test_the_digest_of_a_decoded_buffer_matches_the_decoder_s_bytes(self) -> None:
+        """The decoder's own output, read the way the protocol names it."""
+        samples = np.random.default_rng(2).uniform(-0.5, 0.5, (FRAMES, 2))
+        buffer = encoded(samples)
+        read, _ = sf.read(io.BytesIO(buffer), dtype="float64", always_2d=True)
+        expected = hashlib.sha256(np.asarray(read, dtype="<f8").tobytes()).hexdigest()
+        assert source_decode.decoded_pcm_sha256(read) == expected
+
+    def test_memory_order_and_byte_order_do_not_change_the_digest(self) -> None:
+        decoded = np.random.default_rng(3).uniform(-1, 1, (FRAMES, 2))
+        digest = source_decode.decoded_pcm_sha256(decoded)
+        assert source_decode.decoded_pcm_sha256(np.asfortranarray(decoded)) == digest
+        assert source_decode.decoded_pcm_sha256(decoded.astype(">f8")) == digest
+
+    def test_a_decoder_shaped_array_is_hashed_without_a_copy(self) -> None:
+        """A 64 MiB array must not allocate another 64 MiB to be hashed."""
+        decoded = np.zeros((4_194_304, 2), dtype=np.float64)
+        tracemalloc.start()
+        try:
+            source_decode.decoded_pcm_sha256(decoded)
+            _, peak = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+        assert peak < decoded.nbytes // 64
+
+    def test_an_array_that_is_not_frames_by_channels_is_refused(self) -> None:
+        with pytest.raises(ValueError, match="frames, channels"):
+            source_decode.decoded_pcm_sha256(np.zeros(FRAMES))

@@ -33,6 +33,7 @@ and not yet written. A `MemoryError` is not caught here; the planned runner maps
 
 from __future__ import annotations
 
+import hashlib
 import io
 import logging
 from typing import Literal, cast
@@ -51,9 +52,45 @@ from benchmark.source_evidence import (
 from benchmark.source_inspection import InspectedSource
 from benchmark.source_outcome import IneligibleReason, SourceIneligibleOutcome
 
-__all__ = ["decode_source", "decoded_metadata_matches", "waveform_violations"]
+__all__ = [
+    "decode_source",
+    "decoded_metadata_matches",
+    "decoded_pcm_sha256",
+    "waveform_violations",
+]
 
 logger = logging.getLogger(__name__)
+
+# The bytes `duplicate_detection.decoded_pcm_hash` names: float64, little-endian, in the
+# decoder's (frames, channels) order, so channels are interleaved frame by frame.
+_DECODED_PCM_FORMAT = "<f8"
+
+
+def decoded_pcm_sha256(decoded: npt.NDArray[np.float64]) -> str:
+    """The decoded-PCM digest the third exclusion rule compares.
+
+    A C-ordered little-endian float64 array, which is what the decoder returns, is hashed
+    in place. Any other layout is converted first, so the digest depends only on the
+    sample values and their order. Hashing in place matters because a decoded array may
+    approach `max_decoded_bytes`. On the capacity fixture, the largest peak footprint of v8's
+    five runs exceeded the projection by about 963 MiB of the 1024 MiB allowance, on the
+    reference platform; that is an observation, not an upper bound, but it leaves too little
+    room to copy a decoded array that large.
+
+    Args:
+        decoded: The decoder's output, shaped (frames, channels), before downmix.
+
+    Returns:
+        The lowercase hex SHA-256 of the samples as contiguous little-endian float64.
+
+    Raises:
+        ValueError: If the array is not two-dimensional, so a downmixed or flattened array
+            cannot be hashed by mistake.
+    """
+    if decoded.ndim != 2:
+        raise ValueError(f"decoded PCM must be (frames, channels), got shape {decoded.shape}")
+    contiguous = np.ascontiguousarray(decoded, dtype=_DECODED_PCM_FORMAT)
+    return hashlib.sha256(contiguous.data).hexdigest()
 
 
 def decode_source(
