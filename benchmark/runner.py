@@ -51,6 +51,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from benchmark._source_validation import SourceOutcomeError, checked_digest
 from benchmark.canonical_worker import (
     CANONICAL_FILE,
     CANONICAL_KIND,
@@ -80,7 +81,12 @@ WORKER_LOG = "worker.log"
 _REPO_ROOT = Path(__file__).resolve().parents[1]
 _FLOAT64_BYTES = 8
 _RECORD_KEYS = frozenset({"protocol_sha256", "result"})
-_CANONICAL_KEYS = frozenset({"kind", "sha256", "samples"})
+_CANONICAL_KEYS = frozenset(
+    {"kind", "sha256", "samples", "logical_source_id", "raw_sha256", "decoded_pcm_sha256"}
+)
+# The parent reads at most this much of a record the worker wrote, so a damaged or
+# oversized file cannot make it allocate without bound.
+_MAX_RECORD_BYTES = 1 << 20
 
 
 @dataclass(frozen=True)
@@ -94,11 +100,17 @@ class Candidate:
 
 @dataclass(frozen=True)
 class CanonicalFile:
-    """A canonical waveform on disk whose bytes hashed to `sha256` when the worker ended."""
+    """A canonical waveform on disk whose bytes hashed to `sha256` when the worker ended.
+
+    `raw_sha256` and `decoded_pcm_sha256` identify the source the worker canonicalised, as
+    the raw-digest and decoded-PCM rules compare them.
+    """
 
     path: Path
     sha256: str
     samples: int
+    raw_sha256: str
+    decoded_pcm_sha256: str
 
 
 SourceOutcome = CanonicalFile | SourceIneligibleOutcome | RunAbortOutcome
@@ -164,27 +176,54 @@ def _abort(reason: str, candidate: Candidate, detail: str, out_dir: Path) -> Run
     )
 
 
-def _canonical_file(result: dict[str, Any], out_dir: Path) -> CanonicalFile | str:
+def _record_digest(value: object, field: str) -> str | None:
+    """*value* if it is a SHA-256 digest in canonical form, otherwise None."""
+    if not isinstance(value, str):
+        return None
+    try:
+        return checked_digest(value, field)
+    except SourceOutcomeError:
+        return None
+
+
+def _canonical_file(
+    result: dict[str, Any], candidate: Candidate, out_dir: Path
+) -> CanonicalFile | str:
     """The canonical file the record describes, or why it does not match the record."""
     if set(result) != _CANONICAL_KEYS:
         return f"canonical record has keys {sorted(result)}"
     sha256, samples = result["sha256"], result["samples"]
     if not isinstance(sha256, str) or isinstance(samples, bool) or not isinstance(samples, int):
         return "canonical record has a malformed digest or sample count"
+    if result["logical_source_id"] != candidate.logical_source_id:
+        return "canonical record does not name this source"
+    raw = _record_digest(result["raw_sha256"], "raw_sha256")
+    decoded = _record_digest(result["decoded_pcm_sha256"], "decoded_pcm_sha256")
+    if raw is None or decoded is None:
+        return "canonical record has a malformed raw or decoded-PCM digest"
+    if candidate.expected_sha256 is not None and raw != candidate.expected_sha256:
+        return "canonical record names bytes other than the expected digest"
     path = out_dir / CANONICAL_FILE
     if file_sha256(path) != sha256:
         return "canonical file is missing or does not hash to the recorded digest"
     if path.stat().st_size != samples * _FLOAT64_BYTES:
         return f"canonical file does not hold the recorded {samples} samples"
-    return CanonicalFile(path=path, sha256=sha256, samples=samples)
+    return CanonicalFile(
+        path=path, sha256=sha256, samples=samples, raw_sha256=raw, decoded_pcm_sha256=decoded
+    )
 
 
 def _reported(candidate: Candidate, out_dir: Path, protocol: Protocol) -> SourceOutcome | str:
     """The outcome the worker's record states, or why the record cannot be accepted."""
     try:
-        record = json.loads((out_dir / RECORD_FILE).read_bytes())
+        with (out_dir / RECORD_FILE).open("rb") as handle:
+            data = handle.read(_MAX_RECORD_BYTES + 1)
     except FileNotFoundError:
         return "worker exited 0 without a record"
+    if len(data) > _MAX_RECORD_BYTES:
+        return f"worker record is larger than {_MAX_RECORD_BYTES} bytes"
+    try:
+        record = json.loads(data)
     except ValueError:
         return "worker record is not valid JSON"
     if not isinstance(record, dict) or set(record) != _RECORD_KEYS:
@@ -193,7 +232,7 @@ def _reported(candidate: Candidate, out_dir: Path, protocol: Protocol) -> Source
         return "worker record names a different protocol digest"
     result = record["result"]
     if isinstance(result, dict) and result.get("kind") == CANONICAL_KIND:
-        return _canonical_file(result, out_dir)
+        return _canonical_file(result, candidate, out_dir)
     try:
         outcome = outcome_from_wire(result, protocol.canonicalisation.decode)
     except OutcomeWireError as error:
@@ -201,7 +240,23 @@ def _reported(candidate: Candidate, out_dir: Path, protocol: Protocol) -> Source
         return "worker record does not rebuild"
     if outcome.logical_source_id != candidate.logical_source_id:
         return "worker record does not name this source"
+    if isinstance(outcome, SourceIneligibleOutcome) and _names_other_bytes(outcome, candidate):
+        return "worker record names bytes other than the expected digest"
     return outcome
+
+
+def _names_other_bytes(outcome: SourceIneligibleOutcome, candidate: Candidate) -> bool:
+    """Whether a verdict carries a digest that is not the one the candidate was staged with.
+
+    Abort records are not checked: a SOURCE_HASH_MISMATCH record differs from the expected
+    digest by definition, and every abort ends the run whatever bytes it names. A verdict
+    that carries no digest is accepted: the worker records none only for a source above
+    `max_identity_stream_bytes`, which protocol v11 decides by size rather than by digest.
+    Like the canonical record's raw digest, this binds only when an expected digest is given.
+    """
+    digest = outcome.identity.sha256
+    expected = candidate.expected_sha256
+    return expected is not None and digest is not None and digest != expected
 
 
 def _outcome(

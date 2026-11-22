@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import sys
+import tracemalloc
 from pathlib import Path
 
 import numpy as np
@@ -18,7 +19,13 @@ import pytest
 import soundfile as sf
 
 from benchmark import runner
-from benchmark.canonical_worker import CANONICAL_FILE, EXIT_MEMORY_ERROR, RECORD_FILE
+from benchmark.canonical_worker import (
+    CANONICAL_FILE,
+    EXIT_MEMORY_ERROR,
+    RECORD_FILE,
+    canonicalise_source,
+)
+from benchmark.outcome_wire import outcome_to_wire
 from benchmark.protocol import Protocol, load_protocol
 from benchmark.runner import (
     WORKER_LOG,
@@ -36,6 +43,7 @@ from benchmark.source_outcome import (
 
 RATE = 16000
 SOURCE_ID = "item/tones.flac"
+RAW_SHA256 = "a" * 64
 
 
 @pytest.fixture(scope="module")
@@ -83,16 +91,25 @@ def canonical_record(
         "kind": "canonical",
         "sha256": hashlib.sha256(values.astype("<f8").tobytes()).hexdigest(),
         "samples": int(values.size),
+        "logical_source_id": SOURCE_ID,
+        "raw_sha256": RAW_SHA256,
+        "decoded_pcm_sha256": "b" * 64,
     }
     result.update(changes)
     return {"protocol_sha256": protocol.source_sha256, "result": result}
 
 
 def run(
-    protocol: Protocol, tmp_path: Path, command: runner.WorkerCommand, path: Path | None = None
+    protocol: Protocol,
+    tmp_path: Path,
+    command: runner.WorkerCommand,
+    path: Path | None = None,
+    expected_sha256: str | None = None,
 ) -> runner.SourceRun:
     """Run one candidate through `run_source` with *command* as its worker."""
-    candidate = Candidate(SOURCE_ID, path if path is not None else tmp_path / "unused.flac")
+    candidate = Candidate(
+        SOURCE_ID, path if path is not None else tmp_path / "unused.flac", expected_sha256
+    )
     return run_source(candidate, tmp_path / "source-000000", protocol, command=command)
 
 
@@ -243,8 +260,20 @@ class TestUnattributedEnds:
             ({"samples": 5}, np.zeros(4)),
             ({"samples": True}, np.zeros(1)),
             ({"extra": 1}, np.zeros(4)),
+            ({"logical_source_id": "item/other.flac"}, np.zeros(4)),
+            ({"raw_sha256": "A" * 64}, np.zeros(4)),
+            ({"decoded_pcm_sha256": None}, np.zeros(4)),
         ],
-        ids=["file_missing", "digest_differs", "count_differs", "count_is_a_bool", "extra_key"],
+        ids=[
+            "file_missing",
+            "digest_differs",
+            "count_differs",
+            "count_is_a_bool",
+            "extra_key",
+            "names_another_source",
+            "raw_digest_uppercase",
+            "decoded_digest_missing",
+        ],
     )
     def test_a_canonical_record_that_disagrees_with_its_file_aborts(
         self,
@@ -257,6 +286,81 @@ class TestUnattributedEnds:
         canonical = None if written is None else written.astype("<f8").tobytes()
         command = writes_record(record, canonical)
         assert_aborts(run(protocol, tmp_path, command), AbortReason.INTERNAL_CANONICALISATION_ERROR)
+
+    def test_a_canonical_record_that_holds_together_is_accepted(
+        self, protocol: Protocol, tmp_path: Path
+    ) -> None:
+        """The control for the refusals around it: the stand-in record is itself valid."""
+        samples = np.zeros(4)
+        command = writes_record(
+            canonical_record(protocol, samples), samples.astype("<f8").tobytes()
+        )
+        source_run = run(protocol, tmp_path, command, expected_sha256=RAW_SHA256)
+        assert isinstance(source_run.outcome, CanonicalFile)
+        assert source_run.outcome.raw_sha256 == RAW_SHA256
+        assert source_run.outcome.decoded_pcm_sha256 == "b" * 64
+
+    def test_a_canonical_record_for_other_bytes_aborts(
+        self, protocol: Protocol, tmp_path: Path
+    ) -> None:
+        """Its raw digest is well formed but is not the one the candidate was staged with."""
+        samples = np.zeros(4)
+        command = writes_record(
+            canonical_record(protocol, samples), samples.astype("<f8").tobytes()
+        )
+        source_run = run(protocol, tmp_path, command, expected_sha256="c" * 64)
+        assert_aborts(source_run, AbortReason.INTERNAL_CANONICALISATION_ERROR)
+
+    def test_an_ineligible_record_for_other_bytes_aborts(
+        self, protocol: Protocol, tmp_path: Path
+    ) -> None:
+        """A verdict is charged to a source only for the bytes it was staged with."""
+        noise = tmp_path / "noise.flac"
+        noise.write_bytes(b"not audio at all" * 64)
+        outcome = canonicalise_source(
+            noise, logical_source_id=SOURCE_ID, expected_sha256=None, protocol=protocol
+        )
+        assert isinstance(outcome, SourceIneligibleOutcome)
+        record = {"protocol_sha256": protocol.source_sha256, "result": outcome_to_wire(outcome)}
+        source_run = run(protocol, tmp_path, writes_record(record), expected_sha256="c" * 64)
+        assert_aborts(source_run, AbortReason.INTERNAL_CANONICALISATION_ERROR)
+
+    def test_an_ineligible_record_for_the_staged_bytes_is_accepted(
+        self, protocol: Protocol, tmp_path: Path
+    ) -> None:
+        noise = tmp_path / "noise.flac"
+        noise.write_bytes(b"not audio at all" * 64)
+        digest = hashlib.sha256(noise.read_bytes()).hexdigest()
+        source_run = run(protocol, tmp_path, runner.worker_command, noise, expected_sha256=digest)
+        assert isinstance(source_run.outcome, SourceIneligibleOutcome)
+
+    def test_a_record_over_the_read_bound_aborts(self, protocol: Protocol, tmp_path: Path) -> None:
+        """A valid canonical record padded with JSON whitespace, so only its size refuses it."""
+        samples = np.zeros(4)
+        record = json.dumps(canonical_record(protocol, samples))
+        code = (
+            f"(out / {CANONICAL_FILE!r}).write_bytes({samples.astype('<f8').tobytes()!r})\n"
+            f"(out / {RECORD_FILE!r}).write_text({record!r} + ' ' * {runner._MAX_RECORD_BYTES})"
+        )
+        source_run = run(protocol, tmp_path, script(code), expected_sha256=RAW_SHA256)
+        assert_aborts(source_run, AbortReason.INTERNAL_CANONICALISATION_ERROR)
+
+    def test_reading_an_oversized_record_allocates_only_the_bound(
+        self, protocol: Protocol, tmp_path: Path
+    ) -> None:
+        """A 32 MiB record must not be read whole before its size refuses it."""
+        out_dir = tmp_path / "source-000000"
+        out_dir.mkdir()
+        (out_dir / RECORD_FILE).write_bytes(b" " * (32 << 20))
+        candidate = Candidate(SOURCE_ID, tmp_path / "unused.flac")
+        tracemalloc.start()
+        try:
+            reported = runner._reported(candidate, out_dir, protocol)
+            _, peak = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+        assert isinstance(reported, str)
+        assert peak < 4 * runner._MAX_RECORD_BYTES
 
     def test_a_record_that_does_not_rebuild_aborts(
         self, protocol: Protocol, tmp_path: Path
