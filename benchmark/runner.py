@@ -60,6 +60,7 @@ import signal
 import subprocess
 import sys
 import threading
+import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -132,12 +133,17 @@ SourceOutcome = CanonicalFile | SourceIneligibleOutcome | RunAbortOutcome
 
 @dataclass(frozen=True)
 class SourceRun:
-    """What one source became, how its worker ended, and the worker's peak footprint."""
+    """What one source became, how its worker ended, its peak footprint, and its wall time.
+
+    `wall_seconds` runs from just before the worker starts to just after it is reaped, on a
+    monotonic clock, so it includes process start-up and the footprint read.
+    """
 
     logical_source_id: str
     outcome: SourceOutcome
     returncode: int
     peak_footprint_bytes: int | None
+    wall_seconds: float
 
 
 @dataclass(frozen=True)
@@ -419,16 +425,19 @@ def run_source(
     """
     _check_inputs(candidate, out_dir, timeout_s)
     out_dir.mkdir()
+    started = time.monotonic()
     returncode, footprint, timed_out = _run_worker(command(candidate, out_dir), out_dir, timeout_s)
+    wall_seconds = time.monotonic() - started
     outcome = _outcome(candidate, out_dir, returncode, protocol, timed_out=timed_out)
     logger.info(
-        "Source %s: %s, exit %d, peak footprint %s bytes",
+        "Source %s: %s, exit %d, peak footprint %s bytes, %.2f s",
         candidate.logical_source_id,
         type(outcome).__name__,
         returncode,
         footprint,
+        wall_seconds,
     )
-    return SourceRun(candidate.logical_source_id, outcome, returncode, footprint)
+    return SourceRun(candidate.logical_source_id, outcome, returncode, footprint, wall_seconds)
 
 
 def run_canonicalisation(
