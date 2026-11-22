@@ -21,10 +21,13 @@ cd "$(dirname "$0")/.."
 # verify that the value is a digest, so it is a trusted-field-name exemption rather than
 # content verification. A high-entropy string under any other key still fails.
 DIGEST_FIELDS='(sha256|canonical_sha256|checkpoint_sha256|corpus_sha256|decoded_pcm_sha256|document_sha256|protocol_sha256|degraded_sha256|opgan_checkpoint_sha256|uvr_model_sha256|uvr_vr_model_data_sha256|uvr_mdx_model_data_sha256)'
-# The MusicNet archive and metadata digests are md5 values, as Zenodo publishes them, and
-# are exempted the same way: only these two names, and only 32 lowercase hex characters.
-MD5_FIELDS='(archive_md5|metadata_md5)'
-DIGEST_EXEMPTION="(\"${DIGEST_FIELDS}\": \"[0-9a-f]{64}\"|\"${MD5_FIELDS}\": \"[0-9a-f]{32}\")"
+# md5 and sha1 values published by a source are exempted the same way, each only under
+# its listed names and only at its own length: the MusicNet archive and metadata digests
+# from its Zenodo record, and the md5 and sha1 the Internet Archive lists for each file in
+# a frozen candidate universe.
+MD5_FIELDS='(archive_md5|metadata_md5|md5)'
+SHA1_FIELDS='(sha1)'
+DIGEST_EXEMPTION="(\"${DIGEST_FIELDS}\": \"[0-9a-f]{64}\"|\"${MD5_FIELDS}\": \"[0-9a-f]{32}\"|\"${SHA1_FIELDS}\": \"[0-9a-f]{40}\")"
 
 failed=()
 

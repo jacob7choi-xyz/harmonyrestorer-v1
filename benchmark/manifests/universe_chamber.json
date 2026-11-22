@@ -1,0 +1,570 @@
+{
+  "description": "One stratum's candidate universe, listed from its source's metadata once and frozen before the selection walk.",
+  "stratum": "chamber",
+  "source": "musicnet",
+  "query": "https://zenodo.org/api/records/5120004/files/musicnet_metadata.csv/content",
+  "enumerated_at": "2026-11-22T06:32:38Z",
+  "count": 80,
+  "candidates": [
+    {
+      "identifier": "musicnet/1811",
+      "cluster": "William McColl",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/1812",
+      "cluster": "William McColl",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/1813",
+      "cluster": "William McColl",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/1817",
+      "cluster": "Soni Ventorum Wind Quintet",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/1818",
+      "cluster": "Soni Ventorum Wind Quintet",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/1819",
+      "cluster": "Soni Ventorum Wind Quintet",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2075",
+      "cluster": "Soni Ventorum Wind Quintet",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2076",
+      "cluster": "Soni Ventorum Wind Quintet",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2077",
+      "cluster": "Soni Ventorum Wind Quintet",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2078",
+      "cluster": "Soni Ventorum Wind Quintet",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2079",
+      "cluster": "Soni Ventorum Wind Quintet",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2080",
+      "cluster": "Soni Ventorum Wind Quintet",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2081",
+      "cluster": "Soni Ventorum Wind Quintet",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2082",
+      "cluster": "Soni Ventorum Wind Quintet",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2083",
+      "cluster": "Soni Ventorum Wind Quintet",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2112",
+      "cluster": "Stefano Ligoratti",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2113",
+      "cluster": "Stefano Ligoratti",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2114",
+      "cluster": "Stefano Ligoratti",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2116",
+      "cluster": "Ben Redwine",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2117",
+      "cluster": "Ben Redwine",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2118",
+      "cluster": "Ben Redwine",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2119",
+      "cluster": "Ben Redwine",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2148",
+      "cluster": "Roxana Pavel Goldstein",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2149",
+      "cluster": "Roxana Pavel Goldstein",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2150",
+      "cluster": "Roxana Pavel Goldstein",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2151",
+      "cluster": "Roxana Pavel Goldstein",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2154",
+      "cluster": "Carl Banner",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2155",
+      "cluster": "Carl Banner",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2156",
+      "cluster": "Carl Banner",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2157",
+      "cluster": "Carl Banner",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2177",
+      "cluster": "Musicians from Marlboro",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2178",
+      "cluster": "Musicians from Marlboro",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2179",
+      "cluster": "Musicians from Marlboro",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2180",
+      "cluster": "Musicians from Marlboro",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2186",
+      "cluster": "Oliver Colbentston",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2191",
+      "cluster": "Oliver Colbentston",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2202",
+      "cluster": "Scott Goff",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2203",
+      "cluster": "Scott Goff",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2204",
+      "cluster": "Scott Goff",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2288",
+      "cluster": "John Garner",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2289",
+      "cluster": "John Garner",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2330",
+      "cluster": "Timothy Jones",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2334",
+      "cluster": "Edward Auer",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2335",
+      "cluster": "Edward Auer",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2336",
+      "cluster": "Edward Auer",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2365",
+      "cluster": "Pascal String Quartet",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2366",
+      "cluster": "Pascal String Quartet",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2368",
+      "cluster": "Pascal String Quartet",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2397",
+      "cluster": "Edward Auer",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2398",
+      "cluster": "Edward Auer",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2415",
+      "cluster": "Skidmore Wind Ensemble",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2416",
+      "cluster": "Skidmore Wind Ensemble",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2417",
+      "cluster": "Skidmore Wind Ensemble",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2480",
+      "cluster": "Pascal String Quartet",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2481",
+      "cluster": "Pascal String Quartet",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2482",
+      "cluster": "Pascal String Quartet",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2483",
+      "cluster": "Pascal String Quartet",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2494",
+      "cluster": "Pascal String Quartet",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2497",
+      "cluster": "Pascal String Quartet",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2501",
+      "cluster": "Sayuri Yano",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2502",
+      "cluster": "Sayuri Yano",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2504",
+      "cluster": "Soni Ventorum Wind Quintet",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2505",
+      "cluster": "Soni Ventorum Wind Quintet",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2506",
+      "cluster": "Soni Ventorum Wind Quintet",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2507",
+      "cluster": "Soni Ventorum Wind Quintet",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2521",
+      "cluster": "Hielko Ubels",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2522",
+      "cluster": "Hielko Ubels",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2523",
+      "cluster": "Hielko Ubels",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2560",
+      "cluster": "Pascal String Quartet",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2562",
+      "cluster": "Pascal String Quartet",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2570",
+      "cluster": "Chris Borovas",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2571",
+      "cluster": "Chris Borovas",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2572",
+      "cluster": "Chris Borovas",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2573",
+      "cluster": "Chris Borovas",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2586",
+      "cluster": "John Michel",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2626",
+      "cluster": "Irrera Brothers",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2627",
+      "cluster": "Irrera Brothers",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2628",
+      "cluster": "Irrera Brothers",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2629",
+      "cluster": "Irrera Brothers",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    },
+    {
+      "identifier": "musicnet/2659",
+      "cluster": "John Garner",
+      "size": null,
+      "md5": null,
+      "sha1": null
+    }
+  ]
+}
