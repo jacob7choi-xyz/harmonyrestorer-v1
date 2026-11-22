@@ -170,3 +170,27 @@ class TestTrainingIdentities:
         identities = load_training_identities()
         assert len(identities.filenames) == len(identities.decoded_sha256) == 145
         assert identities.raw_sha256 == frozenset(r.sha256 for r in TRAINING)
+
+
+def _committed_decoder() -> tuple[str, str]:
+    """The soundfile and libsndfile versions the committed decoded manifest was made with."""
+    data = json.loads(training_corpus.DECODED_MANIFEST_PATH.read_text())
+    return data["soundfile_version"], data["libsndfile_version"]
+
+
+@pytest.mark.skipif(
+    _committed_decoder() != (sf.__version__, sf.__libsndfile_version__),
+    reason="the committed digests are comparable only under the decoder that made them",
+)
+class TestTheCommittedDigests:
+    """The decoded manifest the generator wrote for the 145 training files."""
+
+    def test_every_training_file_has_its_own_digests(self) -> None:
+        digests = training_corpus.load_training_digests()
+        assert sorted(digests) == [r.filename for r in TRAINING]
+        assert len({r.decoded_pcm_sha256 for r in digests.values()}) == 145
+        assert len({r.canonical_sha256 for r in digests.values()}) == 145
+
+    def test_the_identities_load_from_the_committed_files(self) -> None:
+        identities = load_training_identities()
+        assert len(identities.filenames) == len(identities.decoded_sha256) == 145
