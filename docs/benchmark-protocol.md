@@ -1017,9 +1017,8 @@ those two builds; runs execute only on the reference platform, where the build i
 ## Runner
 
 Frozen under `runner` since v8. These are duties on the code that runs sources, which
-the loader cannot carry out. `benchmark/runner.py` carries out the worker and exit duties,
-and `benchmark/run_preconditions.py` the model digest check; the v11 timeout is not
-enforced yet.
+the loader cannot carry out. `benchmark/runner.py` carries out the worker and exit duties
+and the v11 timeout, and `benchmark/run_preconditions.py` the model digest check.
 
 - **One child process per source, one at a time.** A worker that dies cannot take a
   record with it, so the parent decides what its death means.

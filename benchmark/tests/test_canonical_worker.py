@@ -24,10 +24,10 @@ from benchmark.canonical_worker import (
     CANONICAL_FILE,
     EXIT_MEMORY_ERROR,
     RECORD_FILE,
+    CanonicalSource,
     canonicalise_source,
     main,
 )
-from benchmark.canonicalisation import CanonicalWaveform
 from benchmark.outcome_wire import outcome_from_wire
 from benchmark.protocol import Protocol, load_protocol
 from benchmark.run_preconditions import file_sha256
@@ -89,8 +89,14 @@ class TestCanonicaliseSource:
         result = canonicalise_source(
             tone_flac, logical_source_id="item/tones.flac", expected_sha256=None, protocol=protocol
         )
-        assert isinstance(result, CanonicalWaveform)
-        assert result.samples.size == RATE
+        assert isinstance(result, CanonicalSource)
+        assert result.waveform.samples.size == RATE
+        assert result.logical_source_id == "item/tones.flac"
+        assert result.raw_sha256 == hashlib.sha256(tone_flac.read_bytes()).hexdigest()
+        decoded, _ = sf.read(tone_flac, dtype="float64", always_2d=True)
+        assert (
+            result.decoded_pcm_sha256 == hashlib.sha256(decoded.astype("<f8").tobytes()).hexdigest()
+        )
 
     def test_an_oversize_source_is_a_record_with_its_streamed_identity(
         self, protocol: Protocol, tone_flac: Path
@@ -119,7 +125,7 @@ class TestCanonicaliseSource:
             expected_sha256=None,
             protocol=with_source_bound(protocol, tone_flac.stat().st_size),
         )
-        assert isinstance(result, CanonicalWaveform)
+        assert isinstance(result, CanonicalSource)
 
     def test_an_undecodable_source_is_rejected_at_inspection(
         self, protocol: Protocol, tmp_path: Path
@@ -165,9 +171,12 @@ class TestMain:
         expected = canonicalise_source(
             tone_flac, logical_source_id="item/tones.flac", expected_sha256=None, protocol=protocol
         )
-        assert isinstance(expected, CanonicalWaveform)
+        assert isinstance(expected, CanonicalSource)
+        assert result["logical_source_id"] == "item/tones.flac"
+        assert result["raw_sha256"] == expected.raw_sha256
+        assert result["decoded_pcm_sha256"] == expected.decoded_pcm_sha256
         np.testing.assert_array_equal(
-            np.fromfile(out_dir / CANONICAL_FILE, dtype="<f8"), expected.samples
+            np.fromfile(out_dir / CANONICAL_FILE, dtype="<f8"), expected.waveform.samples
         )
 
     def test_an_outcome_leaves_a_record_that_rebuilds_and_no_samples(

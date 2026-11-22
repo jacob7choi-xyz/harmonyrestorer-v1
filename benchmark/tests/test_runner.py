@@ -10,7 +10,13 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
+import os
+import signal
+import subprocess
 import sys
+import time
+import tracemalloc
 from pathlib import Path
 
 import numpy as np
@@ -18,7 +24,13 @@ import pytest
 import soundfile as sf
 
 from benchmark import runner
-from benchmark.canonical_worker import CANONICAL_FILE, EXIT_MEMORY_ERROR, RECORD_FILE
+from benchmark.canonical_worker import (
+    CANONICAL_FILE,
+    EXIT_MEMORY_ERROR,
+    RECORD_FILE,
+    canonicalise_source,
+)
+from benchmark.outcome_wire import outcome_to_wire
 from benchmark.protocol import Protocol, load_protocol
 from benchmark.runner import (
     WORKER_LOG,
@@ -36,6 +48,9 @@ from benchmark.source_outcome import (
 
 RATE = 16000
 SOURCE_ID = "item/tones.flac"
+RAW_SHA256 = "a" * 64
+# Generous, so only the timeout tests, which pass their own, can be stopped by it.
+TIMEOUT_S = 120.0
 
 
 @pytest.fixture(scope="module")
@@ -83,17 +98,27 @@ def canonical_record(
         "kind": "canonical",
         "sha256": hashlib.sha256(values.astype("<f8").tobytes()).hexdigest(),
         "samples": int(values.size),
+        "logical_source_id": SOURCE_ID,
+        "raw_sha256": RAW_SHA256,
+        "decoded_pcm_sha256": "b" * 64,
     }
     result.update(changes)
     return {"protocol_sha256": protocol.source_sha256, "result": result}
 
 
 def run(
-    protocol: Protocol, tmp_path: Path, command: runner.WorkerCommand, path: Path | None = None
+    protocol: Protocol,
+    tmp_path: Path,
+    command: runner.WorkerCommand,
+    path: Path | None = None,
+    expected_sha256: str | None = None,
 ) -> runner.SourceRun:
     """Run one candidate through `run_source` with *command* as its worker."""
-    candidate = Candidate(SOURCE_ID, path if path is not None else tmp_path / "unused.flac")
-    return run_source(candidate, tmp_path / "source-000000", protocol, command=command)
+    candidate = Candidate(
+        SOURCE_ID, path if path is not None else tmp_path / "unused.flac", expected_sha256
+    )
+    out_dir = tmp_path / "source-000000"
+    return run_source(candidate, out_dir, protocol, timeout_s=TIMEOUT_S, command=command)
 
 
 def assert_aborts(source_run: runner.SourceRun, reason: AbortReason) -> None:
@@ -133,7 +158,9 @@ class TestAcceptedOutcomes:
         self, protocol: Protocol, tmp_path: Path, tone_flac: Path
     ) -> None:
         candidate = Candidate(SOURCE_ID, tone_flac, expected_sha256="0" * 64)
-        source_run = run_source(candidate, tmp_path / "source-000000", protocol)
+        source_run = run_source(
+            candidate, tmp_path / "source-000000", protocol, timeout_s=TIMEOUT_S
+        )
         assert source_run.returncode == 0
         assert_aborts(source_run, AbortReason.SOURCE_HASH_MISMATCH)
 
@@ -243,8 +270,20 @@ class TestUnattributedEnds:
             ({"samples": 5}, np.zeros(4)),
             ({"samples": True}, np.zeros(1)),
             ({"extra": 1}, np.zeros(4)),
+            ({"logical_source_id": "item/other.flac"}, np.zeros(4)),
+            ({"raw_sha256": "A" * 64}, np.zeros(4)),
+            ({"decoded_pcm_sha256": None}, np.zeros(4)),
         ],
-        ids=["file_missing", "digest_differs", "count_differs", "count_is_a_bool", "extra_key"],
+        ids=[
+            "file_missing",
+            "digest_differs",
+            "count_differs",
+            "count_is_a_bool",
+            "extra_key",
+            "names_another_source",
+            "raw_digest_uppercase",
+            "decoded_digest_missing",
+        ],
     )
     def test_a_canonical_record_that_disagrees_with_its_file_aborts(
         self,
@@ -257,6 +296,81 @@ class TestUnattributedEnds:
         canonical = None if written is None else written.astype("<f8").tobytes()
         command = writes_record(record, canonical)
         assert_aborts(run(protocol, tmp_path, command), AbortReason.INTERNAL_CANONICALISATION_ERROR)
+
+    def test_a_canonical_record_that_holds_together_is_accepted(
+        self, protocol: Protocol, tmp_path: Path
+    ) -> None:
+        """The control for the refusals around it: the stand-in record is itself valid."""
+        samples = np.zeros(4)
+        command = writes_record(
+            canonical_record(protocol, samples), samples.astype("<f8").tobytes()
+        )
+        source_run = run(protocol, tmp_path, command, expected_sha256=RAW_SHA256)
+        assert isinstance(source_run.outcome, CanonicalFile)
+        assert source_run.outcome.raw_sha256 == RAW_SHA256
+        assert source_run.outcome.decoded_pcm_sha256 == "b" * 64
+
+    def test_a_canonical_record_for_other_bytes_aborts(
+        self, protocol: Protocol, tmp_path: Path
+    ) -> None:
+        """Its raw digest is well formed but is not the one the candidate was staged with."""
+        samples = np.zeros(4)
+        command = writes_record(
+            canonical_record(protocol, samples), samples.astype("<f8").tobytes()
+        )
+        source_run = run(protocol, tmp_path, command, expected_sha256="c" * 64)
+        assert_aborts(source_run, AbortReason.INTERNAL_CANONICALISATION_ERROR)
+
+    def test_an_ineligible_record_for_other_bytes_aborts(
+        self, protocol: Protocol, tmp_path: Path
+    ) -> None:
+        """A verdict is charged to a source only for the bytes it was staged with."""
+        noise = tmp_path / "noise.flac"
+        noise.write_bytes(b"not audio at all" * 64)
+        outcome = canonicalise_source(
+            noise, logical_source_id=SOURCE_ID, expected_sha256=None, protocol=protocol
+        )
+        assert isinstance(outcome, SourceIneligibleOutcome)
+        record = {"protocol_sha256": protocol.source_sha256, "result": outcome_to_wire(outcome)}
+        source_run = run(protocol, tmp_path, writes_record(record), expected_sha256="c" * 64)
+        assert_aborts(source_run, AbortReason.INTERNAL_CANONICALISATION_ERROR)
+
+    def test_an_ineligible_record_for_the_staged_bytes_is_accepted(
+        self, protocol: Protocol, tmp_path: Path
+    ) -> None:
+        noise = tmp_path / "noise.flac"
+        noise.write_bytes(b"not audio at all" * 64)
+        digest = hashlib.sha256(noise.read_bytes()).hexdigest()
+        source_run = run(protocol, tmp_path, runner.worker_command, noise, expected_sha256=digest)
+        assert isinstance(source_run.outcome, SourceIneligibleOutcome)
+
+    def test_a_record_over_the_read_bound_aborts(self, protocol: Protocol, tmp_path: Path) -> None:
+        """A valid canonical record padded with JSON whitespace, so only its size refuses it."""
+        samples = np.zeros(4)
+        record = json.dumps(canonical_record(protocol, samples))
+        code = (
+            f"(out / {CANONICAL_FILE!r}).write_bytes({samples.astype('<f8').tobytes()!r})\n"
+            f"(out / {RECORD_FILE!r}).write_text({record!r} + ' ' * {runner._MAX_RECORD_BYTES})"
+        )
+        source_run = run(protocol, tmp_path, script(code), expected_sha256=RAW_SHA256)
+        assert_aborts(source_run, AbortReason.INTERNAL_CANONICALISATION_ERROR)
+
+    def test_reading_an_oversized_record_allocates_only_the_bound(
+        self, protocol: Protocol, tmp_path: Path
+    ) -> None:
+        """A 32 MiB record must not be read whole before its size refuses it."""
+        out_dir = tmp_path / "source-000000"
+        out_dir.mkdir()
+        (out_dir / RECORD_FILE).write_bytes(b" " * (32 << 20))
+        candidate = Candidate(SOURCE_ID, tmp_path / "unused.flac")
+        tracemalloc.start()
+        try:
+            reported = runner._reported(candidate, out_dir, protocol)
+            _, peak = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+        assert isinstance(reported, str)
+        assert peak < 4 * runner._MAX_RECORD_BYTES
 
     def test_a_record_that_does_not_rebuild_aborts(
         self, protocol: Protocol, tmp_path: Path
@@ -324,6 +438,7 @@ class TestRunCanonicalisation:
             runtime_platform="darwin_arm64",
             opgan_checkpoint=tmp_path / "final.pt",
             uvr_model_dir=tmp_path,
+            timeout_s=TIMEOUT_S,
             command=command,
         )
 
@@ -398,3 +513,237 @@ class TestRunCanonicalisation:
 
         with pytest.raises(FileExistsError):
             self.start(protocol, tmp_path, candidates, script("pass"))
+
+
+class TestInputsCheckedBeforeStarting:
+    """The worker runs from the repository root, so the parent refuses what it would misread."""
+
+    @pytest.mark.parametrize(
+        ("relative", "expected"),
+        [("path", None), ("out_dir", None), (None, "A" * 64), (None, "ab"), (None, "\u00e9" * 64)],
+        ids=[
+            "relative_path",
+            "relative_out_dir",
+            "uppercase_digest",
+            "short_digest",
+            "non_ascii_digest_compare_digest_would_raise_on",
+        ],
+    )
+    def test_a_bad_input_is_refused_before_anything_starts(
+        self, protocol: Protocol, tmp_path: Path, relative: str | None, expected: str | None
+    ) -> None:
+        marker = tmp_path / "worker-started"
+        path = Path("unused.flac") if relative == "path" else tmp_path / "unused.flac"
+        out_dir = Path("source-000000") if relative == "out_dir" else tmp_path / "source-000000"
+        candidate = Candidate(SOURCE_ID, path, expected)
+        command = script(f"Path({str(marker)!r}).touch()")
+        with pytest.raises(ValueError, match=r"must be absolute|64 lowercase hex"):
+            run_source(candidate, out_dir, protocol, timeout_s=TIMEOUT_S, command=command)
+        assert not marker.exists()
+        assert not out_dir.exists()
+
+    def test_a_relative_work_directory_is_refused_before_the_preconditions(
+        self, protocol: Protocol, tmp_path: Path
+    ) -> None:
+        work_dir = Path("relative-work-dir-that-must-not-be-created")
+        with pytest.raises(ValueError, match="work directory must be absolute"):
+            run_canonicalisation(
+                protocol,
+                [],
+                work_dir=work_dir,
+                runtime_platform="unused",
+                opgan_checkpoint=tmp_path / "missing.pt",
+                uvr_model_dir=tmp_path / "missing",
+                timeout_s=TIMEOUT_S,
+            )
+        assert not work_dir.exists()
+        assert not (tmp_path / "missing").exists()
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [("path", "un\x00used.flac"), ("logical_source_id", "item/a\x00b.flac")],
+        ids=["nul_in_path", "nul_in_id"],
+    )
+    def test_a_nul_character_is_refused_before_anything_starts(
+        self, protocol: Protocol, tmp_path: Path, field: str, value: str
+    ) -> None:
+        """No process argument can carry a NUL, so Popen would raise after mkdir."""
+        path = tmp_path / value if field == "path" else tmp_path / "unused.flac"
+        source_id = value if field == "logical_source_id" else SOURCE_ID
+        out_dir = tmp_path / "source-000000"
+        with pytest.raises(ValueError, match="NUL character"):
+            run_source(
+                Candidate(source_id, path),
+                out_dir,
+                protocol,
+                timeout_s=TIMEOUT_S,
+                command=script("pass"),
+            )
+        assert not out_dir.exists()
+
+    def test_an_identifier_that_begins_with_a_dash_reaches_the_worker(
+        self, protocol: Protocol, tmp_path: Path, tone_flac: Path
+    ) -> None:
+        """Without `--` before the positionals, the worker's parser would exit 2 on it."""
+        candidate = Candidate("-item/tones.flac", tone_flac)
+        out_dir = tmp_path / "source-000000"
+        source_run = run_source(candidate, out_dir, protocol, timeout_s=TIMEOUT_S)
+        assert source_run.returncode == 0
+        assert isinstance(source_run.outcome, CanonicalFile)
+
+
+class TestTimeout:
+    """A worker past its time is stopped and recorded as a timeout, never as capacity."""
+
+    def test_a_worker_past_its_time_is_a_timeout_naming_the_source(
+        self, protocol: Protocol, tmp_path: Path
+    ) -> None:
+        candidate = Candidate(SOURCE_ID, tmp_path / "unused.flac")
+        command = script("import time\ntime.sleep(60)")
+        started = time.monotonic()
+        source_run = run_source(
+            candidate, tmp_path / "source-000000", protocol, timeout_s=0.5, command=command
+        )
+        assert time.monotonic() - started < 30
+        assert source_run.returncode == -signal.SIGKILL
+        assert_aborts(source_run, AbortReason.WORKER_TIMEOUT)
+
+    def test_a_worker_that_kills_itself_is_still_a_capacity_exit(
+        self, protocol: Protocol, tmp_path: Path
+    ) -> None:
+        """SIGKILL alone is capacity; only the timer's own kill is a timeout."""
+        command = script("import os, signal\nos.kill(os.getpid(), signal.SIGKILL)")
+        assert_aborts(run(protocol, tmp_path, command), AbortReason.ENVIRONMENT_CAPACITY_FAILURE)
+
+    @pytest.mark.parametrize("timeout_s", [0.0, -1.0, math.inf, math.nan, True])
+    def test_a_timeout_that_is_not_a_positive_number_is_refused_before_starting(
+        self, protocol: Protocol, tmp_path: Path, timeout_s: float
+    ) -> None:
+        candidate = Candidate(SOURCE_ID, tmp_path / "unused.flac")
+        out_dir = tmp_path / "source-000000"
+        with pytest.raises(ValueError, match="timeout must be"):
+            run_source(candidate, out_dir, protocol, timeout_s=timeout_s, command=script("pass"))
+        assert not out_dir.exists()
+
+    def test_an_interrupted_wait_kills_and_reaps_the_worker(
+        self, protocol: Protocol, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Ctrl+C while waiting must not leave the worker running or unreaped."""
+        pids: list[int] = []
+
+        def interrupted(pid: int, *, before_reap: object = None) -> tuple[int, int | None]:
+            pids.append(pid)
+            raise KeyboardInterrupt
+
+        monkeypatch.setattr(runner, "wait_with_footprint", interrupted)
+        candidate = Candidate(SOURCE_ID, tmp_path / "unused.flac")
+        command = script("import time\ntime.sleep(60)")
+        started = time.monotonic()
+        with pytest.raises(KeyboardInterrupt):
+            run_source(
+                candidate, tmp_path / "source-000000", protocol, timeout_s=60.0, command=command
+            )
+        # Killed, not waited out: the worker would otherwise sleep for 60 s.
+        assert time.monotonic() - started < 30
+        with pytest.raises(ChildProcessError):
+            os.waitpid(pids[0], os.WNOHANG)
+
+    def test_a_timer_that_reaches_its_kill_after_being_stopped_sends_nothing(
+        self, tmp_path: Path
+    ) -> None:
+        """The race `stop` closes: the timer thread can be past its wait when stop runs."""
+        child = subprocess.Popen([sys.executable, "-c", "import time\ntime.sleep(60)"])
+        try:
+            watchdog = runner._Watchdog(child.pid, 60.0)
+            watchdog.stop()
+            watchdog._fire()
+            assert not watchdog.fired
+            assert child.poll() is None
+        finally:
+            child.kill()
+            child.wait()
+
+    def test_a_fired_timer_on_a_worker_that_exited_normally_is_not_a_timeout(
+        self, protocol: Protocol, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A timer can fire on an exited, unreaped worker; only an exit by SIGKILL is a timeout."""
+
+        class AlwaysFired:
+            fired = True
+
+            def __init__(self, pid: int, timeout_s: float) -> None:
+                del pid, timeout_s
+
+            def stop(self) -> None:
+                return None
+
+        monkeypatch.setattr(runner, "_Watchdog", AlwaysFired)
+        assert_aborts(
+            run(protocol, tmp_path, script("pass")), AbortReason.INTERNAL_CANONICALISATION_ERROR
+        )
+
+    def test_a_timer_that_fails_to_start_does_not_leave_the_worker_running(
+        self, protocol: Protocol, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The worker exists before the timer does, so a failed timer must still end it."""
+        pids: list[int] = []
+
+        class FailingWatchdog:
+            def __init__(self, pid: int, timeout_s: float) -> None:
+                del timeout_s
+                pids.append(pid)
+                raise RuntimeError("no thread for the timer")
+
+        monkeypatch.setattr(runner, "_Watchdog", FailingWatchdog)
+        candidate = Candidate(SOURCE_ID, tmp_path / "unused.flac")
+        command = script("import time\ntime.sleep(60)")
+        started = time.monotonic()
+        with pytest.raises(RuntimeError, match="no thread"):
+            run_source(
+                candidate, tmp_path / "source-000000", protocol, timeout_s=60.0, command=command
+            )
+        assert time.monotonic() - started < 30
+        with pytest.raises(ChildProcessError):
+            os.waitpid(pids[0], os.WNOHANG)
+
+    def test_a_wait_that_reports_no_such_child_signals_nothing(
+        self, protocol: Protocol, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A ChildProcessError means the pid may belong to another process, so no kill."""
+        pids: list[int] = []
+        signalled: list[int] = []
+        real_kill = os.kill
+
+        def no_such_child(pid: int, *, before_reap: object = None) -> tuple[int, int | None]:
+            pids.append(pid)
+            raise ChildProcessError
+
+        monkeypatch.setattr(runner, "wait_with_footprint", no_such_child)
+        monkeypatch.setattr(runner.os, "kill", lambda pid, sig: signalled.append(pid))
+        candidate = Candidate(SOURCE_ID, tmp_path / "unused.flac")
+        command = script("import time\ntime.sleep(60)")
+        try:
+            with pytest.raises(ChildProcessError):
+                run_source(
+                    candidate, tmp_path / "source-000000", protocol, timeout_s=60.0, command=command
+                )
+            assert signalled == []
+        finally:
+            real_kill(pids[0], signal.SIGKILL)
+            os.waitpid(pids[0], 0)
+
+    @pytest.mark.parametrize("timeout_s", [0.0, math.nan])
+    def test_run_canonicalisation_checks_the_timeout_before_the_preconditions(
+        self, protocol: Protocol, tmp_path: Path, timeout_s: float
+    ) -> None:
+        """Checked up front, so an empty run or a failed precondition cannot hide it."""
+        with pytest.raises(ValueError, match="timeout must be"):
+            run_canonicalisation(
+                protocol,
+                [],
+                work_dir=tmp_path,
+                runtime_platform="unused",
+                opgan_checkpoint=tmp_path / "missing.pt",
+                uvr_model_dir=tmp_path / "missing",
+                timeout_s=timeout_s,
+            )

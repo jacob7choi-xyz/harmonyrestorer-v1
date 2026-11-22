@@ -56,7 +56,6 @@ plus about 300 MB of features, and takes tens of minutes.
 
 from __future__ import annotations
 
-import hashlib
 import json
 import math
 import time
@@ -73,7 +72,7 @@ import numpy.typing as npt
 from benchmark.canonicalisation import CanonicalWaveform, canonicalise
 from benchmark.protocol import MfccConfig, Protocol, load_protocol
 from benchmark.source_acquisition import ArtifactBuffered, acquire_local_artifact
-from benchmark.source_decode import decode_source
+from benchmark.source_decode import decode_source, decoded_pcm_sha256
 from benchmark.source_inspection import InspectedSource, inspect_source
 
 MANIFEST = Path("benchmark/manifests/training_corpus.json")
@@ -84,8 +83,6 @@ ROUND_TRIP_RATE = 8000
 TRANSFORMS = ("trim_3_s", "gain_minus_6_db", "round_trip_8_khz")
 TOP_PAIRS = 10
 LOWEST_POSITIVES = 3
-# The byte layout the protocol hashes decoded samples in: float64, little-endian, interleaved.
-_DECODED_FORMAT = "<f8"
 
 Features = npt.NDArray[np.float64]
 
@@ -218,9 +215,7 @@ def load_recording(
     )  # fmt: skip
     if not isinstance(decoded, np.ndarray):
         return f"decode gave {decoded.primary_reason_code}"
-    decoded_sha256 = hashlib.sha256(
-        np.ascontiguousarray(decoded, dtype=_DECODED_FORMAT).data
-    ).hexdigest()
+    decoded_sha256 = decoded_pcm_sha256(decoded)
     canonical = canonicalise(decoded, inspected, logical_source_id=name, config=config)
     if not isinstance(canonical, CanonicalWaveform):
         return f"canonicalisation gave {canonical.reason}"

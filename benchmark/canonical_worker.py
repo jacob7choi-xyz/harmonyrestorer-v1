@@ -9,8 +9,12 @@ its own output directory, which that measurement did not write:
 - `canonical.f64`, written only when the source canonicalises: the canonical samples as
   contiguous little-endian float64 with no header, which are exactly the bytes the canonical
   digest covers, so the parent checks the file by hashing it.
-- `record.json`, written last: the protocol digest and either the canonical digest and
-  sample count or an ineligibility or abort record in the `outcome_wire` form.
+- `record.json`, written last: the protocol digest and either the canonical digest, the
+  sample count, the source's identifier, and its raw and decoded-PCM digests, or an
+  ineligibility or abort record in the `outcome_wire` form. The parent checks the identifier
+  against the candidate it asked about, and the raw digest against the candidate's
+  expected digest when one is given. The decoded-PCM digest is what the third exclusion
+  rule compares; the parent checks only its form.
 
 Both are written atomically, so a file that exists is complete, and the record is written
 after the samples, so a record that names a canonical waveform has its file in place.
@@ -38,17 +42,19 @@ import logging
 import os
 import tempfile
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 import numpy as np
+import numpy.typing as npt
 
 from benchmark.canonicalisation import CanonicalWaveform, canonicalise
 from benchmark.outcome_wire import outcome_to_wire
-from benchmark.protocol import Protocol, load_protocol
-from benchmark.source_acquisition import ArtifactTooLarge, acquire_local_artifact
-from benchmark.source_decode import decode_source
-from benchmark.source_inspection import inspect_source
+from benchmark.protocol import Canonicalisation, Protocol, load_protocol
+from benchmark.source_acquisition import ArtifactBuffered, ArtifactTooLarge, acquire_local_artifact
+from benchmark.source_decode import decode_source, decoded_pcm_sha256
+from benchmark.source_inspection import InspectedSource, inspect_source
 from benchmark.source_outcome import IneligibleReason, RunAbortOutcome, SourceIneligibleOutcome
 
 __all__ = [
@@ -56,6 +62,7 @@ __all__ = [
     "CANONICAL_KIND",
     "EXIT_MEMORY_ERROR",
     "RECORD_FILE",
+    "CanonicalSource",
     "canonicalise_source",
     "main",
 ]
@@ -70,7 +77,18 @@ CANONICAL_KIND = "canonical"
 # The byte layout canonicalisation hashes, so the file's digest is the canonical digest.
 _SAMPLE_FORMAT = "<f8"
 
-SourceResult = CanonicalWaveform | SourceIneligibleOutcome | RunAbortOutcome
+
+@dataclass(frozen=True)
+class CanonicalSource:
+    """A source that canonicalised, with what identifies it to the parent."""
+
+    logical_source_id: str
+    waveform: CanonicalWaveform
+    raw_sha256: str
+    decoded_pcm_sha256: str
+
+
+SourceResult = CanonicalSource | SourceIneligibleOutcome | RunAbortOutcome
 
 
 def canonicalise_source(
@@ -119,7 +137,28 @@ def canonicalise_source(
     )
     if isinstance(decoded, SourceIneligibleOutcome):
         return decoded
-    return canonicalise(decoded, inspected, logical_source_id=logical_source_id, config=config)
+    return _canonical_source(decoded, inspected, artifact, logical_source_id, config)
+
+
+def _canonical_source(
+    decoded: npt.NDArray[np.float64],
+    inspected: InspectedSource,
+    artifact: ArtifactBuffered,
+    logical_source_id: str,
+    config: Canonicalisation,
+) -> CanonicalSource | RunAbortOutcome:
+    """Canonicalise a decoded source and attach the digests that identify it."""
+    # Hashed before canonicalisation, so the digest covers the decoder's output as returned.
+    decoded_digest = decoded_pcm_sha256(decoded)
+    canonical = canonicalise(decoded, inspected, logical_source_id=logical_source_id, config=config)
+    if isinstance(canonical, RunAbortOutcome):
+        return canonical
+    raw_digest = artifact.identity.sha256
+    if raw_digest is None:
+        # A buffered artifact is hashed while it is read, so this is not expected; refusing
+        # keeps a canonical result from ever reaching the parent without its raw digest.
+        raise RuntimeError(f"{logical_source_id}: buffered artifact has no digest")
+    return CanonicalSource(logical_source_id, canonical, raw_digest, decoded_digest)
 
 
 def _write_atomically(target: Path, data: bytes | memoryview) -> None:
@@ -140,11 +179,14 @@ def _write_atomically(target: Path, data: bytes | memoryview) -> None:
 
 def _record(result: SourceResult, protocol: Protocol) -> dict[str, Any]:
     """The record the parent reads: the protocol digest and what this source became."""
-    if isinstance(result, CanonicalWaveform):
+    if isinstance(result, CanonicalSource):
         body: dict[str, Any] = {
             "kind": CANONICAL_KIND,
-            "sha256": result.sha256,
-            "samples": int(result.samples.size),
+            "sha256": result.waveform.sha256,
+            "samples": int(result.waveform.samples.size),
+            "logical_source_id": result.logical_source_id,
+            "raw_sha256": result.raw_sha256,
+            "decoded_pcm_sha256": result.decoded_pcm_sha256,
         }
     else:
         body = outcome_to_wire(result)
@@ -153,8 +195,8 @@ def _record(result: SourceResult, protocol: Protocol) -> dict[str, Any]:
 
 def _report(result: SourceResult, protocol: Protocol, out_dir: Path) -> None:
     """Write the canonical samples when there are any, then the record."""
-    if isinstance(result, CanonicalWaveform):
-        samples = np.ascontiguousarray(result.samples, dtype=_SAMPLE_FORMAT)
+    if isinstance(result, CanonicalSource):
+        samples = np.ascontiguousarray(result.waveform.samples, dtype=_SAMPLE_FORMAT)
         _write_atomically(out_dir / CANONICAL_FILE, samples.data)
     record = json.dumps(_record(result, protocol), sort_keys=True)
     _write_atomically(out_dir / RECORD_FILE, record.encode())
