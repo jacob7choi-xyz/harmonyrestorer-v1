@@ -19,7 +19,7 @@ import numpy as np
 import pytest
 import soundfile as sf
 
-from benchmark import canonical_worker
+from benchmark import atomic_write, canonical_worker
 from benchmark.canonical_worker import (
     CANONICAL_FILE,
     EXIT_MEMORY_ERROR,
@@ -224,7 +224,7 @@ class TestMain:
         def full_disk(fd: int) -> None:
             raise OSError(28, "No space left on device")
 
-        monkeypatch.setattr(canonical_worker.os, "fsync", full_disk)
+        monkeypatch.setattr(atomic_write.os, "fsync", full_disk)
 
         with pytest.raises(OSError, match="No space left"):
             main([str(tone_flac), "item/tones.flac", str(out_dir)])

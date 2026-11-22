@@ -39,8 +39,6 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
-import tempfile
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -49,6 +47,7 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 
+from benchmark.atomic_write import write_atomically
 from benchmark.canonicalisation import CanonicalWaveform, canonicalise
 from benchmark.outcome_wire import outcome_to_wire
 from benchmark.protocol import Canonicalisation, Protocol, load_protocol
@@ -161,22 +160,6 @@ def _canonical_source(
     return CanonicalSource(logical_source_id, canonical, raw_digest, decoded_digest)
 
 
-def _write_atomically(target: Path, data: bytes | memoryview) -> None:
-    """Write *data* to a temporary file beside *target*, fsync it, then replace *target*."""
-    fd, temporary = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.")
-    replaced = False
-    try:
-        with os.fdopen(fd, "wb") as handle:
-            handle.write(data)
-            handle.flush()
-            os.fsync(handle.fileno())
-        Path(temporary).replace(target)
-        replaced = True
-    finally:
-        if not replaced:
-            Path(temporary).unlink(missing_ok=True)
-
-
 def _record(result: SourceResult, protocol: Protocol) -> dict[str, Any]:
     """The record the parent reads: the protocol digest and what this source became."""
     if isinstance(result, CanonicalSource):
@@ -197,9 +180,9 @@ def _report(result: SourceResult, protocol: Protocol, out_dir: Path) -> None:
     """Write the canonical samples when there are any, then the record."""
     if isinstance(result, CanonicalSource):
         samples = np.ascontiguousarray(result.waveform.samples, dtype=_SAMPLE_FORMAT)
-        _write_atomically(out_dir / CANONICAL_FILE, samples.data)
+        write_atomically(out_dir / CANONICAL_FILE, samples.data)
     record = json.dumps(_record(result, protocol), sort_keys=True)
-    _write_atomically(out_dir / RECORD_FILE, record.encode())
+    write_atomically(out_dir / RECORD_FILE, record.encode())
 
 
 def _parse(argv: Sequence[str] | None) -> argparse.Namespace:
