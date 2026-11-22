@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from benchmark.protocol import load_protocol
+from benchmark.protocol import ArchiveItemStratum, load_protocol
 from benchmark.selection import (
     ExclusionRule,
     SelectionError,
@@ -168,11 +168,18 @@ class TestTrainingIdentities:
 
 
 class TestCandidateFilter:
-    """v9's filter: the final path component's suffix, lowercased, is .flac."""
+    """The suffix half of v12's piano filter: the final path component's suffix is .flac.
 
-    def test_the_protocol_names_the_filter_this_module_implements(self) -> None:
-        filter_token = load_protocol().selection.candidate_filter
-        assert filter_token == "final_path_component_suffix_lowercased_is_flac"
+    The protocol token also carries "not_excluded", which names the stratum's exclusion
+    list. This module implements the suffix test only; the exclusion list is applied
+    elsewhere, and this module does not apply it.
+    """
+
+    def test_the_protocol_names_the_filter_token_this_test_checks(self) -> None:
+        stratum = load_protocol().selection.strata[0]
+        assert isinstance(stratum, ArchiveItemStratum)
+        filter_token = stratum.candidate_filter
+        assert filter_token == "final_path_component_suffix_lowercased_is_flac_not_excluded"
 
     @pytest.mark.parametrize(
         ("path", "expected"),

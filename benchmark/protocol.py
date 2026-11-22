@@ -1,6 +1,6 @@
 """Immutable, validated access to the frozen benchmark protocol.
 
-Two things share the authority here, with different jobs. `benchmark/protocols/v11.json`
+Two things share the authority here, with different jobs. `benchmark/protocols/v12.json`
 holds the frozen values a run executes against; its digest is what establishes *which*
 values those are. This module defines what counts as a *well-formed* protocol, which is
 why the gate set, the supported version, the transform vocabulary, and the
@@ -34,7 +34,7 @@ Unknown and missing keys are rejected, so a typo becomes a load failure instead 
 silently ignored setting. Semantic relationships are validated, so a config that
 parses but states an impossible protocol cannot be loaded: a duplicate threshold
 sitting outside its own calibration evidence, a paired effect whose sign contradicts
-its metric direction, a bootstrap resampling frames rather than recordings. The
+its metric direction, a bootstrap resampling recordings rather than performer clusters. The
 runtime is checked against the pinned NumPy version and BitGenerator, because a
 reproducibility guarantee recorded in JSON but never enforced is documentation.
 
@@ -53,6 +53,7 @@ import logging
 import os
 from collections.abc import Mapping
 from dataclasses import dataclass, fields
+from enum import StrEnum
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, TypeVar
@@ -64,9 +65,9 @@ logger = logging.getLogger(__name__)
 # Private so that production code has no supported affordance for reading the file
 # itself. `load_protocol` is the way in.
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_PROTOCOL_PATH = _REPO_ROOT / "benchmark" / "protocols" / "v11.json"
+_PROTOCOL_PATH = _REPO_ROOT / "benchmark" / "protocols" / "v12.json"
 
-SUPPORTED_PROTOCOL_VERSION = 11
+SUPPORTED_PROTOCOL_VERSION = 12
 
 # Which protocol v2 supersedes, and the artifacts it supersedes, as historical facts
 # rather than as arithmetic. `SUPPORTED_PROTOCOL_VERSION - 1` would encode a universal
@@ -74,9 +75,9 @@ SUPPORTED_PROTOCOL_VERSION = 11
 # governance model promises. The paths are frozen here so the config cannot redirect
 # the amendment chain at another file whose digest it also records, and so a relative
 # path out of the tree is not reachable at all.
-_PREDECESSOR_VERSION = 10
-_PREDECESSOR_PROTOCOL_PATH = "benchmark/protocols/v10.json"
-_PREDECESSOR_DOCUMENT_PATH = "docs/benchmark-protocol-v10.md"
+_PREDECESSOR_VERSION = 11
+_PREDECESSOR_PROTOCOL_PATH = "benchmark/protocols/v11.json"
+_PREDECESSOR_DOCUMENT_PATH = "docs/benchmark-protocol-v11.md"
 
 # Closed vocabularies for the frozen LSD transform. Each admits exactly one value. The
 # fields exist so an independent implementer reads each convention from the
@@ -380,8 +381,8 @@ _ELIGIBILITY_COMPUTED_FROM = "canonical_waveform"
 _RMS_COMPARATOR = "greater_than"
 _BIN_REDUCTION = "rms"
 _FRAME_REDUCTION = "arithmetic_mean"
-_COLLECTION_IDENTIFIER = "MusopenCollectionAsFlac"
-_SOURCE_IDENTIFIER = "archive_item_identifier_slash_file_path_in_item"
+_TRAINING_COLLECTION_IDENTIFIER = "MusopenCollectionAsFlac"
+_SOURCE_IDENTIFIER = "stratum_source_slash_path_in_source"
 _SELECTION_ORDERING = "code_point_sort_then_pcg64_permutation"
 _PERMANENT_UNAVAILABILITY_CODE = "CANDIDATE_PERMANENTLY_UNAVAILABLE"
 # Each in precedence order: the first failure in list order is primary.
@@ -402,7 +403,8 @@ _HARNESS_FAILURE = "failure_outside_a_system_call_aborts_the_run"
 _WITHIN_RECORDING = "arithmetic_mean_of_eligible_frames"
 _MACRO_MEAN = "unweighted_arithmetic_mean_over_recordings"
 _MEDIAN_EVEN_COUNT = "mean_of_middle_two"
-_BOOTSTRAP_DRAW = "pcg64_integers_with_replacement_one_index_array_per_iteration"
+_BOOTSTRAP_UNIT = "performer_cluster"
+_BOOTSTRAP_DRAW = "pcg64_integers_with_replacement_over_clusters_one_index_array_per_iteration"
 _BOOTSTRAP_INTERVAL = "numpy_percentile_linear"
 _DEGRADATION_PROCESS = "port_of_dataset_noise_py_at_d8993b2"
 _FRAME_SEED = "seed_sequence_of_seed_digest_words_big_endian_frame_index"
@@ -431,14 +433,31 @@ _CAPACITY_GENERATOR = "tones_0_3_at_440_hz_plus_0_2_at_1234_5_hz"
 _PEAK_MEMORY_PER_SOURCE = "lifetime_max_phys_footprint_recorded"
 _MEMORY_METRIC = "lifetime_max_phys_footprint"
 _GOLDEN_RUN_CHECK = "before_any_candidate_after_golden_fixtures_aborts_golden_fixture_failure"
-_CANDIDATE_FILTER = "final_path_component_suffix_lowercased_is_flac"
+# Per stratum, by source kind. The demo partition appears only in the archive item
+# stratum, whose recordings are CC0; the licence check runs before this order is compared.
+_ARCHIVE_ITEM_PARTITION_ORDER = ("test", "demo", "test_reserve")
+_ZENODO_ARCHIVE_PARTITION_ORDER = ("test", "test_reserve")
+_ARCHIVE_ITEM_CANDIDATE_FILTER = "final_path_component_suffix_lowercased_is_flac_not_excluded"
+# Which source each stratum walks is a kind, like v11's collection: with the seed it selects
+# the walk, so it is closed here rather than left to the JSON alone.
+_ARCHIVE_ITEM_SOURCE = "musopen-chopin-complete-works-flac"
+_ZENODO_SOURCE = (
+    ("source", "musicnet"),
+    ("zenodo_record", "5120004"),
+    ("archive", "musicnet.tar.gz"),
+    ("metadata", "musicnet_metadata.csv"),
+)
+_ARCHIVE_ITEM_CLUSTER = "listed_artist_tag_after_spelling_table"
+_ZENODO_ARCHIVE_CLUSTER = "metadata_source_after_spelling_table"
 _IDENTIFIER_COMPARISON = "exact_code_points_as_listed"
-_PARTITION_ORDER = ("test", "demo", "test_reserve", "development_reserve")
-_PARTITION_ASSIGNMENT = "consecutive_admission_positions_in_partition_order"
-_SHORT_UNIVERSE = "run_invalid_nothing_published"
+_PARTITION_ASSIGNMENT = "consecutive_admission_positions_in_partition_order_within_stratum"
+_SHORT_UNIVERSE = "stratum_invalid_unpublished_other_strata_unaffected"
+_STRATUM_ORDER = "strata_walked_in_listed_order_one_seed"
+_CLUSTER_CAP_CODE = "CLUSTER_CAP_REACHED"
 _PREDICATE_ORDER = (
     "identifier_syntax",
     "training_source_identity",
+    "cluster_cap",
     "fetch",
     "raw_sha256",
     "source_outcome_stages",
@@ -484,7 +503,7 @@ _ADJUDICATION_RECORD_MATCH = (
 _ADJUDICATION_UNMATCHED = "walk_halts_awaiting_adjudication_nothing_published"
 _ADJUDICATION_ADMITS = "only_when_every_flagged_reference_is_a_different_performance"
 _IDENTIFIER_SYNTAX = (
-    "collection_slash_path_of_nonempty_segments_not_dot_or_dotdot_without_nul_backslash_cc_cs"
+    "source_slash_path_of_nonempty_segments_not_dot_or_dotdot_without_nul_backslash_cc_cs"
 )
 _IDENTIFIER_SYNTAX_CODE = "CANDIDATE_IDENTIFIER_MALFORMED"
 _LISTING_CHECK = "listed_size_md5_sha1_each_checked_where_listed_all_attempts_mismatch_excludes"
@@ -494,6 +513,7 @@ _RECORDING_WITHOUT_FRAMES = "evaluated_in_the_walk_before_admission_rejects"
 _DEGENERATE_SCOPE = "candidate_features_only"
 _TIMEOUT_ABORT = "WORKER_TIMEOUT"
 _WORKER_TIMEOUT = "harness_setting_exceeding_it_aborts"
+_CLAIM_SCOPE = "unseen_solo_piano_and_chamber_training_noise_16khz_mono_orchestral_untested"
 # Fields read by the selection walk, the duplicate screen, and the eligibility floors whose
 # JSON type the loader must fix, because _build checks only key names. Each tuple names
 # the attributes of one section that must be exactly that type.
@@ -579,6 +599,17 @@ _ROOT_KEYS = frozenset(
         "publication_gates",
     }
 )
+
+
+class StratumKind(StrEnum):
+    """The two ways a stratum names where its candidates come from.
+
+    Each kind carries its own set of keys, so a field that means nothing for one kind
+    is refused rather than ignored.
+    """
+
+    INTERNET_ARCHIVE_ITEM = "internet_archive_item"
+    ZENODO_RECORD_ARCHIVE = "zenodo_record_archive"
 
 
 class ProtocolError(Exception):
@@ -958,31 +989,78 @@ class SourceOutcomes:
 
 
 @dataclass(frozen=True)
+class ArchiveItemStratum:
+    """A stratum whose candidates are the audio files of one Internet Archive item."""
+
+    name: str
+    source_kind: str
+    source: str
+    candidate_filter: str
+    excluded_paths: tuple[str, ...]
+    excluded_paths_note: str
+    cluster: str
+    cluster_spelling: Mapping[str, str]
+    cluster_cap: int
+    partitions: Mapping[str, int]
+    partition_order: tuple[str, ...]
+    note: str
+
+
+@dataclass(frozen=True)
+class ZenodoArchiveStratum:
+    """A stratum whose candidates are members of one archive, named by identifier."""
+
+    name: str
+    source_kind: str
+    source: str
+    zenodo_record: str
+    archive: str
+    archive_bytes: int
+    archive_md5: str
+    metadata: str
+    metadata_md5: str
+    candidate_ids: tuple[int, ...]
+    candidate_ids_note: str
+    archive_note: str
+    cluster: str
+    cluster_spelling: Mapping[str, str]
+    cluster_cap: int
+    partitions: Mapping[str, int]
+    partition_order: tuple[str, ...]
+    note: str
+
+
+Stratum = ArchiveItemStratum | ZenodoArchiveStratum
+
+
+@dataclass(frozen=True)
 class Selection:
-    """Deterministic admission of candidate recordings into partitions."""
+    """Deterministic admission of candidate recordings into strata and their partitions."""
 
     seed: int
-    partitions: Mapping[str, int]
     acquisition_retries: int
     permanent_failure_codes: tuple[int, ...]
-    collection_identifier: str
-    collection_note: str
+    training_collection_identifier: str
+    training_collection_note: str
     source_identifier: str
     source_identifier_note: str
     ordering: str
     ordering_note: str
     permanent_unavailability_code: str
-    candidate_filter: str
-    candidate_filter_note: str
     identifier_comparison: str
     identifier_comparison_note: str
-    partition_order: tuple[str, ...]
     partition_assignment: str
     partition_assignment_note: str
     short_universe: str
+    short_universe_note: str
+    stratum_order: str
+    stratum_order_note: str
+    strata: tuple[Stratum, ...]
+    cluster_cap_code: str
+    cluster_cap_note: str
     predicate_order: tuple[str, ...]
-    rejection_codes: tuple[str, ...]
     predicate_order_note: str
+    rejection_codes: tuple[str, ...]
     transient_failure: str
     retries_exhausted: str
     retries_exhausted_code: str
@@ -1291,6 +1369,10 @@ class Reporting:
     co_primary_reported_together: bool
     omnibus_winner: bool
     significance_language: bool
+    per_stratum: bool
+    pooled_estimate: bool
+    claim_scope: str
+    claim_scope_note: str
 
 
 @dataclass(frozen=True)
@@ -1470,16 +1552,67 @@ def _parse_degradation(data: Mapping[str, Any]) -> Degradation:
 
 
 def _parse_selection(data: Mapping[str, Any]) -> Selection:
-    """Build the selection section with immutable collections."""
+    """Build the selection section, its strata, and its immutable collections."""
     return _build(
         Selection,
         data,
         "selection",
-        partitions=MappingProxyType(dict(data["partitions"])),
         permanent_failure_codes=tuple(data["permanent_failure_codes"]),
-        partition_order=tuple(data["partition_order"]),
+        strata=tuple(_parse_stratum(raw, index) for index, raw in enumerate(data["strata"])),
         predicate_order=tuple(data["predicate_order"]),
         rejection_codes=tuple(data["rejection_codes"]),
+    )
+
+
+def _parse_stratum(data: Mapping[str, Any], index: int) -> Stratum:
+    """Build one stratum with the field set its source kind requires.
+
+    Args:
+        data: The JSON object for this stratum.
+        index: Position in the strata list, used in error messages.
+
+    Returns:
+        The frozen stratum for the kind the object names.
+
+    Raises:
+        ProtocolValueError: If the source kind is not one of the closed kinds.
+    """
+    raw_kind = data.get("source_kind")
+    try:
+        kind = StratumKind(str(raw_kind))
+    except ValueError as e:
+        allowed = [member.value for member in StratumKind]
+        raise ProtocolValueError(
+            f"selection.strata[{index}].source_kind must be one of {allowed}, got {raw_kind!r}"
+        ) from e
+    if kind is StratumKind.INTERNET_ARCHIVE_ITEM:
+        return _parse_archive_item_stratum(data, index)
+    return _parse_zenodo_stratum(data, index)
+
+
+def _parse_archive_item_stratum(data: Mapping[str, Any], index: int) -> ArchiveItemStratum:
+    """Build an Internet Archive item stratum with its immutable collections."""
+    return _build(
+        ArchiveItemStratum,
+        data,
+        f"selection.strata[{index}]",
+        excluded_paths=tuple(data["excluded_paths"]),
+        cluster_spelling=MappingProxyType(dict(data["cluster_spelling"])),
+        partitions=MappingProxyType(dict(data["partitions"])),
+        partition_order=tuple(data["partition_order"]),
+    )
+
+
+def _parse_zenodo_stratum(data: Mapping[str, Any], index: int) -> ZenodoArchiveStratum:
+    """Build a Zenodo archive stratum with its immutable collections."""
+    return _build(
+        ZenodoArchiveStratum,
+        data,
+        f"selection.strata[{index}]",
+        candidate_ids=tuple(data["candidate_ids"]),
+        cluster_spelling=MappingProxyType(dict(data["cluster_spelling"])),
+        partitions=MappingProxyType(dict(data["partitions"])),
+        partition_order=tuple(data["partition_order"]),
     )
 
 
@@ -2082,8 +2215,13 @@ def _validate_degradation(deg: Degradation, golden: GoldenFixtures) -> None:
 
 
 def _require_digest(name: str, value: str) -> None:
-    if len(value) != 64 or not all(c in "0123456789abcdef" for c in value):
-        raise ProtocolValueError(f"{name} must be 64 lowercase hex digits")
+    _require_hex_digits(name, value, 64)
+
+
+def _require_hex_digits(name: str, value: str, length: int) -> None:
+    """A checksum is exactly `length` lowercase hexadecimal characters."""
+    if len(value) != length or not all(c in "0123456789abcdef" for c in value):
+        raise ProtocolValueError(f"{name} must be {length} lowercase hex digits")
 
 
 def _validate_system_execution(se: SystemExecution) -> None:
@@ -2176,29 +2314,30 @@ def _validate_capacity_fixture(
 
 
 def _validate_selection(sel: Selection) -> None:
-    """Every partition must claim at least one slot and the walk must terminate."""
+    """Retries and failure codes must be well formed, and at least one stratum must exist."""
     if sel.seed < 0:
         raise ProtocolValueError(f"selection.seed must be non-negative, got {sel.seed}")
-    if not sel.partitions:
-        raise ProtocolValueError("selection.partitions must not be empty")
-    for name, count in sel.partitions.items():
-        if count <= 0:
-            raise ProtocolValueError(f"selection.partitions.{name} must be positive, got {count}")
     if sel.acquisition_retries < 0:
         raise ProtocolValueError("selection.acquisition_retries must be non-negative")
     if not sel.permanent_failure_codes:
         raise ProtocolValueError("selection.permanent_failure_codes must not be empty")
+    if not sel.strata:
+        raise ProtocolValueError("selection.strata must not be empty")
 
 
 def _validate_selection_rules(sel: Selection) -> None:
-    """The collection, the identifier, and the ordering are closed tokens.
+    """The training collection, the identifier, and the ordering are closed tokens.
 
     A seed selects one walk only together with the collection it walks, the identifiers it
     orders, and the ordering applied to them. Leaving any of the three open lets the same
     seed produce a different test set.
     """
     for name, stated, frozen in (
-        ("collection_identifier", sel.collection_identifier, _COLLECTION_IDENTIFIER),
+        (
+            "training_collection_identifier",
+            sel.training_collection_identifier,
+            _TRAINING_COLLECTION_IDENTIFIER,
+        ),
         ("source_identifier", sel.source_identifier, _SOURCE_IDENTIFIER),
         ("ordering", sel.ordering, _SELECTION_ORDERING),
         (
@@ -2215,20 +2354,20 @@ def _validate_selection_rules(sel: Selection) -> None:
 
 
 def _validate_selection_walk(sel: Selection) -> None:
-    """Which files are candidates, how admissions fill partitions, and the check order.
+    """Which candidates are walked, how admissions fill strata, and the check order.
 
-    The filter sets `n`, which with the seed fixes the walk, so it is closed for the same
-    reason the ordering is. The partition order must name every partition once, and the
-    check order and rejection codes decide which predicate the audit trail names. Which
-    fetch failures are transient, and what exhausted retries do, are closed because a
+    The strata set `n` for each stratum, which with the seed fixes that stratum's walk, so
+    the strata, their order, and their filters are closed for the same reason the ordering
+    is. The check order and rejection codes decide which predicate the audit trail names.
+    Which fetch failures are transient, and what exhausted retries do, are closed because a
     skipped candidate would let network conditions choose the test set.
     """
     for name, stated, frozen in (
-        ("candidate_filter", sel.candidate_filter, _CANDIDATE_FILTER),
         ("identifier_comparison", sel.identifier_comparison, _IDENTIFIER_COMPARISON),
         ("partition_assignment", sel.partition_assignment, _PARTITION_ASSIGNMENT),
         ("short_universe", sel.short_universe, _SHORT_UNIVERSE),
-        ("partition_order", sel.partition_order, _PARTITION_ORDER),
+        ("stratum_order", sel.stratum_order, _STRATUM_ORDER),
+        ("cluster_cap_code", sel.cluster_cap_code, _CLUSTER_CAP_CODE),
         ("predicate_order", sel.predicate_order, _PREDICATE_ORDER),
         ("rejection_codes", sel.rejection_codes, _REJECTION_CODES),
         ("permanent_failure_codes", sel.permanent_failure_codes, _PERMANENT_FAILURE_CODES),
@@ -2246,8 +2385,161 @@ def _validate_selection_walk(sel: Selection) -> None:
                 f"selection.{name} must be {frozen!r}, got {stated!r}; which candidates are "
                 "walked and which check is recorded as responsible are fixed before the walk"
             )
-    if set(sel.partition_order) != set(sel.partitions):
-        raise ProtocolValueError("selection.partition_order must name exactly the partitions")
+
+
+def _validate_selection_strata(sel: Selection) -> None:
+    """Exactly one stratum of each closed kind, with unique names, each validated for its kind.
+
+    Each kind has its own source, licence and cluster rules, so a stratum of a kind listed
+    twice, or a missing kind, is refused rather than walked.
+    """
+    kinds = sorted(stratum.source_kind for stratum in sel.strata)
+    expected = sorted(member.value for member in StratumKind)
+    if kinds != expected:
+        raise ProtocolValueError(
+            f"selection.strata must hold exactly one stratum of each kind {expected}, got "
+            f"{kinds}; each kind has its own source, licence and cluster rules"
+        )
+    names = [stratum.name for stratum in sel.strata]
+    if len(set(names)) != len(names):
+        raise ProtocolValueError(f"selection.strata names must be unique, got {names}")
+    for stratum in sel.strata:
+        if isinstance(stratum, ArchiveItemStratum):
+            _validate_archive_item_stratum(stratum)
+        else:
+            _validate_zenodo_stratum(stratum)
+
+
+def _validate_archive_item_stratum(stratum: ArchiveItemStratum) -> None:
+    """The item's filter and exclusions are closed, then the rules every stratum shares."""
+    name = stratum.name
+    if stratum.source != _ARCHIVE_ITEM_SOURCE:
+        raise ProtocolValueError(
+            f"selection.strata.{name}.source must be {_ARCHIVE_ITEM_SOURCE!r}, got "
+            f"{stratum.source!r}; the seed selects a walk only together with its source"
+        )
+    if stratum.candidate_filter != _ARCHIVE_ITEM_CANDIDATE_FILTER:
+        raise ProtocolValueError(
+            f"selection.strata.{name}.candidate_filter must be "
+            f"{_ARCHIVE_ITEM_CANDIDATE_FILTER!r}, got {stratum.candidate_filter!r}; the filter "
+            "sets n, and n with the seed fixes the walk"
+        )
+    _require_unique_strings(f"selection.strata.{name}.excluded_paths", stratum.excluded_paths)
+    _validate_stratum_common(stratum, _ARCHIVE_ITEM_CLUSTER, _ARCHIVE_ITEM_PARTITION_ORDER)
+
+
+def _validate_zenodo_stratum(stratum: ZenodoArchiveStratum) -> None:
+    """The archive's size, digests and identifiers, then the rules every stratum shares."""
+    name = stratum.name
+    for field, frozen in _ZENODO_SOURCE:
+        if getattr(stratum, field) != frozen:
+            raise ProtocolValueError(
+                f"selection.strata.{name}.{field} must be {frozen!r}, got "
+                f"{getattr(stratum, field)!r}; the seed selects a walk only together with its source"
+            )
+    if stratum.archive_bytes <= 0:
+        raise ProtocolValueError(
+            f"selection.strata.{name}.archive_bytes must be positive, got {stratum.archive_bytes}"
+        )
+    _require_hex_digits(f"selection.strata.{name}.archive_md5", stratum.archive_md5, 32)
+    _require_hex_digits(f"selection.strata.{name}.metadata_md5", stratum.metadata_md5, 32)
+    _validate_candidate_ids(stratum)
+    _validate_stratum_common(stratum, _ZENODO_ARCHIVE_CLUSTER, _ZENODO_ARCHIVE_PARTITION_ORDER)
+
+
+def _validate_candidate_ids(stratum: ZenodoArchiveStratum) -> None:
+    """The archive's candidates are a non-empty list of distinct positive identifiers."""
+    name = stratum.name
+    ids = stratum.candidate_ids
+    if not ids:
+        raise ProtocolValueError(f"selection.strata.{name}.candidate_ids must not be empty")
+    if len(set(ids)) != len(ids):
+        raise ProtocolValueError(f"selection.strata.{name}.candidate_ids must be unique")
+    if any(identifier <= 0 for identifier in ids):
+        raise ProtocolValueError(f"selection.strata.{name}.candidate_ids must be positive")
+
+
+def _validate_stratum_common(
+    stratum: Stratum, cluster: str, closed_partition_order: tuple[str, ...]
+) -> None:
+    """The cluster rule, cap, and partitions every stratum shares.
+
+    Args:
+        stratum: The stratum to check.
+        cluster: The one cluster token its kind allows.
+        closed_partition_order: The one partition order its kind allows.
+
+    Raises:
+        ProtocolValueError: If any rule is violated.
+    """
+    name = stratum.name
+    if stratum.cluster != cluster:
+        raise ProtocolValueError(
+            f"selection.strata.{name}.cluster must be {cluster!r}, got {stratum.cluster!r}; "
+            "the cluster rule decides which recordings count together against the cap"
+        )
+    _validate_cluster_spelling(name, stratum.cluster_spelling)
+    if stratum.cluster_cap <= 0:
+        raise ProtocolValueError(
+            f"selection.strata.{name}.cluster_cap must be positive, got {stratum.cluster_cap}"
+        )
+    _validate_partitions(stratum, closed_partition_order)
+
+
+def _validate_partitions(stratum: Stratum, closed_partition_order: tuple[str, ...]) -> None:
+    """Partitions are positive, the demo partition is CC0 only, and the order is closed.
+
+    The licence check runs first, so a demo partition in the chamber stratum is reported as a
+    licence failure rather than as a mismatch with the order.
+    """
+    name = stratum.name
+    if isinstance(stratum, ZenodoArchiveStratum) and "demo" in stratum.partitions:
+        raise ProtocolValueError(
+            f"selection.strata.{name}.partitions must not hold a demo partition: only the CC0 "
+            "Musopen recordings may be published as a demonstration, because MusicNet's "
+            "metadata does not give each recording's licence"
+        )
+    if not stratum.partitions:
+        raise ProtocolValueError(f"selection.strata.{name}.partitions must not be empty")
+    for partition, count in stratum.partitions.items():
+        if count <= 0:
+            raise ProtocolValueError(
+                f"selection.strata.{name}.partitions.{partition} must be positive, got {count}"
+            )
+    if set(stratum.partition_order) != set(stratum.partitions):
+        raise ProtocolValueError(
+            f"selection.strata.{name}.partition_order must name exactly the partitions"
+        )
+    if stratum.partition_order != closed_partition_order:
+        raise ProtocolValueError(
+            f"selection.strata.{name}.partition_order must be {closed_partition_order!r}, got "
+            f"{stratum.partition_order!r}; the order decides which partition fills first"
+        )
+
+
+def _validate_cluster_spelling(name: str, spelling: Mapping[str, str]) -> None:
+    """A spelling table maps strings to strings, and no key is also a target.
+
+    A key that is also a target would make the corrected name depend on the order the table
+    is applied in, so the table has to be one step.
+    """
+    if not all(isinstance(key, str) and isinstance(value, str) for key, value in spelling.items()):
+        raise ProtocolSchemaError(
+            f"selection.strata.{name}.cluster_spelling must map strings to strings"
+        )
+    if set(spelling) & set(spelling.values()):
+        raise ProtocolValueError(
+            f"selection.strata.{name}.cluster_spelling has a key that is also a corrected "
+            "value, so the result would depend on the order corrections are applied in"
+        )
+
+
+def _require_unique_strings(name: str, values: tuple[str, ...]) -> None:
+    """A list of identifiers must hold non-empty strings, none repeated."""
+    if any(not isinstance(value, str) or not value for value in values):
+        raise ProtocolValueError(f"{name} must hold only non-empty strings")
+    if len(set(values)) != len(values):
+        raise ProtocolValueError(f"{name} must not repeat an entry")
 
 
 def _validate_eligibility_outcomes(el: Eligibility) -> None:
@@ -2642,12 +2934,13 @@ def _validate_metrics(metrics: Metrics) -> None:
 
 
 def _validate_aggregation(agg: Aggregation) -> None:
-    """Resampling frames instead of recordings is the pseudo-replication this forbids."""
+    """Resampling frames or recordings instead of performer clusters is what this forbids."""
     boot = agg.bootstrap
-    if boot.unit != "recording":
+    if boot.unit != _BOOTSTRAP_UNIT:
         raise ProtocolValueError(
-            f"aggregation.bootstrap.unit must be 'recording', got {boot.unit!r}; frames within "
-            "a recording are not independent and resampling them overstates confidence"
+            f"aggregation.bootstrap.unit must be {_BOOTSTRAP_UNIT!r}, got {boot.unit!r}; "
+            "recordings that share a performer, instrument, room and engineer are dependent, "
+            "and resampling them as if they were independent overstates confidence"
         )
     if boot.paired is not True:
         raise ProtocolValueError(
@@ -2731,6 +3024,21 @@ def _validate_reporting(rep: Reporting) -> None:
             "reporting.significance_language must be false; each interval is marginal for its "
             "named metric and the family-wise rate across three correlated metrics is unquantified"
         )
+    if rep.per_stratum is not True:
+        raise ProtocolValueError(
+            "reporting.per_stratum must be true; each stratum has its own universe, walk and "
+            "result, so a result reported without its stratum is not the design's result"
+        )
+    if rep.pooled_estimate is not False:
+        raise ProtocolValueError(
+            "reporting.pooled_estimate must be false; an estimate across strata mixes two "
+            "sources with different licence and cluster rules"
+        )
+    if rep.claim_scope != _CLAIM_SCOPE:
+        raise ProtocolValueError(
+            f"reporting.claim_scope must be {_CLAIM_SCOPE!r}, got {rep.claim_scope!r}; the claim "
+            "scope states what a result is evidence about, and widening it is a change of claim"
+        )
 
 
 def _validate_gates(gates: PublicationGates) -> None:
@@ -2746,6 +3054,17 @@ def _validate_gates(gates: PublicationGates) -> None:
             "publishable after the protocol is frozen selects which runs get published, "
             "so additions require a version bump just as removals do"
         )
+
+
+def _stratum_typed_fields(stratum: Stratum) -> list[tuple[str, object, type]]:
+    """The integer fields of one stratum, each with the type it must hold."""
+    prefix = f"selection.strata.{stratum.name}"
+    typed: list[tuple[str, object, type]] = [(f"{prefix}.cluster_cap", stratum.cluster_cap, int)]
+    typed += [(f"{prefix}.partitions.{n}", c, int) for n, c in stratum.partitions.items()]
+    if isinstance(stratum, ZenodoArchiveStratum):
+        typed.append((f"{prefix}.archive_bytes", stratum.archive_bytes, int))
+        typed += [(f"{prefix}.candidate_ids", i, int) for i in stratum.candidate_ids]
+    return typed
 
 
 def _typed_fields(protocol: Protocol) -> list[tuple[str, object, type]]:
@@ -2764,8 +3083,9 @@ def _typed_fields(protocol: Protocol) -> list[tuple[str, object, type]]:
             int,
         ),
     ]
-    fields += [(f"selection.partitions.{n}", c, int) for n, c in sel.partitions.items()]
     fields += [("selection.permanent_failure_codes", c, int) for c in sel.permanent_failure_codes]
+    for stratum in sel.strata:
+        fields += _stratum_typed_fields(stratum)
     for section, value, names, kind in (
         ("duplicate_detection.mfcc", dd.mfcc, _MFCC_INT_FIELDS, int),
         ("duplicate_detection.mfcc", dd.mfcc, _MFCC_FLOAT_FIELDS, float),
@@ -2816,6 +3136,7 @@ def _validate(protocol: Protocol) -> None:
     _validate_selection(protocol.selection)
     _validate_selection_rules(protocol.selection)
     _validate_selection_walk(protocol.selection)
+    _validate_selection_strata(protocol.selection)
     _validate_eligibility(protocol.eligibility)
     _validate_eligibility_outcomes(protocol.eligibility)
     _validate_duplicate_detection(
@@ -2861,7 +3182,7 @@ def load_protocol() -> Protocol:
     Example:
         >>> protocol = load_protocol()
         >>> protocol.aggregation.bootstrap.unit
-        'recording'
+        'performer_cluster'
     """
     return _load_from_path(_PROTOCOL_PATH)
 

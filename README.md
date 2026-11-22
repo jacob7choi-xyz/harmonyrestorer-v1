@@ -209,7 +209,7 @@ Previously published SDR, PESQ, and STOI figures were computed across the full g
 
 The figures and their full context are retained in [docs/benchmarks.md](docs/benchmarks.md).
 
-A replacement is in progress, and its protocol was frozen before any evaluation material was selected: recording-level partitions, per-recording bootstrap intervals rather than per-frame, three signal-fidelity metrics chosen for music instead of the speech metrics used before, and publication gates that withhold a comparison unless both systems covered an identical declared population. The protocol is [documented](docs/benchmark-protocol.md) and, more usefully, enforced by a validating loader that refuses to run a configuration contradicting it.
+A replacement is in progress, and its protocol was frozen before any evaluation material was selected: recording-level partitions, bootstrap intervals that resample performers rather than frames or single recordings, three signal-fidelity metrics chosen for music instead of the speech metrics used before, and publication gates that withhold a comparison unless both systems covered an identical declared population. The protocol is [documented](docs/benchmark-protocol.md) and, more usefully, enforced by a validating loader that refuses to run a configuration contradicting it.
 
 ## Samples
 
