@@ -502,3 +502,78 @@ class TestRunCanonicalisation:
 
         with pytest.raises(FileExistsError):
             self.start(protocol, tmp_path, candidates, script("pass"))
+
+
+class TestInputsCheckedBeforeStarting:
+    """The worker runs from the repository root, so the parent refuses what it would misread."""
+
+    @pytest.mark.parametrize(
+        ("relative", "expected"),
+        [("path", None), ("out_dir", None), (None, "A" * 64), (None, "ab"), (None, "\u00e9" * 64)],
+        ids=[
+            "relative_path",
+            "relative_out_dir",
+            "uppercase_digest",
+            "short_digest",
+            "non_ascii_digest_compare_digest_would_raise_on",
+        ],
+    )
+    def test_a_bad_input_is_refused_before_anything_starts(
+        self, protocol: Protocol, tmp_path: Path, relative: str | None, expected: str | None
+    ) -> None:
+        marker = tmp_path / "worker-started"
+        path = Path("unused.flac") if relative == "path" else tmp_path / "unused.flac"
+        out_dir = Path("source-000000") if relative == "out_dir" else tmp_path / "source-000000"
+        candidate = Candidate(SOURCE_ID, path, expected)
+        command = script(f"Path({str(marker)!r}).touch()")
+        with pytest.raises(ValueError, match=r"must be absolute|64 lowercase hex"):
+            run_source(candidate, out_dir, protocol, command=command)
+        assert not marker.exists()
+        assert not out_dir.exists()
+
+    def test_a_relative_work_directory_is_refused_before_the_preconditions(
+        self, protocol: Protocol, tmp_path: Path
+    ) -> None:
+        work_dir = Path("relative-work-dir-that-must-not-be-created")
+        with pytest.raises(ValueError, match="work directory must be absolute"):
+            run_canonicalisation(
+                protocol,
+                [],
+                work_dir=work_dir,
+                runtime_platform="unused",
+                opgan_checkpoint=tmp_path / "missing.pt",
+                uvr_model_dir=tmp_path / "missing",
+            )
+        assert not work_dir.exists()
+        assert not (tmp_path / "missing").exists()
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [("path", "un\x00used.flac"), ("logical_source_id", "item/a\x00b.flac")],
+        ids=["nul_in_path", "nul_in_id"],
+    )
+    def test_a_nul_character_is_refused_before_anything_starts(
+        self, protocol: Protocol, tmp_path: Path, field: str, value: str
+    ) -> None:
+        """No process argument can carry a NUL, so Popen would raise after mkdir."""
+        path = tmp_path / value if field == "path" else tmp_path / "unused.flac"
+        source_id = value if field == "logical_source_id" else SOURCE_ID
+        out_dir = tmp_path / "source-000000"
+        with pytest.raises(ValueError, match="NUL character"):
+            run_source(
+                Candidate(source_id, path),
+                out_dir,
+                protocol,
+                command=script("pass"),
+            )
+        assert not out_dir.exists()
+
+    def test_an_identifier_that_begins_with_a_dash_reaches_the_worker(
+        self, protocol: Protocol, tmp_path: Path, tone_flac: Path
+    ) -> None:
+        """Without `--` before the positionals, the worker's parser would exit 2 on it."""
+        candidate = Candidate("-item/tones.flac", tone_flac)
+        out_dir = tmp_path / "source-000000"
+        source_run = run_source(candidate, out_dir, protocol)
+        assert source_run.returncode == 0
+        assert isinstance(source_run.outcome, CanonicalFile)

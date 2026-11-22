@@ -141,19 +141,14 @@ def worker_command(candidate: Candidate, out_dir: Path) -> list[str]:
     """The command that runs `benchmark.canonical_worker` on one candidate.
 
     `-m` without `-I`, from the repository root, because the `benchmark` package is not
-    installed and `-I` would remove the working directory from the import path.
+    installed and `-I` would remove the working directory from the import path. The option
+    comes first and `--` ends the options, so a path or identifier that begins with `-` is
+    read as a positional argument rather than refused by the parser.
     """
-    command = [
-        sys.executable,
-        "-m",
-        "benchmark.canonical_worker",
-        str(candidate.path),
-        candidate.logical_source_id,
-        str(out_dir),
-    ]
+    command = [sys.executable, "-m", "benchmark.canonical_worker"]
     if candidate.expected_sha256 is not None:
         command += ["--expected-sha256", candidate.expected_sha256]
-    return command
+    return [*command, "--", str(candidate.path), candidate.logical_source_id, str(out_dir)]
 
 
 def _run_worker(command: list[str], out_dir: Path) -> tuple[int, int | None]:
@@ -276,6 +271,28 @@ def _outcome(
     return reported
 
 
+def _check_inputs(candidate: Candidate, out_dir: Path) -> None:
+    """Refuse what the worker would read differently from this process, before it starts.
+
+    The worker runs with the repository root as its working directory, so a relative path
+    would name one file here and another there. A malformed expected digest would reach the
+    worker's comparison, which raises on a non-ASCII value instead of recording a mismatch.
+    """
+    for name, path in (("candidate path", candidate.path), ("output directory", out_dir)):
+        if not path.is_absolute():
+            raise ValueError(f"{name} must be absolute, got {path}")
+    for name, text in (
+        ("candidate path", str(candidate.path)),
+        ("output directory", str(out_dir)),
+        ("logical source id", candidate.logical_source_id),
+    ):
+        if "\x00" in text:
+            raise ValueError(f"{name} contains a NUL character, which no argument can carry")
+    expected = candidate.expected_sha256
+    if expected is not None and _record_digest(expected, "expected_sha256") is None:
+        raise ValueError(f"expected digest is not 64 lowercase hex characters: {expected!r}")
+
+
 def run_source(
     candidate: Candidate,
     out_dir: Path,
@@ -296,7 +313,10 @@ def run_source(
 
     Raises:
         FileExistsError: If `out_dir` already exists.
+        ValueError: If a path is relative or the expected digest is malformed, checked
+            before anything is created or started.
     """
+    _check_inputs(candidate, out_dir)
     out_dir.mkdir()
     returncode, footprint = _run_worker(command(candidate, out_dir), out_dir)
     outcome = _outcome(candidate, out_dir, returncode, protocol)
@@ -333,7 +353,12 @@ def run_canonicalisation(
 
     Returns:
         The sources run, in order, and the abort that stopped the run, if any.
+
+    Raises:
+        ValueError: If `work_dir` is relative, checked before the preconditions run.
     """
+    if not work_dir.is_absolute():
+        raise ValueError(f"work directory must be absolute, got {work_dir}")
     abort = verify_run_preconditions(
         protocol,
         runtime_platform=runtime_platform,
