@@ -31,9 +31,12 @@ from benchmark.protocol import (
     _STAGE_CHECKS,
     EFFECT_FOR_DIRECTION,
     FROZEN_GATES,
+    ArchiveItemStratum,
+    Protocol,
     ProtocolEnvironmentError,
     ProtocolSchemaError,
     ProtocolValueError,
+    ZenodoArchiveStratum,
     _load_from_path,
     load_protocol,
 )
@@ -108,12 +111,32 @@ SUPERSEDED_ARTIFACTS = {
     "docs/benchmark-protocol-v10.md": (
         "2d57bd4b362027bec245f521e3a87646841ebeebff477e1ed47a58979a4d88a9"  # pragma: allowlist secret
     ),
+    "benchmark/protocols/v11.json": (
+        "8da1b94c195b719e7e0d3cf1977916ad9082b54bd1167f6a296934edf79fc752"  # pragma: allowlist secret
+    ),
+    "docs/benchmark-protocol-v11.md": (
+        "62d2bcb280075ed57b88fe284add73f0188b7d061209d5de1342d872b876457e"  # pragma: allowlist secret
+    ),
 }
 
 
 def reason_hint(reasons: tuple[str, ...]) -> str:
     """Failure message for the overclaim check, which is otherwise opaque."""
     return f"a reason code asserts more than a decoder error establishes: {reasons}"
+
+
+def _archive_item(protocol: Protocol) -> ArchiveItemStratum:
+    """The Internet Archive item stratum, which v12 lists first."""
+    stratum = protocol.selection.strata[0]
+    assert isinstance(stratum, ArchiveItemStratum)
+    return stratum
+
+
+def _zenodo(protocol: Protocol) -> ZenodoArchiveStratum:
+    """The Zenodo archive stratum, which v12 lists second."""
+    stratum = protocol.selection.strata[1]
+    assert isinstance(stratum, ZenodoArchiveStratum)
+    return stratum
 
 
 def digest_of(relative_path: str) -> str:
@@ -134,7 +157,7 @@ class TestRealProtocol:
     """The checked-in config must load and describe itself accurately."""
 
     def test_it_loads(self) -> None:
-        assert load_protocol().protocol_version == 11
+        assert load_protocol().protocol_version == 12
 
     def test_digest_is_of_the_exact_file_bytes(self) -> None:
         """The provenance claim is 'these bytes governed this run', so the digest
@@ -179,7 +202,7 @@ class TestImmutability:
     def test_partitions_mapping_rejects_mutation(self) -> None:
         protocol = load_protocol()
         with pytest.raises(TypeError):
-            protocol.selection.partitions["test"] = 1  # type: ignore[index]
+            _archive_item(protocol).partitions["test"] = 1  # type: ignore[index]
 
     def test_sequences_are_tuples_not_lists(self) -> None:
         protocol = load_protocol()
@@ -258,8 +281,8 @@ class TestVersionCommitments:
     """Protocol promises are enforced at load, so weakening one requires a version bump."""
 
     def test_unsupported_version(self, tmp_path: Path) -> None:
-        path = variant(tmp_path, lambda d: d.update({"protocol_version": 12}))
-        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 12"):
+        path = variant(tmp_path, lambda d: d.update({"protocol_version": 13}))
+        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 13"):
             _load_from_path(path)
 
     def test_composite_score_cannot_be_enabled(self, tmp_path: Path) -> None:
@@ -301,8 +324,12 @@ class TestVersionCommitments:
         with pytest.raises(ProtocolValueError, match="fail-open duplicate policy"):
             _load_from_path(path)
 
-    def test_bootstrap_cannot_resample_frames(self, tmp_path: Path) -> None:
-        path = variant(tmp_path, lambda d: d["aggregation"]["bootstrap"].update({"unit": "frame"}))
+    @pytest.mark.parametrize("unit", ["frame", "recording"])
+    def test_bootstrap_cannot_resample_units_other_than_performer_clusters(
+        self, tmp_path: Path, unit: str
+    ) -> None:
+        """Frames are dependent within a recording, and recordings within a performer."""
+        path = variant(tmp_path, lambda d: d["aggregation"]["bootstrap"].update({"unit": unit}))
         with pytest.raises(ProtocolValueError, match="overstates confidence"):
             _load_from_path(path)
 
@@ -383,8 +410,12 @@ class TestNumericBounds:
     """Values that parse but cannot describe a runnable benchmark."""
 
     def test_empty_partition_is_rejected(self, tmp_path: Path) -> None:
-        path = variant(tmp_path, lambda d: d["selection"]["partitions"].update({"demo": 0}))
-        with pytest.raises(ProtocolValueError, match=r"partitions\.demo must be positive"):
+        path = variant(
+            tmp_path, lambda d: d["selection"]["strata"][0]["partitions"].update({"demo": 0})
+        )
+        with pytest.raises(
+            ProtocolValueError, match=r"strata\.solo_piano\.partitions\.demo must be positive"
+        ):
             _load_from_path(path)
 
     def test_confidence_at_one_is_rejected(self, tmp_path: Path) -> None:
@@ -538,16 +569,16 @@ class TestOnlyOneApprovedConfiguration:
 
         def alternate(d: dict[str, Any]) -> None:
             d["selection"]["seed"] = 999
-            d["selection"]["partitions"]["test"] = 50
+            d["selection"]["strata"][0]["partitions"]["test"] = 50
             d["aggregation"]["bootstrap"]["iterations"] = 50_000
 
         parsed = _load_from_path(variant(tmp_path, alternate))
-        assert parsed.protocol_version == 11
+        assert parsed.protocol_version == 12
         assert parsed.selection.seed == 999
 
         approved = load_protocol()
         assert approved.selection.seed != 999
-        assert approved.selection.partitions["test"] != 50
+        assert _archive_item(approved).partitions["test"] != 50
         assert approved.aggregation.bootstrap.iterations != 50_000
         assert approved.source_sha256 != parsed.source_sha256
 
@@ -557,9 +588,9 @@ class TestAmendmentChain:
 
     def test_chain_names_the_immediately_superseded_artifacts(self) -> None:
         amends = load_protocol().amends
-        assert amends.protocol_version == 10
-        assert amends.protocol_path == "benchmark/protocols/v10.json"
-        assert amends.document_path == "docs/benchmark-protocol-v10.md"
+        assert amends.protocol_version == 11
+        assert amends.protocol_path == "benchmark/protocols/v11.json"
+        assert amends.document_path == "docs/benchmark-protocol-v11.md"
 
     def test_recorded_digests_match_the_archived_files(self) -> None:
         amends = load_protocol().amends
@@ -599,14 +630,14 @@ class TestAmendmentChain:
 
     def test_the_predecessor_must_be_the_immediately_previous_version(self, tmp_path: Path) -> None:
         path = variant(tmp_path, lambda d: d["amends"].update({"protocol_version": 0}))
-        with pytest.raises(ProtocolValueError, match=r"amends\.protocol_version must be 10"):
+        with pytest.raises(ProtocolValueError, match=r"amends\.protocol_version must be 11"):
             _load_from_path(path)
 
     def test_the_superseded_config_is_not_loadable_as_current(self) -> None:
         """Proof the version bump is real rather than cosmetic: the archived v1 file
         still parses, and the current validator refuses it."""
-        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 10"):
-            _load_from_path(REPO_ROOT / "benchmark" / "protocols" / "v10.json")
+        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 11"):
+            _load_from_path(REPO_ROOT / "benchmark" / "protocols" / "v11.json")
 
 
 class TestFrozenTransform:
@@ -2207,7 +2238,7 @@ class TestRulesV5LeftOpen:
 
     def test_the_real_protocol_states_each_rule(self) -> None:
         protocol = load_protocol()
-        assert protocol.selection.collection_identifier == "MusopenCollectionAsFlac"
+        assert protocol.selection.training_collection_identifier == "MusopenCollectionAsFlac"
         assert protocol.eligibility.recording_ineligible_reasons[0] == (
             "RECORDING_BELOW_MIN_DURATION"
         )
@@ -2217,7 +2248,12 @@ class TestRulesV5LeftOpen:
 
     @pytest.mark.parametrize(
         "field",
-        ["collection_identifier", "source_identifier", "ordering", "permanent_unavailability_code"],
+        [
+            "training_collection_identifier",
+            "source_identifier",
+            "ordering",
+            "permanent_unavailability_code",
+        ],
     )
     def test_each_selection_rule_is_closed(self, tmp_path: Path, field: str) -> None:
         """The same seed over another collection, identifier, or ordering is another walk."""
@@ -2539,8 +2575,12 @@ class TestRulesV8LeftOpen:
     def test_the_real_protocol_states_each_rule(self) -> None:
         protocol = load_protocol()
         selection, screen = protocol.selection, protocol.duplicate_detection
-        assert selection.candidate_filter == "final_path_component_suffix_lowercased_is_flac"
-        assert selection.partition_order == ("test", "demo", "test_reserve", "development_reserve")
+        piano = _archive_item(protocol)
+        assert piano.candidate_filter == (
+            "final_path_component_suffix_lowercased_is_flac_not_excluded"
+        )
+        assert piano.partition_order == ("test", "demo", "test_reserve")
+        assert selection.short_universe == "stratum_invalid_unpublished_other_strata_unaffected"
         assert screen.flag_threshold == 0.3
         assert (screen.calibration.positives_min, screen.calibration.positives_n) == (0.755, 435)
         assert (screen.calibration.negatives_max, screen.calibration.negatives_n) == (0.1435, 10439)
@@ -2550,8 +2590,8 @@ class TestRulesV8LeftOpen:
         assert protocol.system_execution.native_crash == "run_invalid_no_publication_artifact"
 
     def test_the_partitions_fill_exactly_the_slots_the_walk_stops_at(self) -> None:
-        selection = load_protocol().selection
-        assert [selection.partitions[name] for name in selection.partition_order] == [30, 6, 6, 6]
+        piano = _archive_item(load_protocol())
+        assert [piano.partitions[name] for name in piano.partition_order] == [30, 6, 6]
 
     def test_no_rejection_code_reuses_another_section_s_code(self) -> None:
         """The audit trail names the predicate responsible, so one code means one thing."""
@@ -2569,7 +2609,6 @@ class TestRulesV8LeftOpen:
     @pytest.mark.parametrize(
         ("section", "field", "message"),
         [
-            ("selection", "candidate_filter", r"selection\.candidate_filter must be"),
             ("selection", "identifier_comparison", r"selection\.identifier_comparison must be"),
             ("selection", "partition_assignment", r"selection\.partition_assignment must be"),
             ("selection", "short_universe", r"selection\.short_universe must be"),
@@ -2591,16 +2630,42 @@ class TestRulesV8LeftOpen:
         with pytest.raises(ProtocolValueError, match=message):
             _load_from_path(path)
 
-    @pytest.mark.parametrize("field", ["partition_order", "predicate_order", "rejection_codes"])
+    @pytest.mark.parametrize("field", ["predicate_order", "rejection_codes"])
     def test_each_ordered_list_is_closed(self, tmp_path: Path, field: str) -> None:
         """Reversed, each list holds the same names in an order that changes its meaning."""
         path = variant(tmp_path, lambda d: d["selection"][field].reverse())
         with pytest.raises(ProtocolValueError, match=rf"selection\.{field} must be"):
             _load_from_path(path)
 
+    @pytest.mark.parametrize(
+        ("index", "name"), [(0, "solo_piano"), (1, "chamber")], ids=["piano", "chamber"]
+    )
+    def test_each_stratum_partition_order_is_closed(
+        self, tmp_path: Path, index: int, name: str
+    ) -> None:
+        """Reversed, the order names the same partitions but fills the test set differently."""
+        path = variant(
+            tmp_path, lambda d: d["selection"]["strata"][index]["partition_order"].reverse()
+        )
+        with pytest.raises(ProtocolValueError, match=rf"strata\.{name}\.partition_order must be"):
+            _load_from_path(path)
+
     def test_a_partition_without_a_place_in_the_order_is_rejected(self, tmp_path: Path) -> None:
-        path = variant(tmp_path, lambda d: d["selection"]["partitions"].update({"extra": 1}))
+        path = variant(
+            tmp_path,
+            lambda d: d["selection"]["strata"][0]["partitions"].update({"extra": 1}),
+        )
         with pytest.raises(ProtocolValueError, match="must name exactly the partitions"):
+            _load_from_path(path)
+
+    def test_the_piano_candidate_filter_is_closed(self, tmp_path: Path) -> None:
+        path = variant(
+            tmp_path,
+            lambda d: d["selection"]["strata"][0].update({"candidate_filter": "decided_later"}),
+        )
+        with pytest.raises(
+            ProtocolValueError, match=r"strata\.solo_piano\.candidate_filter must be"
+        ):
             _load_from_path(path)
 
     def test_the_recording_order_is_closed(self, tmp_path: Path) -> None:
@@ -2731,6 +2796,7 @@ class TestRulesV10LeftOpen:
             selection.retries_exhausted_code,
             selection.identifier_syntax_code,
             selection.listing_mismatch_code,
+            selection.cluster_cap_code,
         ]
         assert len(set(codes)) == len(codes)
 
@@ -2761,11 +2827,19 @@ class TestRulesV10LeftOpen:
 
 
 def _set_path(data: dict[str, Any], dotted: str, value: object) -> None:
-    """Set the value at a dotted path in a parsed protocol, for a typed-field variant."""
+    """Set the value at a dotted path in a parsed protocol, for a typed-field variant.
+
+    A segment that is all digits indexes a list, so `selection.strata.0.partitions.test`
+    reaches the first stratum.
+    """
     *parents, leaf = dotted.split(".")
+    node: Any = data
     for key in parents:
-        data = data[key]
-    data[leaf] = value
+        node = node[int(key)] if isinstance(node, list) else node[key]
+    if isinstance(node, list):
+        node[int(leaf)] = value
+    else:
+        node[leaf] = value
 
 
 class TestNumericFieldsHaveOneType:
@@ -2776,8 +2850,16 @@ class TestNumericFieldsHaveOneType:
         [
             pytest.param("selection.seed", True, id="seed_true_walks_as_seed_1"),
             pytest.param("selection.seed", 20260726.0, id="seed_float_fails_late"),
-            pytest.param("selection.partitions.test", 30.0, id="partition_float"),
-            pytest.param("selection.partitions.demo", True, id="partition_true_is_one_slot"),
+            pytest.param("selection.strata.0.partitions.test", 30.0, id="partition_float"),
+            pytest.param(
+                "selection.strata.0.partitions.demo", True, id="partition_true_is_one_slot"
+            ),
+            pytest.param("selection.strata.0.cluster_cap", True, id="cap_true_is_one"),
+            pytest.param("selection.strata.1.cluster_cap", 5.0, id="cap_float"),
+            pytest.param("selection.strata.1.archive_bytes", 1.1e10, id="archive_bytes_float"),
+            pytest.param("selection.strata.1.archive_bytes", True, id="archive_bytes_true"),
+            pytest.param("selection.strata.1.candidate_ids.0", True, id="candidate_id_true"),
+            pytest.param("selection.strata.1.candidate_ids.0", 5.0, id="candidate_id_float"),
             pytest.param("selection.acquisition_retries", True, id="retries_true_is_one"),
             pytest.param("selection.permanent_failure_codes", [401.0], id="status_float"),
             pytest.param("eligibility.recording_rms_dbfs_min", False, id="rms_floor_false_is_0"),
@@ -2812,3 +2894,269 @@ class TestNumericFieldsHaveOneType:
         path = variant(tmp_path, lambda d: _set_path(d, dotted, value))
         with pytest.raises(ProtocolSchemaError, match="holds the wrong JSON type"):
             _load_from_path(path)
+
+
+class TestRulesV11LeftOpen:
+    """What v12 defines: two strata, their exclusions, the cluster cap, and the claim scope."""
+
+    def test_the_real_protocol_states_each_rule(self) -> None:
+        protocol = load_protocol()
+        selection, reporting = protocol.selection, protocol.reporting
+        piano, chamber = _archive_item(protocol), _zenodo(protocol)
+        assert [stratum.name for stratum in selection.strata] == ["solo_piano", "chamber"]
+        assert selection.training_collection_identifier == "MusopenCollectionAsFlac"
+        assert selection.stratum_order == "strata_walked_in_listed_order_one_seed"
+        assert selection.predicate_order.index("cluster_cap") == 2
+        assert selection.cluster_cap_code == "CLUSTER_CAP_REACHED"
+        assert piano.source == "musopen-chopin-complete-works-flac"
+        assert len(piano.excluded_paths) == 8
+        assert piano.cluster_cap == chamber.cluster_cap == 5
+        assert piano.partition_order == ("test", "demo", "test_reserve")
+        assert [piano.partitions[name] for name in piano.partition_order] == [30, 6, 6]
+        assert chamber.source == "musicnet"
+        assert len(chamber.candidate_ids) == 80
+        assert chamber.partition_order == ("test", "test_reserve")
+        assert [chamber.partitions[name] for name in chamber.partition_order] == [30, 6]
+        assert protocol.aggregation.bootstrap.unit == "performer_cluster"
+        assert reporting.per_stratum is True
+        assert reporting.pooled_estimate is False
+        assert reporting.claim_scope == (
+            "unseen_solo_piano_and_chamber_training_noise_16khz_mono_orchestral_untested"
+        )
+
+    def test_the_demo_partition_is_only_in_the_cc0_stratum(self) -> None:
+        protocol = load_protocol()
+        assert "demo" in _archive_item(protocol).partitions
+        assert "demo" not in _zenodo(protocol).partitions
+
+    @pytest.mark.parametrize(
+        ("field", "message"),
+        [
+            ("stratum_order", r"selection\.stratum_order must be"),
+            ("cluster_cap_code", r"selection\.cluster_cap_code must be"),
+            ("short_universe", r"selection\.short_universe must be"),
+            ("partition_assignment", r"selection\.partition_assignment must be"),
+        ],
+    )
+    def test_each_selection_rule_is_closed(self, tmp_path: Path, field: str, message: str) -> None:
+        path = variant(tmp_path, lambda d: d["selection"].update({field: "decided_later"}))
+        with pytest.raises(ProtocolValueError, match=message):
+            _load_from_path(path)
+
+    @pytest.mark.parametrize(
+        ("field", "value"),
+        [("per_stratum", False), ("pooled_estimate", True)],
+    )
+    def test_the_reporting_scope_is_fixed(self, tmp_path: Path, field: str, value: bool) -> None:
+        """A result is reported per stratum and never pooled across strata."""
+        path = variant(tmp_path, lambda d: d["reporting"].update({field: value}))
+        with pytest.raises(ProtocolValueError, match=rf"reporting\.{field} must be"):
+            _load_from_path(path)
+
+    def test_the_claim_scope_is_closed(self, tmp_path: Path) -> None:
+        path = variant(tmp_path, lambda d: d["reporting"].update({"claim_scope": "any_music"}))
+        with pytest.raises(ProtocolValueError, match=r"reporting\.claim_scope must be"):
+            _load_from_path(path)
+
+
+class TestStrataAreValidated:
+    """Each stratum rule refuses a variant, and the refusal names the stratum and the field."""
+
+    @pytest.mark.parametrize(
+        ("mutate", "error", "message"),
+        [
+            pytest.param(
+                lambda d: d["selection"]["strata"][0].update({"candidate_filter": "other"}),
+                ProtocolValueError,
+                r"strata\.solo_piano\.candidate_filter must be",
+                id="piano_filter_closed",
+            ),
+            pytest.param(
+                lambda d: d["selection"]["strata"][0].update({"source": "other-item"}),
+                ProtocolValueError,
+                r"strata\.solo_piano\.source must be",
+                id="piano_source_closed",
+            ),
+            pytest.param(
+                lambda d: d["selection"]["strata"][1].update({"zenodo_record": "1"}),
+                ProtocolValueError,
+                r"strata\.chamber\.zenodo_record must be",
+                id="chamber_record_closed",
+            ),
+            pytest.param(
+                lambda d: d["selection"]["strata"][1].update({"archive": "other.tar.gz"}),
+                ProtocolValueError,
+                r"strata\.chamber\.archive must be",
+                id="chamber_archive_closed",
+            ),
+            pytest.param(
+                lambda d: d["selection"]["strata"][0].update({"cluster": "other"}),
+                ProtocolValueError,
+                r"strata\.solo_piano\.cluster must be",
+                id="piano_cluster_closed",
+            ),
+            pytest.param(
+                lambda d: d["selection"]["strata"][1].update({"cluster": "other"}),
+                ProtocolValueError,
+                r"strata\.chamber\.cluster must be",
+                id="chamber_cluster_closed",
+            ),
+            pytest.param(
+                lambda d: d["selection"]["strata"][1].update({"source_kind": "other_kind"}),
+                ProtocolValueError,
+                r"source_kind must be one of",
+                id="unknown_kind_refused",
+            ),
+            pytest.param(
+                lambda d: d["selection"]["strata"].append(
+                    {**d["selection"]["strata"][0], "name": "piano_again"}
+                ),
+                ProtocolValueError,
+                r"exactly one stratum of each kind",
+                id="kind_repeated_refused",
+            ),
+            pytest.param(
+                lambda d: d["selection"]["strata"][1].update({"name": "solo_piano"}),
+                ProtocolValueError,
+                r"strata names must be unique",
+                id="names_repeated_refused",
+            ),
+            pytest.param(
+                lambda d: d["selection"].update({"strata": []}),
+                ProtocolValueError,
+                r"selection\.strata must not be empty",
+                id="no_strata_refused",
+            ),
+            pytest.param(
+                lambda d: d["selection"]["strata"][0].update({"cluster_cap": 0}),
+                ProtocolValueError,
+                r"strata\.solo_piano\.cluster_cap must be positive",
+                id="piano_cap_zero",
+            ),
+            pytest.param(
+                lambda d: d["selection"]["strata"][1].update({"cluster_cap": -1}),
+                ProtocolValueError,
+                r"strata\.chamber\.cluster_cap must be positive",
+                id="chamber_cap_negative",
+            ),
+            pytest.param(
+                lambda d: d["selection"]["strata"][0].update(
+                    {"partitions": {}, "partition_order": []}
+                ),
+                ProtocolValueError,
+                r"strata\.solo_piano\.partitions must not be empty",
+                id="partitions_empty",
+            ),
+            pytest.param(
+                lambda d: d["selection"]["strata"][0]["partitions"].update({"test": 0}),
+                ProtocolValueError,
+                r"strata\.solo_piano\.partitions\.test must be positive",
+                id="partition_zero",
+            ),
+            pytest.param(
+                lambda d: _add_demo_to_chamber(d),
+                ProtocolValueError,
+                r"must not hold a demo partition.*CC0",
+                id="demo_in_chamber_is_a_licence_failure",
+            ),
+            pytest.param(
+                lambda d: d["selection"]["strata"][0]["partitions"].update({"extra": 1}),
+                ProtocolValueError,
+                r"strata\.solo_piano\.partition_order must name exactly the partitions",
+                id="partition_without_order_refused",
+            ),
+            pytest.param(
+                lambda d: d["selection"]["strata"][0]["excluded_paths"].append(
+                    d["selection"]["strata"][0]["excluded_paths"][0]
+                ),
+                ProtocolValueError,
+                r"excluded_paths must not repeat an entry",
+                id="excluded_repeated",
+            ),
+            pytest.param(
+                lambda d: d["selection"]["strata"][0]["excluded_paths"].append(""),
+                ProtocolValueError,
+                r"excluded_paths must hold only non-empty strings",
+                id="excluded_empty_string",
+            ),
+            pytest.param(
+                lambda d: d["selection"]["strata"][1].update({"candidate_ids": []}),
+                ProtocolValueError,
+                r"strata\.chamber\.candidate_ids must not be empty",
+                id="candidate_ids_empty",
+            ),
+            pytest.param(
+                lambda d: d["selection"]["strata"][1].update({"candidate_ids": [7, 7]}),
+                ProtocolValueError,
+                r"strata\.chamber\.candidate_ids must be unique",
+                id="candidate_ids_repeated",
+            ),
+            pytest.param(
+                lambda d: d["selection"]["strata"][1].update({"candidate_ids": [0, 7]}),
+                ProtocolValueError,
+                r"strata\.chamber\.candidate_ids must be positive",
+                id="candidate_id_zero",
+            ),
+            pytest.param(
+                lambda d: d["selection"]["strata"][1].update({"archive_bytes": 0}),
+                ProtocolValueError,
+                r"strata\.chamber\.archive_bytes must be positive",
+                id="archive_bytes_zero",
+            ),
+            pytest.param(
+                lambda d: d["selection"]["strata"][1].update({"archive_md5": "F" * 32}),
+                ProtocolValueError,
+                r"archive_md5 must be 32 lowercase hex digits",
+                id="archive_md5_uppercase",
+            ),
+            pytest.param(
+                lambda d: d["selection"]["strata"][1].update({"metadata_md5": "1caef62c"}),
+                ProtocolValueError,
+                r"metadata_md5 must be 32 lowercase hex digits",
+                id="metadata_md5_short",
+            ),
+            pytest.param(
+                lambda d: d["selection"]["strata"][0].update(
+                    {"cluster_spelling": {"Alpha": "Beta", "Beta": "Gamma"}}
+                ),
+                ProtocolValueError,
+                r"cluster_spelling has a key that is also a corrected value",
+                id="spelling_chained",
+            ),
+            pytest.param(
+                lambda d: d["selection"]["strata"][0].update({"cluster_spelling": {"Alpha": 1}}),
+                ProtocolSchemaError,
+                r"cluster_spelling must map strings to strings",
+                id="spelling_non_string",
+            ),
+            pytest.param(
+                lambda d: d["selection"]["strata"][1].update({"candidate_filter": "x"}),
+                ProtocolSchemaError,
+                r"unknown key\(s\) \['candidate_filter'\]",
+                id="zenodo_stratum_has_no_filter",
+            ),
+            pytest.param(
+                lambda d: d["selection"]["strata"][0].pop("note"),
+                ProtocolSchemaError,
+                r"missing key\(s\) \['note'\]",
+                id="item_stratum_needs_note",
+            ),
+        ],
+    )
+    def test_each_stratum_rule_refuses_its_variant(
+        self,
+        tmp_path: Path,
+        mutate: Callable[[dict[str, Any]], None],
+        error: type[Exception],
+        message: str,
+    ) -> None:
+        path = variant(tmp_path, mutate)
+        with pytest.raises(error, match=message):
+            _load_from_path(path)
+
+
+def _add_demo_to_chamber(d: dict[str, Any]) -> None:
+    """Give the chamber stratum a demo partition, which its licence does not permit."""
+    chamber = d["selection"]["strata"][1]
+    chamber["partitions"]["demo"] = 6
+    chamber["partition_order"] = ["test", "demo", "test_reserve"]

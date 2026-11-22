@@ -113,7 +113,8 @@ def training_filename(source_identifier: str, collection: str) -> str:
 
     Args:
         source_identifier: `<item identifier>/<path in the item>`.
-        collection: `selection.collection_identifier`, the only item candidates come from.
+        collection: `selection.training_collection_identifier`, the item the training
+            recordings were downloaded from.
 
     Returns:
         `<item>__<path>` with every slash replaced by an underscore.
@@ -143,7 +144,7 @@ def exclusions(
         source_identifier: The candidate's source identifier.
         raw_sha256: The SHA-256 of the candidate's file.
         decoded_sha256: The SHA-256 of its decoded PCM, float64 little-endian interleaved.
-        collection: `selection.collection_identifier`.
+        collection: `selection.training_collection_identifier`.
         training: The training corpus's identities.
 
     Returns:

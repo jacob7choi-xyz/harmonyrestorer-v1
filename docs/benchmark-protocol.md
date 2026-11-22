@@ -1,14 +1,14 @@
-# Benchmark protocol v11
+# Benchmark protocol v12
 
 Frozen before candidate identities are selected, downloaded for evaluation,
 auditioned, or scored. The source collection has already been inspected in general
 terms; what has not happened is any decision about which recordings enter the
 benchmark.
 
-> **Note:** v11 amends v10, which amended v9, which amended v8, which amended v7, which
+> **Note:** v12 amends v11, which amended v10, which amended v9, which amended v8, which
 > amended v6, which amended v5, which amended v4, which amended v3, which amended v2, which
 > amended v1, all before any evaluation ran. The
-> operational values live in `benchmark/protocols/v11.json`, which is normative; this
+> operational values live in `benchmark/protocols/v12.json`, which is normative; this
 > document explains them and
 > its numbers are illustrative. Superseded versions are preserved unmodified, as
 > [benchmark-protocol-v1.md](benchmark-protocol-v1.md),
@@ -20,7 +20,8 @@ benchmark.
 > [benchmark-protocol-v7.md](benchmark-protocol-v7.md),
 > [benchmark-protocol-v8.md](benchmark-protocol-v8.md),
 > [benchmark-protocol-v9.md](benchmark-protocol-v9.md), and
-> [benchmark-protocol-v10.md](benchmark-protocol-v10.md) with their configs, so an
+> [benchmark-protocol-v10.md](benchmark-protocol-v10.md), and
+> [benchmark-protocol-v11.md](benchmark-protocol-v11.md) with their configs, so an
 > artifact recording an older `protocol_version` stays interpretable. See
 > [Amendment](#amendment) for what changed and why.
 
@@ -59,10 +60,13 @@ SHA-256 of the newline-joined per-file digests in sorted filename order.
 
 **Automatic exclusion**, no discretion:
 
-1. Source item and file identity within the collection. A candidate's source
-   identifier is `MusopenCollectionAsFlac/<path in the item>`. Training files are named
-   with the item identifier, two underscores, and the path with each slash replaced by
-   an underscore (`dataset/acquire.py`), so a candidate is compared in that form
+1. Source identity within the candidate's stratum. A candidate's source identifier is
+   its stratum's source name, a slash, and its path in that source (see
+   [Selection](#selection)). Training files are named with the item identifier
+   `MusopenCollectionAsFlac`, two underscores, and the path with each slash replaced by
+   an underscore (`dataset/acquire.py`). No v12 stratum's identifier has that form, so
+   this rule matches no candidate. Rules 2 and 3 still compare every candidate with the
+   training corpus
 2. Raw file SHA-256
 3. Decoded PCM SHA-256, which catches lossless re-encodes of the same master. The hash
    covers the samples as the pinned decoder returns them, float64 and interleaved, as
@@ -174,113 +178,187 @@ Candidates are not downloaded, inspected, and then filtered. Filtering after
 inspection is how a benchmark becomes curated. The admission algorithm has no
 discretionary branch.
 
-1. Enumerate the complete candidate universe from the metadata of the Internet Archive
-   item `MusopenCollectionAsFlac`, the collection the training recordings came from. From
-   v9, a listed file is a candidate when the suffix of the final component of its path,
-   lowercased, is `.flac`, the test `dataset/acquire.py` applied when the training
-   recordings were downloaded. The training recordings pass that test and stay in the
-   universe; the first exclusion rule removes each of them before any fetch
-2. Sort the source identifiers by Unicode code point, then walk them in the order
-   `numpy.random.Generator(PCG64(20260726)).permutation(n)` gives, where `n` is the
-   size of the frozen universe. Identifiers are compared exactly as the listing gives
-   them, with no Unicode normalisation or case folding
-3. Walk that order strictly. For each candidate, in this order: from v11, the identifier
-   syntax rule; the first exclusion rule (before any fetch); fetch; the raw digest; the
-   source-outcome stages; the decoded-PCM digest; the eligibility floors, which from v11
-   include `RECORDING_WITHOUT_ELIGIBLE_FRAMES`; the duplicate screen. The first check a
-   candidate fails is the predicate responsible
-4. Rejected candidates are skipped and the walk continues. There is no manual
-   substitution and no reordering
+Candidates come from two strata, `solo_piano` and `chamber`. Each has its own frozen
+universe, walk, partitions, and result. The strata are walked one after the other in the
+listed order, with the one selection seed `20260726`, and each stratum's permutation is
+over its own `n`. A stratum whose universe runs out before its partitions are full is
+invalid, and the other stratum's result still stands (see [Short universe](#short-universe)).
 
-Acquisition failures do not determine membership. A transient failure (network,
-timeout, 5xx) retries the same candidate three times with exponential backoff and
-does not advance the walk. Only a permanent source condition (404, 410, from v10 also
-401, 403, or 451, or a file that cannot be decoded) excludes a candidate, and it is
-logged with its cause. A 404 or
-410 is recorded as `CANDIDATE_PERMANENTLY_UNAVAILABLE`; a file that cannot be decoded
-carries its source-ineligible code.
+> **Note:** v11 drew candidates from the Internet Archive item `MusopenCollectionAsFlac`.
+> A listing of that item on 2026-11-22 found 145 `.flac` files, all of them training files
+> by name and byte count, so the v11 walk could admit nothing. v12 replaces that source.
+> See [Amendment](#amendment).
 
-From v10, a 401, 403, or 451 is also permanent and is recorded as
-`CANDIDATE_PERMANENTLY_UNAVAILABLE` with its status. The run cannot fetch a file whose
-access is refused, and treating the refusal as transient would make every run invalid for
-as long as it lasts. A refusal can be lifted or differ between accounts, so the logged
-status records why the file was excluded. Every other fetch failure is transient: a
-network error, a timeout, a 5xx, any other HTTP status, and a transfer that ends short.
-"Three times" means three retries after the first attempt, so at most four attempts are
-made. If every attempt fails transiently, the run is invalid under
-`ACQUISITION_RETRIES_EXHAUSTED` and nothing is published. Skipping the candidate instead
-would let network conditions choose the test set. The wait between attempts is a harness
-setting rather than a protocol value, because it cannot change which candidates are
-admitted.
+### The two strata
 
-From v11, a source identifier must be the collection identifier, one slash, and a path
-whose slash-separated segments are each non-empty and neither `.` nor `..`, with no NUL,
-no backslash, and no character of Unicode general category Cc (control) or Cs (a lone
-surrogate, which cannot be encoded as UTF-8 for a record or a worker argument). A
-trailing slash leaves an empty last segment, and a leading slash in the path an empty
-first one, so both are malformed. A malformed identifier that passes the candidate filter stays in the universe,
-so `n` counts it, and is rejected as `CANDIDATE_IDENTIFIER_MALFORMED` at its position in
-the walk, before rule 1 and before any fetch. It never becomes a local path. The rule was
-written before the listing was read, so it cannot be fitted to the entries it excludes.
+**`solo_piano`** is the Internet Archive item `musopen-chopin-complete-works-flac`:
+Musopen's recordings of Chopin's complete works, released CC0 (item metadata, read on
+2026-11-22). It holds 214 FLAC files, about 13.6 hours, by 16 artist tags. v12 records
+that Chopin is not among the training works, and that the pianists differ from the
+training pianists, apart from the Paul Pitman files excluded below.
 
-From v11, the frozen universe records each file's size, md5, and sha1 as the listing gives
-them, and records a value as absent where the listing gives none. Whether this item's
-listing gives them was not checked when v11 was frozen; v4 recorded that the collection
-publishes no checksum. After each fetch attempt every recorded value is compared with the
-downloaded bytes, and the audit trail records which were compared. A mismatch, for example
-an error page served with status 200, is a transient failure of that attempt. If every
-attempt ends in a mismatch, the candidate is excluded as `CANDIDATE_LISTING_MISMATCH`, so
-a file whose listing is persistently wrong cannot block every run; if the attempts run out
-with any other transient failure among them, the run is invalid as above. md5 and sha1
-check that the transfer delivered the listed bytes; they are not evidence against
-deliberate tampering. The local SHA-256 remains the artifact's identity.
+The candidate filter is the suffix test from v9: the suffix of the final path component,
+lowercased, is `.flac`. Eight files are then excluded, all identified from the item's
+file listing tags before any audio was fetched:
 
-From v11, a download stops once it exceeds `max_identity_stream_bytes`, and no raw digest
-is computed for it. The staged prefix still exceeds that bound, so the source-outcome
-stages exclude it as `SOURCE_EXCEEDS_MAX_BYTES` without reading it. The raw-digest rules
-are then decided by size: every training recording and every admitted candidate is at most
-`max_source_bytes`, and byte strings of different lengths are not the same bytes, so such a
-file matches none of them.
+- four files of the Cello Sonata, Op. 65, which is not solo piano;
+- four files played by Paul Pitman. His name tags 26 of the 145 training files, so these
+  could share a performer, piano, room, and engineer with training.
 
-The candidate universe is enumerated once and frozen to
-`benchmark/manifests/candidate_universe.json` with its own digest, recording the
-collection identifier, query parameters, enumeration timestamp, and every candidate
-identity. All assignment works from that frozen manifest, never a live API, because
-the source collection can gain or lose files and would otherwise silently change
-the test set.
+214 FLAC files less 8 excluded leaves 206 candidates.
 
-A full selection audit trail is recorded for every candidate examined: position in
-the walk, source identifier, admitted or rejected, the predicate responsible for a
-rejection, and the assigned partition. Anyone can then ask why a given recording is
-absent without trusting the script's summary. From v9 each disjointness rejection has its
-own code: `TRAINING_SOURCE_IDENTITY`, `TRAINING_RAW_SHA256`, `ADMITTED_RAW_SHA256`,
-`TRAINING_DECODED_PCM_SHA256`, `ADMITTED_DECODED_PCM_SHA256`,
-`SCREEN_SAME_PERFORMANCE_TRAINING`, `SCREEN_SAME_PERFORMANCE_ADMITTED`, and
-`SCREEN_UNCERTAIN`. A source-outcome or eligibility failure keeps its own code from those
-sections.
+**`chamber`** is MusicNet, Zenodo record 5120004 (record licence CC BY 4.0). Its archive
+is `musicnet.tar.gz`, 11,097,394,998 bytes, with md5 `844764911fa0d5b97c97da944a057590`,
+and its metadata file is `musicnet_metadata.csv`, with md5
+`1caef62cee9c875235e62aac368b49d8`. The candidates are the 80 MusicNet ids, about 8.7
+hours, whose metadata ensemble is not Solo Piano and whose source is none of the three
+below. Those three are excluded from this stratum:
 
-Partitions are assigned by position in the admitted sequence, before any audio is
-auditioned. Admissions are numbered from 1 in walk order: the first 30 are test, the next
-6 demo, the next 6 test_reserve, and the next 6 development_reserve, and the walk stops at
-the 48th admission. If the universe runs out first, the run is invalid and nothing is
-published:
+- the 36 Musopen rows. v12 records that all 36 are works in the training set, so they are
+  likely the same performances. That is an inference from the works, not a measured match.
+- the European Archive recordings. They are older and often mono, a risk to a clean
+  reference. That is a judgement from the metadata, not a measurement.
+- the Paul Pitman recordings, for the reason given for `solo_piano`.
 
-| Partition | N | Use |
-|---|---|---|
-| test | 30 | Frozen. Never used for any system decision. |
-| demo | 6 | Public samples. May be auditioned and curated freely. |
-| test_reserve | 6 | Replacement test material only, consumed in order. |
-| development_reserve | 6 | Future training and validation material. |
+### How the sources are read
 
-Reserve is split because one pool cannot serve both roles: a track used for
-development is contaminated and can never replace a pristine test track. Splitting
-them now removes the future question of which unused track to promote, which would
-reintroduce selection freedom at the worst moment.
+v12 does not fix these as protocol values. They were written down here before any candidate
+audio was fetched, so they cannot be chosen to suit what a fetch returns:
+
+- Every request is HTTPS, and a redirect is followed only to another HTTPS URL. Certificates
+  are verified with the standard library's defaults.
+- An Internet Archive item's listing is its metadata at `https://archive.org/metadata/<item>`.
+  A file in it is fetched from `https://archive.org/download/<item>/<path>`, each segment of
+  the path percent-encoded from its UTF-8 bytes. Some `solo_piano` file names hold non-ASCII
+  characters, such as `é` and `♭`.
+- MusicNet's archive and metadata file are fetched from
+  `https://zenodo.org/api/records/5120004/files/<file>/content`.
+- Each stratum's universe is frozen to its own file under `benchmark/manifests/`, written in
+  one serialisation (UTF-8 JSON with ASCII escapes, two-space indent, candidates sorted by
+  identifier code point). Its SHA-256 is pinned in the code that reads it, so a change to a
+  universe is a change to the code, and the walk refuses a file with another digest.
+
+A failed attempt at the MusicNet archive costs a full download of up to 11,097,394,998 bytes,
+so four attempts can read about 44 GB.
+
+### Clusters and the cluster cap
+
+Each candidate has a cluster, so that recordings sharing performers, instrument, room, and
+engineer count together. In `solo_piano` the cluster is the listed artist tag, after two
+corrections from a spelling table: `Cristoph Zbinden` becomes `Christoph Zbinden`, and
+`OIga Gurevich` becomes `Olga Gurevich`. In `chamber` the cluster is the metadata
+source, the performer or ensemble named in it, after one correction: `Soni Ventorum` becomes `Soni Ventorum Wind Quintet`.
+
+Each stratum admits at most 5 recordings per cluster. A candidate whose cluster already has
+5 admissions in its stratum is rejected as `CLUSTER_CAP_REACHED`, and the walk continues.
+The check runs before any fetch. The cap was set from the candidates' metadata before any
+audio was fetched. The rationale is that one performer can otherwise fill much of a test
+partition: in `solo_piano` one pianist recorded 54 of the 206 candidates.
+
+### Admission order
+
+Each candidate is checked in this order, and the first check it fails is recorded as the
+predicate responsible:
+
+1. the identifier syntax rule (below), recorded as `CANDIDATE_IDENTIFIER_MALFORMED`;
+2. training source identity. Training files are named `MusopenCollectionAsFlac__<path>`,
+   with slashes replaced by underscores, and no v12 stratum's identifier has that form, so
+   this rule matches no v12 candidate;
+3. the cluster cap;
+4. the fetch, with its retry and listing rules (below), then the raw SHA-256 against the
+   training corpus and against earlier admissions;
+5. the source-outcome stages;
+6. the decoded PCM SHA-256 against the training corpus and against earlier admissions;
+7. the eligibility floors, which include `RECORDING_WITHOUT_ELIGIBLE_FRAMES`;
+8. the duplicate screen, described under [Identity and disjointness](#identity-and-disjointness).
+
+Rejected candidates are skipped and the walk continues. There is no manual substitution and
+no reordering.
+
+A source identifier is the stratum's source name, one slash, and the path within that
+source. The path's slash-separated segments are each non-empty and neither `.` nor `..`, with
+no NUL, no backslash, and no character of Unicode general category Cc or Cs. A malformed
+identifier stays in the universe, so `n` counts it, and is rejected at its position in the
+walk before any fetch. v11 wrote the rule before it read the collection listing, so the
+rule was not fitted to the entries it excludes.
+
+### Fetch, retries, and listing checks
+
+A transient fetch failure (a network error, a timeout, a 5xx, any other status outside the
+permanent list, or a transfer that ends short) retries the same candidate three times with
+exponential backoff, so at most four attempts are made, and does not advance the walk. The
+permanent statuses are 401, 403, 404, 410, and 451. A candidate that ends in one of them is
+excluded as `CANDIDATE_PERMANENTLY_UNAVAILABLE`, and the status is logged. If every attempt
+fails transiently, the run is invalid under `ACQUISITION_RETRIES_EXHAUSTED` and nothing is
+published. Skipping the candidate instead would let network conditions choose the test set.
+The wait between attempts is a harness setting, because it cannot change which candidates
+are admitted.
+
+The frozen universe records each file's size, md5, and sha1 as the listing gives them, and
+records a value as absent where the listing gives none. After each fetch attempt, every
+recorded value is compared with the downloaded bytes, and the audit trail records which
+were compared. A mismatch, for example an error page served with status 200, is a transient
+failure of that attempt. If every attempt mismatches, the candidate is excluded as
+`CANDIDATE_LISTING_MISMATCH`. md5 and sha1 check that the transfer delivered the listed
+bytes. They are not evidence against deliberate tampering, and the local SHA-256 remains the
+artifact's identity. Whether the Internet Archive listing gives these values was not checked
+when v11 was frozen. The listings read before v12 was frozen gave all three for every
+`.flac` file in `MusopenCollectionAsFlac` (145 files) and in
+`musopen-chopin-complete-works-flac` (214 files). MusicNet's members have no per-file
+listing values, so none are recorded for them.
+
+A download stops once it exceeds `max_identity_stream_bytes`, and no raw digest is computed
+for it. The staged prefix still exceeds that bound, so the source-outcome stages exclude it
+as `SOURCE_EXCEEDS_MAX_BYTES` without reading it. The raw-digest rules are then decided by
+size: every training recording and every admitted candidate is at most `max_source_bytes`,
+and byte strings of different lengths are not the same bytes, so such a file matches none
+of them.
+
+The `chamber` archive is not a candidate source, so this rule does not apply to it. At
+11,097,394,998 bytes it is above `max_identity_stream_bytes` (8,589,934,592 bytes), and its
+download is bounded instead by its own `archive_bytes`, stopping once it exceeds that size.
+Each WAV extracted from it is a candidate source, and the size bounds and source-outcome
+stages apply to that file as to any other.
+
+### Partitions and the end of each walk
+
+Admissions are numbered from 1 in walk order within each stratum, and they fill that
+stratum's partitions in its partition order. Each stratum's walk stops when its last
+partition is full: `solo_piano` at 42 admissions, and `chamber` at 36.
+
+| Partition | `solo_piano` N | `chamber` N | Use |
+|---|---|---|---|
+| test | 30 | 30 | Frozen. Never used for any system decision. |
+| demo | 6 | none | Public samples. Only CC0 recordings. May be auditioned and curated freely. |
+| test_reserve | 6 | 6 | Replacement test material only, consumed in order. |
+
+The demo partition exists only in `solo_piano`. MusicNet's metadata does not give each
+recording's licence, so no chamber recording is published as a demonstration. v12 has no
+`development_reserve` partition, and v11's is not carried over.
 
 N is fixed here and is not adjusted because intervals are wide or results are
-unfavourable. Thirty recordings is a real sample; it will produce wide intervals
-and outlier recordings will matter. Both are acceptable and neither justifies
-expanding N afterwards.
+unfavourable. Thirty recordings per stratum is a real sample; it will produce wide intervals
+and outlier recordings will matter. Both are acceptable and neither justifies expanding N
+afterwards.
+
+### Short universe
+
+If a stratum's universe is exhausted before its partitions are full, that stratum is invalid
+and publishes reasons, never numbers. The other stratum's walk and result are unaffected,
+and its publication states that the short stratum was invalid and why. Any other
+run-invalid condition, such as exhausted retries or an abort, invalidates the whole run.
+
+### Audit trail
+
+A selection audit trail is recorded for every candidate examined: its stratum, its position
+in that stratum's walk, its source identifier, whether it was admitted or rejected, the
+predicate responsible for a rejection, and its assigned partition. Anyone can then ask why a
+given recording is absent without trusting the script's summary. Each rejection has its own
+code: `CANDIDATE_IDENTIFIER_MALFORMED`, `CLUSTER_CAP_REACHED`, `TRAINING_SOURCE_IDENTITY`,
+`TRAINING_RAW_SHA256`, `ADMITTED_RAW_SHA256`, `TRAINING_DECODED_PCM_SHA256`,
+`ADMITTED_DECODED_PCM_SHA256`, `SCREEN_SAME_PERFORMANCE_TRAINING`,
+`SCREEN_SAME_PERFORMANCE_ADMITTED`, and `SCREEN_UNCERTAIN`. A source-outcome or eligibility
+failure keeps its own code from those sections.
 
 ## Governance
 
@@ -1267,6 +1345,14 @@ judgement:
   effects with intervals and drawing no verdict sidesteps the question rather than
   answering it badly.
 
+Results are reported per stratum, and never pooled across strata. `reporting.per_stratum`
+is true and `reporting.pooled_estimate` is false. The claim scope is fixed as well: a result
+says how the systems compare on recordings that neither model was trained on, in solo piano
+and chamber music, degraded by OpGAN's training noise process, at 16 kHz mono. It says
+nothing about orchestral music, which no stratum contains, and nothing about real degraded
+recordings. Some references may be live recordings, whose room or audience noise a denoiser
+may remove and be scored for as distortion.
+
 ### Legacy diagnostics
 
 Dropped in v6. v5 listed PESQ and STOI as legacy diagnostics, kept for comparability
@@ -1338,27 +1424,35 @@ being scored.
 
 ## Aggregation
 
-Frames within a recording are not independent observations; reporting a frame count
-as N overstates confidence by roughly the frames-per-recording factor.
+Frames within a recording are not independent observations. Recordings that share a
+performer, instrument, room, and engineer are not independent of one another either.
+Reporting a frame count as N overstates confidence by roughly the frames-per-recording
+factor, and resampling recordings as if they were independent overstates it in the same
+way.
 
 1. Per-frame primary metrics
 2. Within each recording, the arithmetic mean of its eligible frames, unweighted.
    The published estimand is therefore the **mean frame-level metric for a
    recording**, which is not the same quantity as a metric computed over the whole
    recording's aggregate signal energy
-3. Across recordings, the unweighted macro mean and the median. With an even number
-   of recordings, the median is the mean of the middle two
-4. Bootstrap over recordings, never frames: 10,000 resamples, percentile method,
-   95% level, seed `20260726`. For the paired comparison, per-recording differences
-   are formed first and then recording indices are resampled once per iteration, so
-   the pairing is preserved; the two systems are never resampled independently
+3. Across recordings within a stratum, the unweighted macro mean and the median. With an
+   even number of recordings, the median is the mean of the middle two
+4. Bootstrap over performer clusters, never frames or single recordings: 10,000
+   resamples, percentile method, 95% level, seed `20260726`. Each stratum is bootstrapped
+   on its own test partition. For the paired comparison, per-recording differences are
+   formed first and then performer clusters are resampled once per iteration, so the
+   pairing is preserved; the two systems are never resampled independently
 
-The draw is fixed: a single `numpy.random.Generator(PCG64(20260726))` draws one index
-array per iteration, `integers(0, n, size=n)`, with replacement, in iteration order,
-and the same array is applied to every estimand. The interval bounds are
-`numpy.percentile` of the iteration means with `method="linear"` at 2.5 and 97.5.
-The index arrays pick positions, so the order of the recordings changes the intervals;
-from v9 the recordings are in the test partition's admission order.
+The draw is fixed. Within a stratum, its clusters are ordered by their first test
+admission. A single `numpy.random.Generator(PCG64(20260726))` draws one index array per
+iteration, `integers(0, k, size=k)` over the `k` clusters, with replacement, in iteration
+order, and that array serves every estimand. The iteration statistic is the mean over every
+test recording of every drawn cluster, so a cluster drawn twice counts twice. The interval
+bounds are `numpy.percentile` of the iteration means with `method="linear"` at 2.5 and
+97.5. The order of the clusters changes the intervals, so it is fixed by first test
+admission. Recordings by one performer share instrument, room, and engineer, so resampling
+recordings would treat dependent recordings as independent and make the interval too
+narrow.
 
 Bootstrap reproducibility depends on the pinned runtime, not on the seed alone. A
 seed selects a stream only within a fixed generator implementation, so the protocol
@@ -1372,8 +1466,8 @@ primary metric is reported as a per-recording difference with its own bootstrap
 interval, which is more informative than two independent intervals. "Headline"
 means that set of three differences, never a single summary of them.
 
-Reported per metric: per-recording mean and median, 95% CI by recording, paired
-difference CI, N recordings, N eligible frames, and coverage.
+Reported per metric and per stratum: per-recording mean and median, 95% CI by performer
+cluster, paired difference CI, N recordings, N eligible frames, and coverage.
 
 ## Publication
 
@@ -1395,6 +1489,26 @@ defect discovered after results exist invalidates those results rather than
 retroactively changing the rules that produced them. Superseded versions stay in the
 tree rather than being replaced, and each version names its predecessor by digest;
 the loader recomputes those digests, so the chain is checked rather than asserted.
+
+### v11 to v12
+
+A listing of `MusopenCollectionAsFlac` on 2026-11-22 found 145 `.flac` files, all of them
+training files by name and byte count, so the v11 walk could admit nothing. v12 replaces
+that source with two strata, `solo_piano` and `chamber`, each with its own universe, walk,
+partitions, and result. It adds a cap of 5 admissions per cluster per stratum
+(`CLUSTER_CAP_REACHED`), a bootstrap that resamples performer clusters instead of recordings,
+per-stratum reporting, and a fixed claim scope. MusicNet's one archive is fetched whole and
+checked against the size and md5 its Zenodo record gives, bounded by that size rather than
+by `max_identity_stream_bytes`, since it is not itself a candidate source. The candidate filter and partitions move into
+each stratum, v11's `development_reserve` partition is not carried over, and the
+`amends` record names v11 by digest. Before v12 was frozen, the following were read, and
+nothing else about the candidates: the listing above; the Internet Archive metadata of
+`MusopenCollectionAsFlac` (for its artist tags), `musopen-chopin-complete-works-flac`,
+`Musopen-Libre`, and `MusopenKickstarterRecordingsLossless`; an archive.org search for
+musopen; the booklet text of the Chopin item; and the Zenodo records of MusicNet and MAESTRO
+with their metadata CSV files. No audio from either stratum, and no canonical waveform,
+eligibility outcome, degraded input, system output, metric score, aggregate, or comparative
+conclusion, had been acquired, generated, or inspected.
 
 ### v10 to v11
 
