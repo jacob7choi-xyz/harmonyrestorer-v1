@@ -48,6 +48,8 @@ __all__ = [
     "WAITS_S",
     "Attempt",
     "Expected",
+    "FetchOutcome",
+    "Getter",
     "ListingMismatch",
     "PermanentlyUnavailable",
     "RetriesExhausted",
