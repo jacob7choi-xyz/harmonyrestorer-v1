@@ -74,6 +74,7 @@ class Response:
 
     `content_length` is the length the server declared, or None, so a caller can tell a
     transfer that ended short. `exceeded` means the server offered more than the cap.
+    `retry_after` is the server's Retry-After in seconds when it gave one as a number.
     """
 
     status: int
@@ -83,6 +84,7 @@ class Response:
     sha256: str
     md5: str
     sha1: str
+    retry_after: float | None = None
 
 
 Opener = Callable[[urllib.request.Request, float], IO[bytes]]
@@ -93,6 +95,14 @@ def _open(request: urllib.request.Request, timeout_s: float) -> IO[bytes]:
     opener = urllib.request.build_opener(_HttpsOnlyRedirects)
     response: IO[bytes] = opener.open(request, timeout=timeout_s)
     return response
+
+
+def _retry_after(headers: Message | None) -> float | None:
+    """The Retry-After header as seconds, or None if absent or not a number of seconds."""
+    value = None if headers is None else headers.get("Retry-After")
+    if value is None or not value.strip().isdigit():
+        return None
+    return float(value.strip())
 
 
 def _declared_length(headers: Message) -> int | None:
@@ -144,16 +154,21 @@ def get(
         except urllib.error.HTTPError as error:
             logger.info("GET %s returned %d", url, error.code)
             error.close()
-            return Response(error.code, 0, False, None, *(d.hexdigest() for d in digests))
+            wait = _retry_after(error.headers)
+            sha256, md5, sha1 = (d.hexdigest() for d in digests)
+            return Response(error.code, 0, False, None, sha256, md5, sha1, wait)
         with response:
             status = getattr(response, "status", 200)
-            declared = _declared_length(getattr(response, "headers", Message()))
+            headers = getattr(response, "headers", Message())
+            declared = _declared_length(headers)
             size, exceeded = _stream(response, sink, max_bytes, digests)
     except http.client.HTTPException as error:
         logger.warning("GET %s failed inside the response: %r", url, error)
         raise TransferError(f"GET {url} failed inside the response: {error!r}") from error
     logger.info("GET %s returned %d, %d bytes%s", url, status, size, " (cap)" if exceeded else "")
-    return Response(status, size, exceeded, declared, *(d.hexdigest() for d in digests))
+    wait = _retry_after(headers)
+    sha256, md5, sha1 = (d.hexdigest() for d in digests)
+    return Response(status, size, exceeded, declared, sha256, md5, sha1, wait)
 
 
 def _stream(
