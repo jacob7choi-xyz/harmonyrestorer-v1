@@ -2358,8 +2358,13 @@ def _validate_calibration(dd: DuplicateDetection) -> None:
         )
 
 
-def _validate_duplicate_detection(dd: DuplicateDetection) -> None:
-    """Screening must be a cosine threshold with a fail-closed uncertain verdict."""
+def _validate_duplicate_detection(dd: DuplicateDetection, canonical_rate: int) -> None:
+    """Screening must be a cosine threshold with a fail-closed uncertain verdict.
+
+    The features are computed on the canonical waveform, whose samples carry no rate of
+    their own, so an MFCC rate other than the canonical rate would compute every feature
+    with the wrong frequency and time scale and still load.
+    """
     if not -1.0 <= dd.flag_threshold <= 1.0:
         raise ProtocolValueError(
             f"duplicate_detection.flag_threshold is a cosine similarity and must lie in "
@@ -2384,6 +2389,11 @@ def _validate_duplicate_detection(dd: DuplicateDetection) -> None:
             raise ProtocolValueError(f"duplicate_detection.mfcc.{name} must be positive")
     if mfcc.alignment_search_s < 0:
         raise ProtocolValueError("duplicate_detection.mfcc.alignment_search_s must be >= 0")
+    if mfcc.sample_rate != canonical_rate:
+        raise ProtocolValueError(
+            f"duplicate_detection.mfcc.sample_rate {mfcc.sample_rate} must equal the canonical "
+            f"rate {canonical_rate}; the screen's input is the canonical waveform"
+        )
     if dd.decoded_pcm_hash != _DECODED_PCM_HASH:
         raise ProtocolValueError(
             f"duplicate_detection.decoded_pcm_hash must be {_DECODED_PCM_HASH!r}; hashing "
@@ -2808,7 +2818,9 @@ def _validate(protocol: Protocol) -> None:
     _validate_selection_walk(protocol.selection)
     _validate_eligibility(protocol.eligibility)
     _validate_eligibility_outcomes(protocol.eligibility)
-    _validate_duplicate_detection(protocol.duplicate_detection)
+    _validate_duplicate_detection(
+        protocol.duplicate_detection, protocol.canonicalisation.resample.target_sample_rate
+    )
     _validate_conditioning(protocol.conditioning)
     _validate_system_execution(protocol.system_execution)
     _validate_runner(

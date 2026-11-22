@@ -49,6 +49,9 @@ the corpus holds more than one performance of that movement, which the protocol'
 that it contains one performance per work does not allow for. The protocol's same-session
 and same-composer rows were not recomputed: only the ten highest pairs are printed.
 
+The feature and similarity functions are now in `benchmark.duplicate_screen`, which the
+selection walk's screen uses, and are imported here unchanged.
+
 Run from the repository root: `uv run --frozen python -m benchmark.measurements.training_screen`.
 It reads `data/raw/`, which is not in the repository, holds one recording's arrays at a time
 plus about 300 MB of features, and takes tens of minutes.
@@ -57,20 +60,19 @@ plus about 300 MB of features, and takes tens of minutes.
 from __future__ import annotations
 
 import json
-import math
 import time
 from collections import Counter
 from dataclasses import dataclass
 from itertools import combinations
 from pathlib import Path
-from typing import Literal
 
 import librosa
 import numpy as np
 import numpy.typing as npt
 
 from benchmark.canonicalisation import CanonicalWaveform, canonicalise
-from benchmark.protocol import MfccConfig, Protocol, load_protocol
+from benchmark.duplicate_screen import Features, offsets, similarity, unit_features
+from benchmark.protocol import Protocol, load_protocol
 from benchmark.source_acquisition import ArtifactBuffered, acquire_local_artifact
 from benchmark.source_decode import decode_source, decoded_pcm_sha256
 from benchmark.source_inspection import InspectedSource, inspect_source
@@ -83,87 +85,6 @@ ROUND_TRIP_RATE = 8000
 TRANSFORMS = ("trim_3_s", "gain_minus_6_db", "round_trip_8_khz")
 TOP_PAIRS = 10
 LOWEST_POSITIVES = 3
-
-Features = npt.NDArray[np.float64]
-
-
-@dataclass(frozen=True)
-class Degenerate:
-    """Counts of the cases the normalisation leaves undefined."""
-
-    zero_variance_coefficients: int
-    zero_norm_frames: int
-
-
-def offsets(config: MfccConfig) -> list[int]:
-    """Every multiple of the stride within the alignment search, in frames, including 0."""
-    reach = math.floor(config.alignment_search_s * config.sample_rate / config.hop_length)
-    steps = reach // config.alignment_stride_frames
-    return [k * config.alignment_stride_frames for k in range(-steps, steps + 1)]
-
-
-# The protocol closes pad_mode to "constant"; the table gives it librosa's literal type.
-_PAD_MODES: dict[str, Literal["constant"]] = {"constant": "constant"}
-
-
-def coefficients(waveform: npt.NDArray[np.float64], config: MfccConfig) -> npt.NDArray[np.float64]:
-    """The MFCCs with every argument taken from the protocol, shaped (coefficients, frames)."""
-    mel = librosa.feature.melspectrogram(
-        y=waveform, sr=config.sample_rate, n_fft=config.n_fft, hop_length=config.hop_length,
-        win_length=config.win_length, window=config.window, center=config.center,
-        pad_mode=_PAD_MODES[config.pad_mode], power=config.power, n_mels=config.n_mels,
-        fmin=config.fmin, fmax=config.fmax, htk=config.htk, norm=config.mel_norm,
-        dtype=np.dtype(config.mel_basis_dtype),
-    )  # fmt: skip
-    decibels = librosa.power_to_db(
-        mel, ref=config.db_ref, amin=config.db_amin, top_db=config.db_top_db
-    )
-    return np.asarray(
-        librosa.feature.mfcc(
-            S=decibels, n_mfcc=config.n_mfcc, dct_type=config.dct_type, norm=config.dct_norm,
-            lifter=config.lifter,
-        ),
-        dtype=np.float64,
-    )  # fmt: skip
-
-
-def unit_features(
-    waveform: npt.NDArray[np.float64], config: MfccConfig
-) -> tuple[Features, Degenerate]:
-    """Z-normalised MFCC frames scaled to unit length, shaped (frames, coefficients).
-
-    Scaling each frame to unit length makes the per-frame cosine a dot product. A zero
-    variance coefficient is left at zero and a zero-norm frame stays zero, and both are
-    counted, so the measurement reports whether either occurs.
-    """
-    mfcc = coefficients(waveform, config)
-    mean = mfcc.mean(axis=1, keepdims=True)
-    std = mfcc.std(axis=1, keepdims=True, ddof=config.zscore_ddof)
-    flat = std[:, 0] == 0.0
-    z = np.divide(mfcc - mean, std, out=np.zeros_like(mfcc), where=~flat[:, None]).T
-    norms = np.linalg.norm(z, axis=1)
-    zero = norms == 0.0
-    unit = np.divide(z, norms[:, None], out=np.zeros_like(z), where=~zero[:, None])
-    return np.ascontiguousarray(unit), Degenerate(int(flat.sum()), int(zero.sum()))
-
-
-def similarity(a: Features, b: Features, lags: list[int], min_overlap: int) -> float | None:
-    """The best mean per-frame cosine over the offsets, or None when no offset overlaps enough.
-
-    At offset `o`, frame `t + o` of `a` is paired with frame `t` of `b`.
-    """
-    best: float | None = None
-    for lag in lags:
-        start_a, start_b = max(lag, 0), max(-lag, 0)
-        overlap = min(len(a) - start_a, len(b) - start_b)
-        if overlap < min_overlap:
-            continue
-        x = a[start_a : start_a + overlap]
-        y = b[start_b : start_b + overlap]
-        score = float(np.einsum("ij,ij->", x, y)) / overlap
-        if best is None or score > best:
-            best = score
-    return best
 
 
 def transformed(
