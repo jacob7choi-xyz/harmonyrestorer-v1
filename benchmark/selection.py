@@ -34,6 +34,7 @@ the duplicate screen's codes are in `benchmark.duplicate_screen`.
 
 from __future__ import annotations
 
+import unicodedata
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
@@ -130,6 +131,48 @@ def training_filename(source_identifier: str, collection: str) -> str:
     return f"{item}__{path}".replace("/", "_")
 
 
+def identifier_well_formed(source_identifier: str, source: str) -> bool:
+    """Whether an identifier meets v11's syntax rule, with v12's per-stratum source.
+
+    Well formed: the stratum's source, one slash, and a path whose slash-separated segments
+    are each non-empty and neither `.` nor `..`, with no NUL, no backslash, and no character
+    of Unicode general category Cc (control) or Cs (lone surrogate). A trailing slash leaves
+    an empty last segment, so it is malformed. The rule runs before rule 1 and before any
+    fetch, so a malformed identifier never becomes a URL or a local path.
+
+    Args:
+        source_identifier: The candidate's identifier as the frozen universe names it.
+        source: The stratum's `source`.
+    """
+    prefix = f"{source}/"
+    if not source_identifier.startswith(prefix):
+        return False
+    if any(c in "\0\\" or unicodedata.category(c) in ("Cc", "Cs") for c in source_identifier):
+        return False
+    segments = source_identifier.removeprefix(prefix).split("/")
+    return all(segment not in ("", ".", "..") for segment in segments)
+
+
+def matches_training_source(
+    source_identifier: str, collection: str, training_filenames: frozenset[str]
+) -> bool:
+    """Rule 1: whether the identifier names a training file in its flattened form.
+
+    Only an identifier inside the training collection can match. From v12 no stratum draws
+    from that collection, so a candidate from any other source matches nothing rather than
+    being refused.
+
+    Args:
+        source_identifier: The candidate's identifier.
+        collection: `selection.training_collection_identifier`.
+        training_filenames: The training manifest's filenames.
+    """
+    item, slash, path = source_identifier.partition("/")
+    if item != collection or not slash or not path:
+        return False
+    return training_filename(source_identifier, collection) in training_filenames
+
+
 def exclusions(
     source_identifier: str,
     *,
@@ -151,7 +194,7 @@ def exclusions(
         The rules the candidate meets.
     """
     met: list[ExclusionRule] = []
-    if training_filename(source_identifier, collection) in training.filenames:
+    if matches_training_source(source_identifier, collection, training.filenames):
         met.append(ExclusionRule.SOURCE_IDENTITY)
     if raw_sha256 in training.raw_sha256:
         met.append(ExclusionRule.RAW_SHA256)

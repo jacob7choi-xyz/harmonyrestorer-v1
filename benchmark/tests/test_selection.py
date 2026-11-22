@@ -11,7 +11,9 @@ from benchmark.selection import (
     SelectionError,
     TrainingIdentities,
     exclusions,
+    identifier_well_formed,
     is_candidate,
+    matches_training_source,
     training_filename,
     training_identities,
     walk_order,
@@ -209,3 +211,82 @@ class TestRejectionCodes:
         codes = load_protocol().selection.rejection_codes
         training = tuple(code for code in codes if code.startswith("TRAINING_"))
         assert tuple(ExclusionRule) == training
+
+
+PIANO = "musopen-chopin-complete-works-flac"
+
+
+class TestIdentifierSyntax:
+    """The syntax rule decides, before any fetch, whether an identifier may become a URL."""
+
+    @pytest.mark.parametrize(
+        "path",
+        [
+            "Ballade No. 1 in G minor, Op. 23.flac",
+            "Nocturnes, Op. 32 - No. 2. Nocturne in A\u266d major.flac",
+            "\u00c9tude Op. 10, no. 5 in G flat major - 'Black Keys'.flac",
+            "dir/sub/file.flac",
+        ],
+        ids=["spaces_and_commas", "flat_sign", "accent_and_apostrophe", "nested"],
+    )
+    def test_a_listed_path_under_its_source_is_well_formed(self, path: str) -> None:
+        assert identifier_well_formed(f"{PIANO}/{path}", PIANO)
+
+    @pytest.mark.parametrize(
+        "identifier",
+        [
+            "other-item/a.flac",
+            f"{PIANO}a.flac",
+            f"{PIANO}/",
+            f"{PIANO}/a.flac/",
+            f"{PIANO}//a.flac",
+            f"{PIANO}/../a.flac",
+            f"{PIANO}/x/./a.flac",
+            f"{PIANO}/a\x00.flac",
+            f"{PIANO}/a\\b.flac",
+            f"{PIANO}/a\nb.flac",
+            f"{PIANO}/a\ud800.flac",
+        ],
+        ids=[
+            "other_source",
+            "no_slash",
+            "empty_path",
+            "trailing_slash",
+            "empty_segment",
+            "dot_dot",
+            "dot",
+            "nul",
+            "backslash",
+            "control",
+            "lone_surrogate",
+        ],
+    )
+    def test_a_malformed_identifier_is_refused(self, identifier: str) -> None:
+        assert not identifier_well_formed(identifier, PIANO)
+
+
+class TestTrainingSourceRule:
+    """Rule 1 matches only identifiers inside the training collection."""
+
+    def test_a_training_file_named_in_the_collection_matches(self) -> None:
+        names = frozenset({f"{ITEM}__Bach_01.flac"})
+        assert matches_training_source(f"{ITEM}/Bach/01.flac", ITEM, names)
+
+    @pytest.mark.parametrize(
+        "identifier",
+        [f"{PIANO}/Bach/01.flac", "musicnet/1811", f"{ITEM}/", ITEM],
+        ids=["piano_stratum", "chamber_stratum", "empty_path", "no_slash"],
+    )
+    def test_any_other_identifier_matches_nothing_rather_than_raising(
+        self, identifier: str
+    ) -> None:
+        names = frozenset({f"{ITEM}__Bach_01.flac"})
+        assert not matches_training_source(identifier, ITEM, names)
+
+    def test_exclusions_evaluate_rule_1_for_a_v12_candidate_without_raising(self) -> None:
+        training = TrainingIdentities(frozenset({f"{ITEM}__a.flac"}), frozenset(), frozenset())
+        met = exclusions(
+            "musicnet/1811", raw_sha256="0" * 64, decoded_sha256="1" * 64, collection=ITEM,
+            training=training,
+        )  # fmt: skip
+        assert met == ()
