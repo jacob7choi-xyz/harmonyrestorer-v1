@@ -52,11 +52,13 @@ are checked before the UVR separator is built is not reached in this stage.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import logging
 import math
 import os
 import signal
+import stat
 import subprocess
 import sys
 import threading
@@ -64,7 +66,10 @@ import time
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
+
+import numpy as np
+import numpy.typing as npt
 
 from benchmark._source_validation import SourceOutcomeError, checked_digest
 from benchmark.canonical_worker import (
@@ -72,6 +77,7 @@ from benchmark.canonical_worker import (
     CANONICAL_KIND,
     EXIT_MEMORY_ERROR,
     RECORD_FILE,
+    SAMPLE_FORMAT,
 )
 from benchmark.footprint import wait_with_footprint
 from benchmark.outcome_wire import OutcomeWireError, outcome_from_wire
@@ -83,6 +89,7 @@ __all__ = [
     "WORKER_LOG",
     "Candidate",
     "CanonicalFile",
+    "CanonicalFileError",
     "CanonicalisationRun",
     "SourceRun",
     "run_canonicalisation",
@@ -113,6 +120,14 @@ class Candidate:
     expected_sha256: str | None = None
 
 
+class CanonicalFileError(RuntimeError):
+    """Raised when a canonical file no longer holds the bytes its record describes."""
+
+
+# Opened read-only, never through a symlink, and without blocking if a FIFO stands at the path.
+_OPEN_FLAGS = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
+
+
 @dataclass(frozen=True)
 class CanonicalFile:
     """A canonical waveform on disk whose bytes hashed to `sha256` when the worker ended.
@@ -126,6 +141,48 @@ class CanonicalFile:
     samples: int
     raw_sha256: str
     decoded_pcm_sha256: str
+
+    def load(self) -> npt.NDArray[np.float64]:
+        """The waveform, from bytes read once and hashed to `sha256`.
+
+        The file was written by a worker that handled untrusted audio and was hashed by path
+        when the worker ended, so it is read again here rather than trusted: opened without
+        following a symlink at the file itself, checked on the open descriptor to be a regular
+        file of exactly `samples` float64 values, read to the end, and the bytes read are the
+        bytes hashed and returned. The array is read-only.
+
+        Raises:
+            CanonicalFileError: If the file cannot be opened that way, is not a regular file of
+                the recorded size, holds another number of bytes when read, or hashes to
+                another digest.
+        """
+        expected = self.samples * _FLOAT64_BYTES
+        try:
+            fd = os.open(self.path, _OPEN_FLAGS)
+        except OSError as error:
+            logger.error("Canonical file %s cannot be opened as a file: %s", self.path, error)
+            raise CanonicalFileError(f"canonical file {self.path} cannot be opened") from error
+        try:
+            info = os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode) or info.st_size != expected:
+                _refuse_canonical_file(self.path, f"is not a regular file of {expected} bytes")
+            with os.fdopen(fd, "rb", closefd=False) as handle:
+                data = handle.read(expected + 1)
+        finally:
+            os.close(fd)
+        if len(data) > expected:
+            _refuse_canonical_file(self.path, "grew past its recorded size while it was read")
+        if len(data) < expected:
+            _refuse_canonical_file(self.path, f"held {len(data)} bytes, expected {expected}")
+        if hashlib.sha256(data).hexdigest() != self.sha256:
+            _refuse_canonical_file(self.path, "does not hash to the recorded digest")
+        return np.asarray(np.frombuffer(data, dtype=SAMPLE_FORMAT), dtype=np.float64)
+
+
+def _refuse_canonical_file(path: Path, why: str) -> NoReturn:
+    """Log and raise that the canonical file at *path* cannot be used."""
+    logger.error("Canonical file %s %s", path, why)
+    raise CanonicalFileError(f"canonical file {path} {why}")
 
 
 SourceOutcome = CanonicalFile | SourceIneligibleOutcome | RunAbortOutcome

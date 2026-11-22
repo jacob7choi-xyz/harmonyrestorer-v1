@@ -61,6 +61,7 @@ __all__ = [
     "CANONICAL_KIND",
     "EXIT_MEMORY_ERROR",
     "RECORD_FILE",
+    "SAMPLE_FORMAT",
     "CanonicalSource",
     "canonicalise_source",
     "main",
@@ -74,7 +75,7 @@ RECORD_FILE = "record.json"
 CANONICAL_FILE = "canonical.f64"
 CANONICAL_KIND = "canonical"
 # The byte layout canonicalisation hashes, so the file's digest is the canonical digest.
-_SAMPLE_FORMAT = "<f8"
+SAMPLE_FORMAT = "<f8"
 
 
 @dataclass(frozen=True)
@@ -179,7 +180,7 @@ def _record(result: SourceResult, protocol: Protocol) -> dict[str, Any]:
 def _report(result: SourceResult, protocol: Protocol, out_dir: Path) -> None:
     """Write the canonical samples when there are any, then the record."""
     if isinstance(result, CanonicalSource):
-        samples = np.ascontiguousarray(result.waveform.samples, dtype=_SAMPLE_FORMAT)
+        samples = np.ascontiguousarray(result.waveform.samples, dtype=SAMPLE_FORMAT)
         write_atomically(out_dir / CANONICAL_FILE, samples.data)
     record = json.dumps(_record(result, protocol), sort_keys=True)
     write_atomically(out_dir / RECORD_FILE, record.encode())

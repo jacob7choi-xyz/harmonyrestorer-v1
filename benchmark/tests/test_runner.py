@@ -15,8 +15,10 @@ import os
 import signal
 import subprocess
 import sys
+import threading
 import time
 import tracemalloc
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
@@ -759,3 +761,109 @@ class TestWallTime:
         source_run = run(protocol, tmp_path, script("import time\ntime.sleep(0.5)"))
         elapsed = time.monotonic() - started
         assert 0.5 <= source_run.wall_seconds <= elapsed
+
+
+class TestCanonicalFileLoad:
+    """The parent reads a canonical file once, as a regular file, and only bytes that hash."""
+
+    SAMPLES = np.array([0.0, 0.25, -0.5, 1.0])
+
+    def written(self, path: Path, samples: np.ndarray | None = None) -> CanonicalFile:
+        """A canonical file at *path* holding *samples*, described by its own digest."""
+        data = np.ascontiguousarray(self.SAMPLES if samples is None else samples, "<f8").tobytes()
+        path.write_bytes(data)
+        return CanonicalFile(
+            path=path,
+            sha256=hashlib.sha256(data).hexdigest(),
+            samples=len(data) // 8,
+            raw_sha256="a" * 64,
+            decoded_pcm_sha256="b" * 64,
+        )
+
+    def test_the_samples_come_back_as_float64_and_read_only(self, tmp_path: Path) -> None:
+        loaded = self.written(tmp_path / CANONICAL_FILE).load()
+        assert loaded.dtype == np.float64
+        assert np.array_equal(loaded, self.SAMPLES)
+        assert not loaded.flags.writeable
+
+    def test_a_symlink_to_a_matching_file_is_refused(self, tmp_path: Path) -> None:
+        """The digest matches, so only the link itself can be what refuses it."""
+        real = self.written(tmp_path / "real.f64")
+        link = tmp_path / CANONICAL_FILE
+        link.symlink_to(real.path)
+        with pytest.raises(runner.CanonicalFileError, match="cannot be opened"):
+            CanonicalFile(link, real.sha256, real.samples, "a" * 64, "b" * 64).load()
+
+    def test_a_fifo_is_refused_without_waiting_for_a_writer(self, tmp_path: Path) -> None:
+        described = self.written(tmp_path / "real.f64")
+        fifo = tmp_path / CANONICAL_FILE
+        os.mkfifo(fifo)
+        errors: list[BaseException] = []
+
+        def load() -> None:
+            try:
+                CanonicalFile(fifo, described.sha256, described.samples, "a" * 64, "b" * 64).load()
+            except runner.CanonicalFileError as error:
+                errors.append(error)
+
+        reader = threading.Thread(target=load, daemon=True)
+        reader.start()
+        reader.join(timeout=10)
+        assert not reader.is_alive()
+        assert len(errors) == 1
+        assert "not a regular file" in str(errors[0])
+
+    @pytest.mark.parametrize(
+        ("change", "message"),
+        [
+            (lambda data: data[:-8], "not a regular file of 32 bytes"),
+            (lambda data: data + b"\0" * 8, "not a regular file of 32 bytes"),
+            (lambda data: data[:-1] + bytes([data[-1] ^ 1]), "does not hash"),
+        ],
+        ids=["shorter", "longer", "same_size_other_bytes"],
+    )
+    def test_a_file_that_changed_after_the_worker_ended_is_refused(
+        self, tmp_path: Path, change: Callable[[bytes], bytes], message: str
+    ) -> None:
+        described = self.written(tmp_path / CANONICAL_FILE)
+        described.path.write_bytes(change(described.path.read_bytes()))
+        with pytest.raises(runner.CanonicalFileError, match=message):
+            described.load()
+
+    @pytest.mark.parametrize(
+        ("change", "message"),
+        [
+            (lambda data: data + b"\0" * 8, "grew past its recorded size"),
+            (lambda data: data[:-8], "held 24 bytes, expected 32"),
+        ],
+        ids=["grew", "shrank"],
+    )
+    def test_a_file_that_changes_size_after_the_size_check_is_refused(
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        change: Callable[[bytes], bytes],
+        message: str,
+    ) -> None:
+        """The size check reports the recorded size; the read still sees the change."""
+        described = self.written(tmp_path / CANONICAL_FILE)
+        described.path.write_bytes(change(described.path.read_bytes()))
+        real_fstat = os.fstat
+
+        def stale_fstat(fd: int) -> os.stat_result:
+            info = list(real_fstat(fd))
+            info[6] = described.samples * 8  # st_size as recorded, before the change
+            return os.stat_result(info)
+
+        monkeypatch.setattr(runner.os, "fstat", stale_fstat)
+        with pytest.raises(runner.CanonicalFileError, match=message):
+            described.load()
+
+    @pytest.mark.parametrize("make", ["missing", "directory"])
+    def test_a_path_that_is_not_a_file_is_refused(self, tmp_path: Path, make: str) -> None:
+        described = self.written(tmp_path / "real.f64")
+        target = tmp_path / CANONICAL_FILE
+        if make == "directory":
+            target.mkdir()
+        with pytest.raises(runner.CanonicalFileError):
+            CanonicalFile(target, described.sha256, described.samples, "a" * 64, "b" * 64).load()
