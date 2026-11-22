@@ -55,7 +55,10 @@ logger = logging.getLogger(__name__)
 
 _MANIFESTS = Path(__file__).resolve().parents[1] / "benchmark" / "manifests"
 # Set in the commit that adds each listed file; None means that stratum has not been listed.
-UNIVERSE_SHA256: dict[str, str | None] = {"solo_piano": None, "chamber": None}
+UNIVERSE_SHA256: dict[str, str | None] = {
+    "solo_piano": "55a38b8d7d6f3bff450df9583d5db236c1065db8066933a7a177684aecfad1eb",  # pragma: allowlist secret
+    "chamber": "b4dccbf7c4330c8bcf20129e056d99260ebbc40aa9c378f3677ee43680e29a90",  # pragma: allowlist secret
+}
 
 _HEX = {"md5": re.compile(r"[0-9a-f]{32}"), "sha1": re.compile(r"[0-9a-f]{40}")}
 _FILE_KEYS = frozenset(

@@ -461,3 +461,16 @@ class TestSummary:
         assert lines[0] == "solo_piano: 9 candidates in 2 clusters"
         assert lines[1] == "  cap 5 allows 7 admissions; partitions need 42"
         assert lines[3:] == ["     7  Ann", "     2  Bo"]
+
+
+class TestTheCommittedUniverses:
+    """The frozen files in the repository load against their pinned digests."""
+
+    def test_each_stratum_loads_with_the_counts_listed(
+        self, strata: tuple[ArchiveItemStratum, ZenodoArchiveStratum]
+    ) -> None:
+        piano, chamber = (candidate_universe.load_universe(stratum) for stratum in strata)
+        assert (len(piano.files), len({f.cluster for f in piano.files})) == (206, 12)
+        assert (len(chamber.files), len({f.cluster for f in chamber.files})) == (80, 19)
+        assert all(f.md5 is not None and f.sha1 is not None for f in piano.files)
+        assert all(f.size is None for f in chamber.files)

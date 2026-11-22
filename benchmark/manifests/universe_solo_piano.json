@@ -1,0 +1,1452 @@
+{
+  "description": "One stratum's candidate universe, listed from its source's metadata once and frozen before the selection walk.",
+  "stratum": "solo_piano",
+  "source": "musopen-chopin-complete-works-flac",
+  "query": "https://archive.org/metadata/musopen-chopin-complete-works-flac",
+  "enumerated_at": "2026-11-22T06:32:37Z",
+  "count": 206,
+  "candidates": [
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Albumleaf in E major.flac",
+      "cluster": "Aya Higuchi",
+      "size": 13684762,
+      "md5": "0a229280c78e5716ca9966e3ff144006",
+      "sha1": "4f64582e9c7af77edd9b4c987944b35b8eb5b6fa"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Allegro de concert, Op. 46.flac",
+      "cluster": "Olga Gurevich",
+      "size": 97542475,
+      "md5": "bd3e2165924284a11b46fd338132664b",
+      "sha1": "73a333f882a6b6a731592811f96d94c87092d89d"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Andante spianato and Grande Polonaise Brillante Op. 22.flac",
+      "cluster": "Olga Gurevich",
+      "size": 59001593,
+      "md5": "6b4a820aae6fddb9fbb6ecdd87c570e3",
+      "sha1": "27995160ea8b3adee312815522e95840993800f5"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Andantino 'Spring', B. 117.flac",
+      "cluster": "Aya Higuchi",
+      "size": 11852221,
+      "md5": "4a5e23393a2dfc7a3ca695c7faeba1fc",
+      "sha1": "1bb3039fc0be678a724d259aa5ac4746697b8732"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Ballade No. 2 in F Major, Op. 38.flac",
+      "cluster": "Frank Levy",
+      "size": 119862462,
+      "md5": "a282c6ea692d96aaaa27053dbcc377ac",
+      "sha1": "03fa99371a3529bfe1cdbb9384f167596d36dd17"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Ballade no. 1 in G minor, Op. 23.flac",
+      "cluster": "Frank Levy",
+      "size": 148151533,
+      "md5": "108461cdc7b56fdf96f1087936d8fe34",
+      "sha1": "ba8746dc0350d755743ecf893ae9b052fb540928"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Ballade no. 3 in A flat major Op. 47.flac",
+      "cluster": "Frank Levy",
+      "size": 122132131,
+      "md5": "c204a6b39fc85981bef81747887e1c6f",
+      "sha1": "4b9331bfcf80b70887f452fcfd8662f6fbdd9749"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Ballade no. 4 op. 52.flac",
+      "cluster": "Frank Levy",
+      "size": 182037728,
+      "md5": "9c7eba60eddab676cdab606cc7d6d3bc",
+      "sha1": "2f90090c1386695f75d514e184278d213de3a230"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Barcarolle Op. 60.flac",
+      "cluster": "Olga Gurevich",
+      "size": 68723739,
+      "md5": "c179d7ac7291cb195f732329e0ce843f",
+      "sha1": "1a17af68513a737891eac1dfb40d11e43c0781aa"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Berceuse in D-flat major, Op. 57 .flac",
+      "cluster": "Olga Gurevich",
+      "size": 33657677,
+      "md5": "2985eff2df1b221bfdc6ca99389c39bc",
+      "sha1": "33e58b6471d9d7f20a53255e858e155e7d315c29"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Bolero, Op. 19.flac",
+      "cluster": "Christoph Zbinden",
+      "size": 68322928,
+      "md5": "3750773ec55c5010aa5d3ed594b561d2",
+      "sha1": "d0292862b5c075f0485bef0bf53cf63099c270c1"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Bourre\u0301e No. 1 in A Major, B. 160b1.flac",
+      "cluster": "Aya Higuchi",
+      "size": 5738013,
+      "md5": "1786b55c25775f71c492d63529259bd0",
+      "sha1": "fc4acec8ae4f96f53cecc75c97ca0435c9458e52"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Bourre\u0301e No. 2 in G Major, B. 160b2.flac",
+      "cluster": "Aya Higuchi",
+      "size": 4646979,
+      "md5": "b05be4fd298f6c5bcfbf5c425fa54c85",
+      "sha1": "acff6e9cc7bf6e88178338d76863b7e9bc1000ef"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Cantabile in Bb, B. 84.flac",
+      "cluster": "Aya Higuchi",
+      "size": 8695258,
+      "md5": "3dbf879aa657db1338718ee6585902ed",
+      "sha1": "52be969da3f977adbb247c54e9c9b7b75975ac4c"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Contredanse in Gb, B. 17.flac",
+      "cluster": "Aya Higuchi",
+      "size": 16866225,
+      "md5": "a0cd3f2539657070cffacfb66febd243",
+      "sha1": "2671bfdda9dac31525cef19f2686ab287f3216ad"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Ecossaises, Op. 72 no. 3 - I. In D major.flac",
+      "cluster": "Aya Higuchi",
+      "size": 7174764,
+      "md5": "a821fe0034830a3baca93e6dbfa9125e",
+      "sha1": "f27949ffb072fc3b544a5dcdc43d3960d660adac"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Ecossaises, Op. 72 no. 3 - II. In G major.flac",
+      "cluster": "Aya Higuchi",
+      "size": 5814875,
+      "md5": "251da916fece811198c4690bbfec82b5",
+      "sha1": "c8e7295473b865bccfb46e19e4ee0063a4eebf6e"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Ecossaises, Op. 72 no. 3 - III. In D flat major.flac",
+      "cluster": "Aya Higuchi",
+      "size": 5856462,
+      "md5": "82a9275c8acb816e143fdcd9d9093bb6",
+      "sha1": "ab28e7648db89e2089f5ef6b5259389c44b47a0d"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Etude Op. 10, no. 1 in C major - 'Waterfall'.flac",
+      "cluster": "Edward Neeman",
+      "size": 7684473,
+      "md5": "3f81f0e0dfa57c5f70dfb91ef7dae7bc",
+      "sha1": "3c56836538da4255316ccd4975b57b4c5fe0a85e"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Etude Op. 10, no. 10 in A flat major.flac",
+      "cluster": "Edward Neeman",
+      "size": 8552207,
+      "md5": "388dd3932c972a23d2b4c8276f2e8e68",
+      "sha1": "9633cdaaeec7636f0cc5e75bfe39f24ad2c4afd8"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Etude Op. 10, no. 11 in E flat major - 'Arpeggio'.flac",
+      "cluster": "Edward Neeman",
+      "size": 8477736,
+      "md5": "45ed1677e45f5792b3a0b4fcc49e5699",
+      "sha1": "02ff442cb5ede228e19064d39975604ff13c85cd"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Etude Op. 10, no. 12 in C minor - 'Revolutionary'.flac",
+      "cluster": "Edward Neeman",
+      "size": 10891752,
+      "md5": "66b4c4b7a0850e0e045400778bea08aa",
+      "sha1": "fe3c5d418a8d656f59253947f515bbcd00aadbf5"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Etude Op. 10, no. 2 in A minor - 'Chromatique'.flac",
+      "cluster": "Edward Neeman",
+      "size": 4770643,
+      "md5": "e8d4893eab393332bca2f92030e27467",
+      "sha1": "6d981f7de60b5ec2e947dcbbd1dbde96ddaefcd0"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Etude Op. 10, no. 3 in E major - 'Tristesse'.flac",
+      "cluster": "Edward Neeman",
+      "size": 15219764,
+      "md5": "ff671302c101e17f9d7fac08fc87cb55",
+      "sha1": "e075474687fadac770a6ec76ce8d3a0b6744a1e4"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Etude Op. 10, no. 4 in C sharp minor - 'Torrent'.flac",
+      "cluster": "Edward Neeman",
+      "size": 8935687,
+      "md5": "5517ddcaaa5d3a1b6c3f72f2952b122a",
+      "sha1": "9ea7669f077c4ee60d8ccb1d54570f46e271a6ef"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Etude Op. 10, no. 6 in E flat minor - 'Lament'.flac",
+      "cluster": "Edward Neeman",
+      "size": 12945303,
+      "md5": "02cc581f6c9b0c396b6539468e6f3464",
+      "sha1": "ba71a9412908485d625bae32167b043bd5038133"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Etude Op. 10, no. 7 in C major - 'Toccata'.flac",
+      "cluster": "Edward Neeman",
+      "size": 5836325,
+      "md5": "f4561bf2ce5abb931754dbeed0ff766e",
+      "sha1": "fca2192e218920f2c978fd399f49b12c262e460b"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Etude Op. 10, no. 8 in F major - 'Sunshine'.flac",
+      "cluster": "Edward Neeman",
+      "size": 9728405,
+      "md5": "b4fe408bce83ae90b3c483604e57fe0c",
+      "sha1": "3a1bc88b88ae96bba9c540d763fe4f6848973f98"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Etude Op. 10, no. 9 in F minor.flac",
+      "cluster": "Edward Neeman",
+      "size": 8089206,
+      "md5": "88762c6ad61ecba305db763e7716cf0b",
+      "sha1": "5fe451f11212edf7e4f820f9bb8b1cc5081a5b95"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Etude Op. 25 no. 1 in A flat major - 'Aeolian Harp _ Shepherd Boy'.flac",
+      "cluster": "Edward Neeman",
+      "size": 8169554,
+      "md5": "573386476247a6ff65a4bf763290715e",
+      "sha1": "cf35a3827d28356378fd25b4ade1aa55df83059e"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Etude Op. 25 no. 10 in B minor - 'Octave'.flac",
+      "cluster": "Edward Neeman",
+      "size": 15005494,
+      "md5": "1fae205bdc89c39b28941c623f5b025b",
+      "sha1": "ea8056df62cb2d88205669fa6cf78d7cca4e49b8"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Etude Op. 25 no. 11 in A minor - 'Winter Wind'.flac",
+      "cluster": "Edward Neeman",
+      "size": 14044123,
+      "md5": "e80e2d234096094dea41d0d12121bf52",
+      "sha1": "6ec4a5dcdb20272d9f4fb13a42ee2f1c313630a9"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Etude Op. 25 no. 12 in C minor - 'Ocean'.flac",
+      "cluster": "Edward Neeman",
+      "size": 10736701,
+      "md5": "5f3a6fcae824ab89a411b27c4ef3083c",
+      "sha1": "9933c6430d415f155b5033c47e785ceefc679d2f"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Etude Op. 25 no. 2 in F minor - 'The Bees'.flac",
+      "cluster": "Edward Neeman",
+      "size": 5506098,
+      "md5": "1898be17f770f219808a0d765fc5eda2",
+      "sha1": "4c4a3f99f9539eaf92d7701d1918d931a91ebc36"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Etude Op. 25 no. 3 in F major - 'The Horseman'.flac",
+      "cluster": "Edward Neeman",
+      "size": 5611873,
+      "md5": "11230b82fc6cd56d6b5fa774ac83f8b1",
+      "sha1": "23ac8a47cc1c01254de263e88539066f27b1bac2"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Etude Op. 25 no. 4 in A minor - 'Paganini'.flac",
+      "cluster": "Edward Neeman",
+      "size": 5755970,
+      "md5": "43ba8f199fbd4080f8309a58baa4d93f",
+      "sha1": "8e4d4120296e60d3eae12ee395fc367c54aa36e1"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Etude Op. 25 no. 5 in E minor - 'Wrong Note'.flac",
+      "cluster": "Edward Neeman",
+      "size": 11750827,
+      "md5": "ef0c4379deaabcf4b71e8dcb44a0ae82",
+      "sha1": "82be1e0c0cc301a92bd6f85ca4f485fcfa30852a"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Etude Op. 25 no. 6 in G sharp minor - 'Thirds'.flac",
+      "cluster": "Edward Neeman",
+      "size": 6918227,
+      "md5": "12440cc0748191ace5209a34eab0e277",
+      "sha1": "23fe559a5b868938c1d013de8a54a67ec691dee1"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Etude Op. 25 no. 7 in C sharp minor- 'Cello'.flac",
+      "cluster": "Edward Neeman",
+      "size": 16869122,
+      "md5": "57da7e6ccb7dc7c598ed51e188deed12",
+      "sha1": "713d2551fdf138fce0be30d3f04858da4296f85e"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Etude Op. 25 no. 8 in D flat major - 'Sixths'.flac",
+      "cluster": "Edward Neeman",
+      "size": 4250701,
+      "md5": "5d179e05642abe2099d14b439ef2611d",
+      "sha1": "cbebbcfef5e0c200d4cb81e226df6ae3f7ee12b4"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Etude Op. 25 no. 9 in G flat major - 'Butterfly'.flac",
+      "cluster": "Edward Neeman",
+      "size": 3816780,
+      "md5": "364921fd9361bcc66290e93a56e4bac5",
+      "sha1": "2b4faa7d906b2692d1cc18cf24a9048b32603756"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Etude no.26 - B.130  Trois nouvelles e\u0301tudes No.2 Ab-major.flac",
+      "cluster": "Donald Betts",
+      "size": 9038077,
+      "md5": "3ab4d02e48d773aaaf5c1845c7aa7fa2",
+      "sha1": "aaf4e9413eebf3a2032f35cf444511d061024527"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/E\u0301tude Op. 10, no. 5 in G flat major - 'Black Keys'.flac",
+      "cluster": "Edward Neeman",
+      "size": 6824634,
+      "md5": "758a601766982d1f708c3d88977cd3c1",
+      "sha1": "26413e38f68e93ed5361335d127a4a62dc915e1f"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Fantaisie - Impromptu, Op. 66.flac",
+      "cluster": "Frank Levy",
+      "size": 78860515,
+      "md5": "0c9490f036f5ed6eb66134ecf4a2067a",
+      "sha1": "a1a9bec801cd6fa86e748ad80a93ab720c715234"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Fantasy, Op. 49.flac",
+      "cluster": "Olga Gurevich",
+      "size": 94057007,
+      "md5": "4c46929bbd21ae7f54ba3eacea9509ed",
+      "sha1": "572face40eaa9c901feef051f566315f96ed7e96"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Fugue in A minor, B. 144.flac",
+      "cluster": "Aya Higuchi",
+      "size": 22318056,
+      "md5": "f96fab1cafe881c8c261c20cbbe5abda",
+      "sha1": "d81ab8ca0beb2741e5918ed048650710cf80be86"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Funeral March in C minor, Op. posth. 72 no. 2.flac",
+      "cluster": "Aya Higuchi",
+      "size": 51878247,
+      "md5": "3f375d809f0170079aee4016186835ad",
+      "sha1": "6ba52acfb347eadc6535fe829bcbf54a5699f54a"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Galop Marquis.flac",
+      "cluster": "Aya Higuchi",
+      "size": 7419923,
+      "md5": "5876a35743e54f9d0f315b50f0a1497e",
+      "sha1": "1bf95df9f661781be2375b7a25301df9b54e54df"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Grande valse brillante in E flat major, Op. 18.flac",
+      "cluster": "Olga Gurevich",
+      "size": 40580691,
+      "md5": "e80a38791169ffb4ac9a0c5fe1a96e36",
+      "sha1": "c8ee1b64d618e27575385ac07e4a7b4f194d62ed"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Impromptu no. 1 in A flat major, Op. 29.flac",
+      "cluster": "Frank Levy",
+      "size": 66744956,
+      "md5": "9a0d1a95e20c5c1e0c4124351d23c1e9",
+      "sha1": "823535db03587fe9bc00e9468767b55244afbf07"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Impromptu no. 2 in F sharp major, Op. 36.flac",
+      "cluster": "Frank Levy",
+      "size": 85945884,
+      "md5": "1391ec2f80aaae6c20ab65d763873221",
+      "sha1": "d51447c197062b42fa541f82d11ac242fbff5d51"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Impromptu no. 3 in G flat major, Op. 51.flac",
+      "cluster": "Frank Levy",
+      "size": 91536353,
+      "md5": "eb81e5eba8695415318ccb05962e2b1c",
+      "sha1": "17c10bc6bf401b363ee8034b9ad8f76024299581"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Largo in E flat major, B. 109.flac",
+      "cluster": "Aya Higuchi",
+      "size": 19429691,
+      "md5": "990dc8c3f5c20aebbe39c8f70c113e43",
+      "sha1": "4eb9313a2cf61250d0a212fc950cc7e272c90b5f"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka Op. 67 no. 4 in A minor.flac",
+      "cluster": "Olga Gurevich",
+      "size": 24850290,
+      "md5": "f71469e9f56ae8e71227116e52f2696e",
+      "sha1": "0cfb907139cb1430f4e9d1e11d91faf4cf2b4c68"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in A flat major, B. 85.flac",
+      "cluster": "Edward Neeman",
+      "size": 6458338,
+      "md5": "5c2f1703357c56a9f23e9e42f2d17455",
+      "sha1": "0f8e4752236fc7e9ca7ab2a4d2747f7eafa7bc8e"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in A flat major, Op. 17 no. 3.flac",
+      "cluster": "Edward Neeman",
+      "size": 11036315,
+      "md5": "b85bba228bb1bf9a23fc6df6719b3976",
+      "sha1": "de1a62e1c432872be88c70f984a7f9909c7062a3"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in A flat major, Op. 24 no. 3.flac",
+      "cluster": "Edward Neeman",
+      "size": 5783467,
+      "md5": "6a138f91ac81f64e3c1eaa95600f18fb",
+      "sha1": "40b35ad8486d0593a9644d408086782152fc079d"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in A flat major, Op. 41 no. 4.flac",
+      "cluster": "Edward Neeman",
+      "size": 4825276,
+      "md5": "23c5c5bd6829f41a550496ee890be135",
+      "sha1": "953ba852e72f3ea3b0fa301608c81cce7876d6ce"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in A flat major, Op. 50 no. 2.flac",
+      "cluster": "Xuan He",
+      "size": 10395021,
+      "md5": "23433562dd9ba965713fb228e8108285",
+      "sha1": "c1d74f27ac63e2adb86f58fa3dc442fe6ccadde7"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in A flat major, Op. 59, no. 2.flac",
+      "cluster": "Xuan He",
+      "size": 9308457,
+      "md5": "14cfabbc375e60a1802a9de38677e07c",
+      "sha1": "41c93ad5b7e5d09b7bf0fe71c393d5b0e85adc8f"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in A flat major, Op. 7 no. 4 .flac",
+      "cluster": "Edward Neeman",
+      "size": 3506703,
+      "md5": "68a9b174886c63c8669fb1863dc2015b",
+      "sha1": "ad68ea2c91800f1cdcbb219a0c68e7ccea776a48"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in A minor, B. 134.flac",
+      "cluster": "Edward Neeman",
+      "size": 9887544,
+      "md5": "286526985c9dd48165aa231e2b491901",
+      "sha1": "d293e016e967385e396d5875f4768966eee45646"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in A minor, B. 140.flac",
+      "cluster": "Edward Neeman",
+      "size": 8296719,
+      "md5": "a9d0be8402763bc0ad6e1d45aae44ed8",
+      "sha1": "c1fbecc34102a85d12bc0d6fc49efcc0db6c1919"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in A minor, Op. 17 no. 4.flac",
+      "cluster": "Luke Faulkner",
+      "size": 12817227,
+      "md5": "ca54fc0c4fa3ffb1cc4de083e0903b52",
+      "sha1": "94a0ce91765bb198ffddee990cebc9674860fc74"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in A minor, Op. 59, no. 1.flac",
+      "cluster": "Xuan He",
+      "size": 13529359,
+      "md5": "ccde702330ac495348261587bf538b55",
+      "sha1": "2786d130e1560e59e6aa92debcebe0cb7c9750ba"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in A minor, Op. 68 no. 2.flac",
+      "cluster": "Olga Gurevich",
+      "size": 20278046,
+      "md5": "6aa03b022929fffa44104359cec1d3bf",
+      "sha1": "6e24f64fe6e9b4ccd29a1655cc9ea80d482dd630"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in A minor, Op. 7 no. 2.flac",
+      "cluster": "Luis Sarro",
+      "size": 54222247,
+      "md5": "28e04fa2474138ee386ab435e0eff6aa",
+      "sha1": "e50ed1cbab5f1f56c02bef4a996ac696d3bfeed7"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in B flat major, B. 16 no. 2.flac",
+      "cluster": "Edward Neeman",
+      "size": 4876644,
+      "md5": "6680e70088629a2d7950ab0f4eb68526",
+      "sha1": "db015f28e72b54a91475c2ba4122775716fd3053"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in B flat major, B. 73.flac",
+      "cluster": "Edward Neeman",
+      "size": 3105202,
+      "md5": "bf15a4ae434bc3672b83917dd06ddf5c",
+      "sha1": "b18671cb5fcb701e1bebcf4a3a499b09f454afaf"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in B flat major, Op. 17 no. 1.flac",
+      "cluster": "Edward Neeman",
+      "size": 6677120,
+      "md5": "76d77a91eba1093f54b93bc2ca56f016",
+      "sha1": "33f0a5d7f00868286bcb694627f5af580d1246c8"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in B flat minor, Op. 24 no. 4.flac",
+      "cluster": "Luke Faulkner",
+      "size": 15063759,
+      "md5": "48ee161e5ce1fd26f3550492f36d9a51",
+      "sha1": "f6df1d4338838d34a6d3f7fe56788d209ff097c5"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in B major, Op. 41 no. 3.flac",
+      "cluster": "Edward Neeman",
+      "size": 3603831,
+      "md5": "793a77257736574fa1277b09ac27b411",
+      "sha1": "eff46f95ce659099a791e2d59b989b06ce46af3c"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in B major, Op. 56 no. 1.flac",
+      "cluster": "Xuan He",
+      "size": 15662019,
+      "md5": "fa0a9547908fa2076ccd6341a28efd8c",
+      "sha1": "f5978d010a2f6e59597c0e1309c4586e4a2dd4bd"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in B major, Op. 63 no. 1.flac",
+      "cluster": "Edward Neeman",
+      "size": 5941483,
+      "md5": "21778234190aceb1d52a74c0ff5f8352",
+      "sha1": "f64448d5f0cbdb26cd1f2b003c706c7f6193e1aa"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in B minor, Op. 30 no. 2.flac",
+      "cluster": "Christoph Zbinden",
+      "size": 3645774,
+      "md5": "b52bb4c8fa28f1ee0d2bb949fbd947c3",
+      "sha1": "ba5e6ea381db27906f3cfb5da21e9018de0a1748"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in B minor, Op. 33 no. 4.flac",
+      "cluster": "Olga Gurevich",
+      "size": 39207661,
+      "md5": "f69ef18e43e9dd4de98af031dea20695",
+      "sha1": "76758039024ada4fbc44e2707b2fd39782ff6e6a"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in B-flat major, Op. 7 no. 1.flac",
+      "cluster": "Luis Sarro",
+      "size": 42855106,
+      "md5": "7beee9f4d1b19c5017a88c0ce4074d9c",
+      "sha1": "249baef1a74cf316df74ea83c0c9a5a5c1ebf570"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in C major, B. 82.flac",
+      "cluster": "Edward Neeman",
+      "size": 9005000,
+      "md5": "cf6bb3f3986c01731184f37a4a7beda5",
+      "sha1": "a13c12cfbbc4d2a45b9c21bd48bc1e7d122b2dab"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in C major, Op. 24 no. 2.flac",
+      "cluster": "Edward Neeman",
+      "size": 5551036,
+      "md5": "73341a7a5adbe21133120009aad3efc4",
+      "sha1": "82f36c86c810a4d911d4b8c3e6e676343bfb40d2"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in C major, Op. 33 no. 3.flac",
+      "cluster": "Olga Gurevich",
+      "size": 9528531,
+      "md5": "99e5188effae436b5e3bc67261e76065",
+      "sha1": "0e7355ba46fbabd7dcb49c08e1e3600c67d01e38"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in C major, Op. 56 no. 2.flac",
+      "cluster": "Xuan He",
+      "size": 6211050,
+      "md5": "af10d695a22428a1484ea7375dd8945d",
+      "sha1": "2ec84dd749797b1d20571abd0ff4f49875f85c8f"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in C major, Op. 67 no. 3.flac",
+      "cluster": "Edward Neeman",
+      "size": 3262218,
+      "md5": "9fab5a0bc775ea2782f52fab70909e00",
+      "sha1": "bb58d128081f6b3860e5eefdb0bb6d5ba6ff4d14"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in C major, Op. 68 no. 1.flac",
+      "cluster": "Edward Neeman",
+      "size": 4669844,
+      "md5": "a002db405218a22459393b1fd6d85d62",
+      "sha1": "d3fa7e679ca7838421347b58c4edcec1ceeb6399"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in C major, Op. 7 no. 5 .flac",
+      "cluster": "Luis Sarro",
+      "size": 9821266,
+      "md5": "041232cdc2de754d1213bbea5ac6f7a1",
+      "sha1": "982603264ec9c2ef95308d2ba9a66b6f24bf3d82"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in C minor, Op. 30 no. 1.flac",
+      "cluster": "Edward Neeman",
+      "size": 4036864,
+      "md5": "7117c9f4ad56fb228e8a91a189c4c570",
+      "sha1": "733144778de391bda266ad2218a666d3c08c988d"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in C minor, Op. 56 no. 3.flac",
+      "cluster": "Xuan He",
+      "size": 19296571,
+      "md5": "43fcd8e4e6b1921969059e46d722f3ef",
+      "sha1": "6f35be89cc173559aa16d13627d98eec24818693"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in C sharp minor, Op. 30 no. 4.flac",
+      "cluster": "Edward Neeman",
+      "size": 9590379,
+      "md5": "d19ead0fb9e493eb53d65f41b8cddbab",
+      "sha1": "1edb98124b4abab1d1342d586ffa034479669926"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in C sharp minor, Op. 41 no. 1.flac",
+      "cluster": "Edward Neeman",
+      "size": 9603532,
+      "md5": "8d5fa72cbbed864666728d1b593870ff",
+      "sha1": "2add62c60ba83d905e155380a299e5e5294c76b3"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in C sharp minor, Op. 50 no. 3.flac",
+      "cluster": "Xuan He",
+      "size": 18376148,
+      "md5": "641d848919a88418d575e7e2bd91c015",
+      "sha1": "2b25ec45e68369f4db74bf2696a5b7aa6f20de04"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in C sharp minor, Op. 6 no. 2.flac",
+      "cluster": "Luis Sarro",
+      "size": 36161997,
+      "md5": "d583f19a0ca0a88f5a9b79e555245b0e",
+      "sha1": "dc067061dcaeaeb95ee07a73b8efc4f5eb765083"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in C sharp minor, Op. 63 no. 3 .flac",
+      "cluster": "Edward Neeman",
+      "size": 6047988,
+      "md5": "31df94a342266340e9a142506e5c8d6a",
+      "sha1": "e89d635289b20cb2d23f26edcdcfd938e191c920"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in D flat major, Op. 30 no. 3.flac",
+      "cluster": "Edward Neeman",
+      "size": 7624612,
+      "md5": "36cbeda94f88aceeceac8d3c99c69722",
+      "sha1": "3acdeb729405552b6fe6799bc15dae192fc8ea10"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in D major, B. 31.flac",
+      "cluster": "Edward Neeman",
+      "size": 3777387,
+      "md5": "7450b6f24b00904cadec853c42ab4e8f",
+      "sha1": "d591d638596afd700f6c23d14e76132e97a369e6"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in D major, B. 4.flac",
+      "cluster": "Edward Neeman",
+      "size": 2392122,
+      "md5": "18f9f9a0d40eac28be29f202e7fa256a",
+      "sha1": "28153deb89ee6125d126a86be52afe7cd07fb488"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in D major, B. 71.flac",
+      "cluster": "Edward Neeman",
+      "size": 4417989,
+      "md5": "ed85553fad7ef29ebcf6705d028fd8ee",
+      "sha1": "6e475ba4da47bf69eaefac278d8c116043ce6480"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in D major, Op. 33 no. 2.flac",
+      "cluster": "Olga Gurevich",
+      "size": 21289972,
+      "md5": "598dcf3327c9d3c978efd066bee4be08",
+      "sha1": "99a3d6a9006be328fc412a1b16860dcb233c1858"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in E flat minor, Op. 6 no. 4.flac",
+      "cluster": "Edward Neeman",
+      "size": 2451569,
+      "md5": "0dbc60c65eef37c3308d7a066363ab70",
+      "sha1": "6fe24d88306d781973c1b2312d35ad5cbd000491"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in E major, Op. 6 no. 3.flac",
+      "cluster": "Luis Sarro",
+      "size": 26584685,
+      "md5": "bc7f71e74e469455f682e33060ec4262",
+      "sha1": "10811cb2dd2bd3a05b4141c90b095798fd68df39"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in E minor, Op. 17, no. 2.flac",
+      "cluster": "Christoph Zbinden",
+      "size": 4751890,
+      "md5": "dcb8c8834b7458be2e32d7a248288e24",
+      "sha1": "583cf78fb1068adae9ae67396291c4d6af813397"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in E minor, Op. 41 no. 2.flac",
+      "cluster": "Edward Neeman",
+      "size": 5758095,
+      "md5": "1492b5e7b59ce64c735cb4cdc15453ad",
+      "sha1": "47e11ea9aa9d05074434bbade8182f661ee98f24"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in F major, Op. 68 no. 3.flac",
+      "cluster": "Olga Gurevich",
+      "size": 12283056,
+      "md5": "c837c4758c3a2ddb022bf9680b4a3450",
+      "sha1": "a3dd209e941a108562227e7bab92da08b78fba3d"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in F minor, Op. 68 no. 4.flac",
+      "cluster": "Edward Neeman",
+      "size": 5044718,
+      "md5": "47fe73e415692378a8f53a909116b0c5",
+      "sha1": "1cdff31bed6f76329537ec9168dfdcf01a984d14"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in F minor, Op. 7 no. 3.flac",
+      "cluster": "Edward Neeman",
+      "size": 6250591,
+      "md5": "fd46be41f3eabb784fe739d60e36644e",
+      "sha1": "938d7aaf5ac6b76d747bd1521a319b35f502adbb"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in F sharp minor, Op. 59, no. 3.flac",
+      "cluster": "Xuan He",
+      "size": 12591095,
+      "md5": "2c85e9a10a567842543a1b9175bdee60",
+      "sha1": "b55512f8c9735f6280f03f4606b9ca2cdd1adbae"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in F sharp minor, Op. 6 no. 1.flac",
+      "cluster": "Luis Sarro",
+      "size": 46468402,
+      "md5": "28c05240520fe0f76bc4fc3df719e2a0",
+      "sha1": "13850f5b33897c08997cace6a1eebf7096a699b5"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in G major, B. 16 no. 1.flac",
+      "cluster": "Edward Neeman",
+      "size": 3286026,
+      "md5": "2496a064056dff12d965a059bdef686a",
+      "sha1": "38fa40e7c8a9091b4c91d49c859e4235260dd76a"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in G major, Op. 50 no. 1.flac",
+      "cluster": "Xuan He",
+      "size": 9176465,
+      "md5": "96f7dbbdb0034a10c01fa160950a7174",
+      "sha1": "73b8a73221a3408e8abe3298bdf851da4666f8b5"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in G major, Op. 67 no. 1.flac",
+      "cluster": "Edward Neeman",
+      "size": 3650813,
+      "md5": "c761afa4c710f9dc637ce4fd8caf688e",
+      "sha1": "4599573aab0a352607ca9f9f976dcaaaed58abeb"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in G minor, Op. 24 no. 1.flac",
+      "cluster": "Christoph Zbinden",
+      "size": 7140690,
+      "md5": "501ae693f1a0d44891b6bce40a3cd6e5",
+      "sha1": "854566e121e0d5216b5243aadeb16a0c0a7ed8fb"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in G minor, Op. 67 no. 2.flac",
+      "cluster": "Olga Gurevich",
+      "size": 15518647,
+      "md5": "7fe61d1129cc829b10e9a6769be095b2",
+      "sha1": "994bc18ce558858dbb7179eded10f92dc8e265cf"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in G sharp minor, Op. 33 no. 1.flac",
+      "cluster": "Olga Gurevich",
+      "size": 11806720,
+      "md5": "30cc3516f56faa8719e0d4d8357989e7",
+      "sha1": "33703a70897dc2ddb3abf19d23c796c85f829e01"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Mazurkaa in F minor, Op. 63 no. 2.flac",
+      "cluster": "Olga Gurevich",
+      "size": 13551078,
+      "md5": "af78f6dadf83ccd0ff151c525277b168",
+      "sha1": "e8f820a6694f5f683922c2fa6106689f198c8d74"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Nocturne Op. 37 no. 1 in G minor.flac",
+      "cluster": "Luis Sarro",
+      "size": 102507640,
+      "md5": "29a1e898939694990f5b54b890992b17",
+      "sha1": "0860c6a7cc0a765d0135d7df04289f49b728d942"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Nocturne Op. 37 no. 2 in G major.flac",
+      "cluster": "Olga Gurevich",
+      "size": 48543023,
+      "md5": "b0a8087035b8391ddcfb64175fb52b3c",
+      "sha1": "faab6d67e339a4d391bb917fe8511a8ac38db47e"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Nocturne in B flat minor, Op. 9 no. 1.flac",
+      "cluster": "Olga Gurevich",
+      "size": 40480541,
+      "md5": "d90397bc3c857e1ac7e50ab3e6231210",
+      "sha1": "19b4a12d65fec3235f83733a103bff7096cb544d"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Nocturne in B major, Op. 62 no. 1.flac",
+      "cluster": "Olga Gurevich",
+      "size": 23916735,
+      "md5": "1c780ceaa4b3742f8737d962ec89dec6",
+      "sha1": "8a48527926eb053f5abd7e7efe95a2b95b854799"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Nocturne in B major, Op. 9 no. 3.flac",
+      "cluster": "Xuan He",
+      "size": 20690340,
+      "md5": "630bd361f248c5c9faf5ae61a2a0d0cf",
+      "sha1": "05fa2b7c6c16c69bbb2d20884cdd74ab6f8ae3e0"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Nocturne in C minor, B. 108.flac",
+      "cluster": "Diana Hughes",
+      "size": 26828096,
+      "md5": "81b429cb940c4cbb38f83b59bbc63bef",
+      "sha1": "4fdb10458d91f450a4cce4fa7760e96f52e4e0a3"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Nocturne in C minor, Op. 48 no. 1.flac",
+      "cluster": "Luke Faulkner",
+      "size": 44881005,
+      "md5": "a0a6d18bdc853d41de0403bc0126ab28",
+      "sha1": "4b0183357ed6c7b7bcbc34a4616a9e0b33357393"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Nocturne in C sharp minor 'Lento con gran espressione', B. 49 (Op. posth.).flac",
+      "cluster": "Frank Levy",
+      "size": 52021393,
+      "md5": "e5196b1deee4d10313931a31fd38c76b",
+      "sha1": "a36dd3b46eb39aae8fd282ca781662133eea942f"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Nocturne in C sharp minor, Op. 27 no. 1.flac",
+      "cluster": "Luke Faulkner",
+      "size": 13039455,
+      "md5": "d86595e60f605b238460b9035cb6ca69",
+      "sha1": "9d57dc6814347e39610cb3e982b0688d65acd747"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Nocturne in D flat major, Op. 27 no. 2.flac",
+      "cluster": "Frank Levy",
+      "size": 88385764,
+      "md5": "d8f7a1634b1ed7c6894cdb9edffa7a39",
+      "sha1": "13c6127cf0a5d617c89a483dce9934f46c1c13d1"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Nocturne in E flat major, Op. 55 no. 2.flac",
+      "cluster": "Xuan He",
+      "size": 15125278,
+      "md5": "2fdfcad2339a3975aeb7fda614002d0d",
+      "sha1": "7cc267c2af9c01940c53223a17d1922e11d46a7a"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Nocturne in E flat major, Op. 9 no. 2.flac",
+      "cluster": "Frank Levy",
+      "size": 62681284,
+      "md5": "6f7cf7c9fae820801c70a332e6af3b9d",
+      "sha1": "1fb95d92276f65030efb1d1b693d146bddd1a64c"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Nocturne in E major, Op. 62 no. 2.flac",
+      "cluster": "Luke Faulkner",
+      "size": 17706607,
+      "md5": "6fb0c860a85dd84ef81f78bb87729a76",
+      "sha1": "f421e673f83589b84c67eb0404ca08f4de657834"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Nocturne in E minor, Op. posth. 72.flac",
+      "cluster": "Luke Faulkner",
+      "size": 12837778,
+      "md5": "2befee8007bad05251daf3d92398d9fa",
+      "sha1": "7841e03beaa4599be026bcfd9dafd1d368a2d851"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Nocturne in F major, Op. 15, no. 1.flac",
+      "cluster": "Luke Faulkner",
+      "size": 34751576,
+      "md5": "c46511a4dd425f50f09d87ea7337b92d",
+      "sha1": "be760fc838eddca8d2a80ea28abc44b8a6ab64ba"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Nocturne in F minor, Op. 55 no. 1.flac",
+      "cluster": "Luke Faulkner",
+      "size": 35639227,
+      "md5": "a86dde282bd78c7e5fb5bfa4df7d62b5",
+      "sha1": "72042b75303846f1b1469ebfdcf1470d5a3b082a"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Nocturne in F sharp major, Op. 15, no. 2.flac",
+      "cluster": "Luke Faulkner",
+      "size": 11368646,
+      "md5": "22791d746cf947bf452c28a9195eb8a3",
+      "sha1": "c28e3796d7362120f3f30f219806cfd0e54b31d2"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Nocturne in F sharp minor, Op. 48 no. 2.flac",
+      "cluster": "Luke Faulkner",
+      "size": 56462073,
+      "md5": "50b14224012d3bc7e4642f49e8cb91be",
+      "sha1": "351d4cae3e5e0ea7cc22fa0ef70407762dad6982"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Nocturne in G minor, Op. 15 no. 3.flac",
+      "cluster": "Olga Gurevich",
+      "size": 30189267,
+      "md5": "ac1d33af97f993110ab3915b2c0366b0",
+      "sha1": "c1ac527aae37694abf42f5dcf652b5ac27414616"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Nocturnes, Op. 32 - No. 1. Nocturne in B major.flac",
+      "cluster": "Frank Levy",
+      "size": 68865458,
+      "md5": "c9881f4ac0ddc16d49aead8125feb94f",
+      "sha1": "0eaf1a717db194e416ec83fe32b1a9f68b386afd"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Nocturnes, Op. 32 - No. 2. Nocturne in A\u266d major.flac",
+      "cluster": "Olga Gurevich",
+      "size": 40730599,
+      "md5": "295eafd734f8833b1a93e133bfd0f2f5",
+      "sha1": "355ec66c1bea4129e728cb1d647ea0814b31085b"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Polonaise in A flat major 'Heroique', Op. 53.flac",
+      "cluster": "Luke Faulkner",
+      "size": 22339355,
+      "md5": "a96dc134f0b31102c69fc2c8ba6dda9b",
+      "sha1": "adb432f577b1d9cf88f89ae344886af3aa8e2123"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Polonaise in A flat major, B. 5.flac",
+      "cluster": "Luke Faulkner",
+      "size": 34512196,
+      "md5": "08e6ad55786568d5f839d826dc48ae41",
+      "sha1": "303e86557f0d3da74e118225a68efe1341da6e85"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Polonaise in A major 'Military', Op. 40 no. 1.flac",
+      "cluster": "Aya Higuchi",
+      "size": 49205771,
+      "md5": "60e72135f0ccd755ce21a7351149be8e",
+      "sha1": "c542843aabdb5678f86fa3ad899a1ad829d6eadc"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Polonaise in B flat minor, B. 13.flac",
+      "cluster": "Luke Faulkner",
+      "size": 18955211,
+      "md5": "abf9add3bfe90c768cc3cf0fb026c1f6",
+      "sha1": "d7b8394ea696c522808c162818fba3091eea6025"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Polonaise in Bb, B. 3.flac",
+      "cluster": "Aya Higuchi",
+      "size": 28794405,
+      "md5": "b4b0340408758e74710d3e7443e9cfcb",
+      "sha1": "e5b4c623e25325e6d92014a880bae94c6f15a30e"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Polonaise in C minor, Op. 40 no. 2.flac",
+      "cluster": "Diana Hughes",
+      "size": 6945259,
+      "md5": "53e0f217bfce997edc7a8a4d3c303e70",
+      "sha1": "7f7a8a31a31aeed8e780a5efffcbac44d941df4d"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Polonaise in C sharp minor, Op. 26 no. 1.flac",
+      "cluster": "Xuan He",
+      "size": 27019779,
+      "md5": "031cc5dbf7f9deeb899306cb1f629bdd",
+      "sha1": "0174d1e60e39e5f356cf9e60975ab962cacc1e8c"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Polonaise in E flat minor, Op. 26 no. 2.flac",
+      "cluster": "Xuan He",
+      "size": 25491858,
+      "md5": "03044b0cd43446dc1966b936252cd63f",
+      "sha1": "c4520a1e652735a329a18448aef73150c770ade3"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Polonaise in F sharp minor, Op. 44.flac",
+      "cluster": "Olga Gurevich",
+      "size": 40958708,
+      "md5": "1a55b95421d7d7fc39329f57b8a0265a",
+      "sha1": "26807d51ad58dd374efbf1b4966d1569976f9074"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Polonaise in G flat major, B. 36.flac",
+      "cluster": "Luke Faulkner",
+      "size": 23368332,
+      "md5": "0073b065d6e4ab43f1ae2f1cafcdcdbf",
+      "sha1": "92fee88dbd88a42eea7efdd38954f078add66cfd"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Polonaise in G minor, B. 1 .flac",
+      "cluster": "Aya Higuchi",
+      "size": 28336229,
+      "md5": "bff15c4b986ddf8b59cebc7fc4461dcf",
+      "sha1": "c3bf727bd4f25c968fe400497dacaf7cbae289a9"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Polonaise in G sharp minor, B. 6.flac",
+      "cluster": "Luke Faulkner",
+      "size": 22736589,
+      "md5": "08bf58ff953a23841c85be50e31adf6b",
+      "sha1": "e048700cab3ef1d1621eeab9628324b6981f34e8"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Polonaise, Op. 71 no. 1.flac",
+      "cluster": "Luke Faulkner",
+      "size": 19205493,
+      "md5": "487c7c947c728548da0e04fb8bb4ffd5",
+      "sha1": "b9e96ad1646c4627635434664615bdbe81c8cbd8"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Polonaise, Op. 71 no. 2.flac",
+      "cluster": "Luke Faulkner",
+      "size": 27046301,
+      "md5": "3807be2956eed5c6a51c917a81d682a7",
+      "sha1": "3d915c399491ac9ba5962d0277c132cabeee3a67"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Prelude in A flat major, B. 86.flac",
+      "cluster": "Jeannette Fang",
+      "size": 3293429,
+      "md5": "ddfac86914d5c924f201b8cfad3a4625",
+      "sha1": "22a0c92e2262a6ad5c0baaf2009f9af388c0969a"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Prelude in C sharp minor, Op. 45.flac",
+      "cluster": "Jeannette Fang",
+      "size": 16082947,
+      "md5": "afbf4d20bbdca0ed5bbc8f4d461fbbcf",
+      "sha1": "8c37cf6e8f7d72702827aac1af182000733b8515"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Prelude no. 27 'The Devil's Trill'.flac",
+      "cluster": "Jeannette Fang",
+      "size": 4549902,
+      "md5": "2c8079e64a973bfd7f84c28cef2d141c",
+      "sha1": "48501474e5d2b56596a41d37be317e3a8e6b8658"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Preludes, Op. 28 - No. 1 'Reunion'.flac",
+      "cluster": "Jeannette Fang",
+      "size": 2384837,
+      "md5": "1bf7abf1e55a73117e9127d63d4b1b95",
+      "sha1": "ac126845ea69ac98fe125448394fca13051d9cf0"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Preludes, Op. 28 - No. 10 'The night moth'.flac",
+      "cluster": "Jeannette Fang",
+      "size": 2049384,
+      "md5": "b0156d27f1b6a4b80774fb7e7303eb77",
+      "sha1": "244a531f9635be7f5c9255736e7b62160f1f8fbd"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Preludes, Op. 28 - No. 11 ' The dragonfly'.flac",
+      "cluster": "Jeannette Fang",
+      "size": 2409521,
+      "md5": "8e601802f0e1ad03554d37132808844d",
+      "sha1": "0f9df0c7d2fc772d9b7d903ff9d25298624d1b89"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Preludes, Op. 28 - No. 12 'The duel'.flac",
+      "cluster": "Jeannette Fang",
+      "size": 6001497,
+      "md5": "1d5d4f676071512ffb04a21ba1662df5",
+      "sha1": "a6da473e81254726184bfaaba7d0d72402c58d66"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Preludes, Op. 28 - No. 13 'Loss'.flac",
+      "cluster": "Jeannette Fang",
+      "size": 8860652,
+      "md5": "60dad7aa0d86e3a1bb22bf53c96584d6",
+      "sha1": "82d3d793b91c624faaa3cf67cf2a1ff2272c61b4"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Preludes, Op. 28 - No. 14 'Stormy sea'.flac",
+      "cluster": "Jeannette Fang",
+      "size": 3013933,
+      "md5": "353ec119978ef2cb3058149e521fa19b",
+      "sha1": "fe9ae94338418dd6b17d039844c3ac4ccf40957f"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Preludes, Op. 28 - No. 15 'Raindrop'.flac",
+      "cluster": "Jeannette Fang",
+      "size": 17919568,
+      "md5": "9f98338eddd4995cc084d0f3944e892d",
+      "sha1": "9fc49e78611c96a3e2ee0e7e8e65b6434fd3eae3"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Preludes, Op. 28 - No. 16 'Hades'.flac",
+      "cluster": "Jeannette Fang",
+      "size": 5968296,
+      "md5": "bd3b230a35c95e052d487536ee4f3a88",
+      "sha1": "d37dcd1e2010682e2ec07de5e30fb5dc7b5fb346"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Preludes, Op. 28 - No. 17 'Scene on the Place de Notre-Dame'.flac",
+      "cluster": "Jeannette Fang",
+      "size": 10430419,
+      "md5": "1f38412b8e2ae13daccf63e62e0f3e4a",
+      "sha1": "500154ee7cf3ecec46609726d17b9df2c1a937ae"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Preludes, Op. 28 - No. 18 'Suicide'.flac",
+      "cluster": "Jeannette Fang",
+      "size": 5631759,
+      "md5": "5285cdd257784ef37978ebe530e7fca0",
+      "sha1": "ebf9dc73c107e2fd7d633e22f5e57b82531de771"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Preludes, Op. 28 - No. 19 'Heartfelt happiness'.flac",
+      "cluster": "Jeannette Fang",
+      "size": 5478508,
+      "md5": "d20068adaa577e06050a60a652536824",
+      "sha1": "551454e8b13abf0ca3d7d1e5300c925191a2c789"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Preludes, Op. 28 - No. 2 'Presentiment of death'.flac",
+      "cluster": "Jeannette Fang",
+      "size": 7433231,
+      "md5": "3c796b85032e09cbdf7b51298d0e82e7",
+      "sha1": "fa4899291b2b126d4a90251a2e31299dd32f62ec"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Preludes, Op. 28 - No. 20 'Funeral march'.flac",
+      "cluster": "Jeannette Fang",
+      "size": 6117522,
+      "md5": "d5fe7363a576278728af5ccfc11ac9be",
+      "sha1": "cd03cf7b47229b042077fff39539345c8786e22f"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Preludes, Op. 28 - No. 21 'Sunday'.flac",
+      "cluster": "Jeannette Fang",
+      "size": 7273315,
+      "md5": "f72622f1a1a06edecb8e4f7ca149b995",
+      "sha1": "89312732e98f83ec7cbb98bc081cb747b7b65c63"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Preludes, Op. 28 - No. 22 'Impatience'.flac",
+      "cluster": "Jeannette Fang",
+      "size": 4688524,
+      "md5": "eaa786182f85a31f943d6cad49899201",
+      "sha1": "5ee9b40349ae398d9b0b5137aaa2ccc0c715e8f4"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Preludes, Op. 28 - No. 23 'A pleasure boat'.flac",
+      "cluster": "Jeannette Fang",
+      "size": 3175561,
+      "md5": "162ae59fd1e9748084b2c7940c3ea9c0",
+      "sha1": "26e3a6fd1271f6f2751b8ccb59e809c5ef54b362"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Preludes, Op. 28 - No. 24 'The storm'.flac",
+      "cluster": "Jeannette Fang",
+      "size": 11473218,
+      "md5": "449fdf5e0f3c52bf646167b3c677f28b",
+      "sha1": "3e28e444bd254380426af6e95181b27f82dc9cbb"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Preludes, Op. 28 - No. 3 'Thou Art So Like a Flower''.flac",
+      "cluster": "Jeannette Fang",
+      "size": 3399568,
+      "md5": "4f4bae3c65fe535a50deb073cbf17045",
+      "sha1": "c7d5b2a61b4db0c906ab0cadfb1be68a2d9615e9"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Preludes, Op. 28 - No. 4 'Suffocation'.flac",
+      "cluster": "Jeannette Fang",
+      "size": 6450191,
+      "md5": "c4b1fb35b619692447a170ade16fce89",
+      "sha1": "a17b8bb8d501a36ef4ae84a1ac6cd84555b44758"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Preludes, Op. 28 - No. 5 'Uncertainty'.flac",
+      "cluster": "Jeannette Fang",
+      "size": 2515958,
+      "md5": "5129322a1df73d0c5b52969eb790eb89",
+      "sha1": "420065867fc7ac367a804572fb7e98ebd09863ef"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Preludes, Op. 28 - No. 6 'Tolling bells'.flac",
+      "cluster": "Jeannette Fang",
+      "size": 6165777,
+      "md5": "53387a2be68d4b63867d095401906004",
+      "sha1": "f4e7a50601c825a8d4ad4e3301ba90e882dd99b8"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Preludes, Op. 28 - No. 7 'The Polish dancer'.flac",
+      "cluster": "Jeannette Fang",
+      "size": 1985158,
+      "md5": "1497aeca3c3b54320a83521919cbb233",
+      "sha1": "5d78d5cb2b48d4e9c21fc28ca33edff2ca6a8dca"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Preludes, Op. 28 - No. 8 'Desperation'.flac",
+      "cluster": "Jeannette Fang",
+      "size": 8828106,
+      "md5": "b35b2da3ce727eebd12e62bbfddc3415",
+      "sha1": "1df78de8f0fb4e276ee19bbb22d74cacad71f07a"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Preludes, Op. 28 - No. 9 'Vision'.flac",
+      "cluster": "Jeannette Fang",
+      "size": 5162783,
+      "md5": "8981b2c7eeed5e18ddd77100f9262f8c",
+      "sha1": "915540d62f1492ea1b6fde3dd3faa56794323b1e"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Rondo in C minor, Op. 1.flac",
+      "cluster": "Christoph Zbinden",
+      "size": 81280624,
+      "md5": "927c8a0340d0863e1172f1eec47be570",
+      "sha1": "68e96ee9fe2319c27fc11e6c84ff8133766e5242"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Rondo in E-flat major, Op. 16.flac",
+      "cluster": "Christoph Zbinden",
+      "size": 88689798,
+      "md5": "6e9710b76fb832f7165f6810e3b8142b",
+      "sha1": "14a95bb71fe896b70748b2e7c7221265361ab2b1"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Scherzo no. 1 in B minor, Op. 20.flac",
+      "cluster": "Alice G. Young",
+      "size": 35967142,
+      "md5": "b793d807952884533afb365c078f6380",
+      "sha1": "d7b23eee003cc51864b1f1c100d17bbd0fa328c7"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Scherzo no. 2 in B flat minor, Op. 31.flac",
+      "cluster": "Alice G. Young",
+      "size": 36605587,
+      "md5": "707df526337dfddaa654ee10c65dec29",
+      "sha1": "8d5e9cc8633ab80024818506f87058105ef68d3d"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Scherzo no. 3 in C sharp minor, Op. 39.flac",
+      "cluster": "Alice G. Young",
+      "size": 28583594,
+      "md5": "ecc72e5df65cd2fe51b301c9f73d8ae6",
+      "sha1": "87f978cd4d63f9492cede9a2afcc1f51f31c315f"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Scherzo no. 4 in E major, Op. 54.flac",
+      "cluster": "Alice G. Young",
+      "size": 41642941,
+      "md5": "426501fa150cf8d2d5eee6ffe0c27547",
+      "sha1": "f08591ce52571cb77ac64dfb28d2e9a6eb620cac"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Tarantelle, Op. 43.flac",
+      "cluster": "Olga Gurevich",
+      "size": 27364992,
+      "md5": "b4833a98d61e0ccc814ed6ac3f34578c",
+      "sha1": "b29750ffe9408fde56f65a473cdc5a9d698d04c9"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/The Rondo a\u0300 la mazur in F major, Op. 5.flac",
+      "cluster": "Christoph Zbinden",
+      "size": 78746792,
+      "md5": "21b410aae425eb4ec2d732500c550019",
+      "sha1": "d5e21adfbe9dd4bbe09d10ce57c31582a0c3ee9e"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Unfinished Canon in F minor, B. 129a.flac",
+      "cluster": "Aya Higuchi",
+      "size": 6540158,
+      "md5": "1a125c840ec323fca93a18970c2e42c0",
+      "sha1": "d1566167a3df4543e64f22ff9c9e35b9b4bb97d6"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Valse me\u0301lancolique 'Le Regret', Op. 332.flac",
+      "cluster": "Olga Gurevich",
+      "size": 18040852,
+      "md5": "73b8d1ba56c38d06372373447a9d62d5",
+      "sha1": "aac5d84043bb366936afe151b59bf203336fbd19"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Variations Brillantes, Op. 12.flac",
+      "cluster": "Olga Gurevich",
+      "size": 26561610,
+      "md5": "760252a3e4f8bf1f5d00ea65acd7d56f",
+      "sha1": "276c12667ca2fc06a52d8857650916d293b422e9"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Variations for Flute and Piano in E major ('Non piu Mesta'), B. 9 .flac",
+      "cluster": "Diana Hughes",
+      "size": 18571912,
+      "md5": "cd2d00482450faee2f7a4bb06361a562",
+      "sha1": "ed9dee1af15556ad3c7548a6517315745dbddea0"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Variations in A major 'Souvenir de Paganini', B. 37.flac",
+      "cluster": "Olga Gurevich",
+      "size": 25385906,
+      "md5": "788a45d21919dab497e8b86896ef20bd",
+      "sha1": "4167262bbffa7d3e876046bc434f05d8d532bdf3"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Variations sur un air national allemand, B. 14.flac",
+      "cluster": "Olga Gurevich",
+      "size": 30883413,
+      "md5": "c39c1f58d88fce812945affd14da703c",
+      "sha1": "d10d07f5dfc4d3858656f2fc04d5d0a6801804f8"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Waltz in A flat major 'Farewell', Op. 69 no. 1.flac",
+      "cluster": "Olga Gurevich",
+      "size": 29761572,
+      "md5": "565c9370aa263a258bf7323c8f1f789d",
+      "sha1": "aaa00ef506dbced3757eb132dc7677884f2114bc"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Waltz in A flat major, B. 21.flac",
+      "cluster": "Olga Gurevich",
+      "size": 15417779,
+      "md5": "a434c067de5e06e43f0d7335adddd3cd",
+      "sha1": "9bc6298f27d4566821ea441a12c4aa0488bae0d7"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Waltz in A flat major, Op. 34 no. 1.flac",
+      "cluster": "Olga Gurevich",
+      "size": 22078868,
+      "md5": "f76c3be25fa584bed779f9f3a01287a9",
+      "sha1": "83f134d1ae737cdad9be187128ae12940009859d"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Waltz in A flat major, Op. 42.flac",
+      "cluster": "Olga Gurevich",
+      "size": 17745162,
+      "md5": "5f513a8292ae31c732d69f6f1ce9a3a2",
+      "sha1": "66a8c485960b744fac4629457df98abc0e89e517"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Waltz in A flat major, Op. 64 no. 3.flac",
+      "cluster": "Diana Hughes",
+      "size": 25227031,
+      "md5": "b50313b0a4f444c0a75c3119e683ef97",
+      "sha1": "b84ae856eaf0428b00e44119d331781c9cbb0318"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Waltz in A minor, B. 150.flac",
+      "cluster": "Aya Higuchi",
+      "size": 19577689,
+      "md5": "ce235d5f4dafb3ca288f8599dbfb7e91",
+      "sha1": "dfe807df26b295df7269cf2eabc48c501a27163b"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Waltz in A minor, Op. 34 no. 2.flac",
+      "cluster": "Olga Gurevich",
+      "size": 36636449,
+      "md5": "63611e0f0ea3dbfa4ccee1e8dd950802",
+      "sha1": "ba85241d30ee74ed35b0b7264f40917daabdfd9f"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Waltz in B minor, Op. 69 no. 2.flac",
+      "cluster": "Olga Gurevich",
+      "size": 26539205,
+      "md5": "5d5868a385a9db9ae38a64d4211fc16f",
+      "sha1": "0a29d5d1ac8cf0c2d8c2f0c88b91c15c45f0dd0e"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Waltz in C sharp minor, Op. 64 no. 2.flac",
+      "cluster": "Olga Gurevich",
+      "size": 28399530,
+      "md5": "c904ac90eebf6057d4147b228fe6367d",
+      "sha1": "9234b60e27633e9eac7da11f515b9f9e907714e8"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Waltz in D flat major 'Minute', Op. 64 no. 1.flac",
+      "cluster": "Olga Gurevich",
+      "size": 14009814,
+      "md5": "bb7bde261e9a4921b0233c71d55778c8",
+      "sha1": "498233718061a7eebcec36a30274fc2642073708"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Waltz in D flat major, Op. 70 no. 3.flac",
+      "cluster": "Olga Gurevich",
+      "size": 21643906,
+      "md5": "dd5911c587d23f3c64b67033ff9f6989",
+      "sha1": "fa049a5a57cfacfdf7f1627e38c918d8abb55cd9"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Waltz in E flat major 'sostenuto', B. 133.flac",
+      "cluster": "Aya Higuchi",
+      "size": 15214057,
+      "md5": "5f15686d75d3712d793e5b0941ef5227",
+      "sha1": "c65df6b8d25db1e48339220abe5f29b8f7cdb5cc"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Waltz in E flat major, B. 46.flac",
+      "cluster": "Olga Gurevich",
+      "size": 18213520,
+      "md5": "d27b23894c4c56d765343cd7f6a417a4",
+      "sha1": "ced0a672619986c25d9ddd05ccd7d5a19e3555ba"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Waltz in E major, B. 44.flac",
+      "cluster": "Olga Gurevich",
+      "size": 7879069,
+      "md5": "dc3f36ff47fb587dea286567a2066a43",
+      "sha1": "1b9a2d87730ef66fd684476f83b60fe69a7d2d4a"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Waltz in E minor, B. 56.flac",
+      "cluster": "Olga Gurevich",
+      "size": 21945738,
+      "md5": "99e46f370ae8ed6365570e8f9f8ce4ac",
+      "sha1": "8640ad46bc139258459995b6e457042db31f3ed5"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Waltz in F major, Op. 34 no. 3.flac",
+      "cluster": "Olga Gurevich",
+      "size": 16846869,
+      "md5": "73a92912f91a885188031fd8c06359a4",
+      "sha1": "eea34c0c6ca31bcd65272ff060a3b8d1931acef4"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Waltz in F minor, Op. 70 no. 2.flac",
+      "cluster": "Olga Gurevich",
+      "size": 22942250,
+      "md5": "4445ce57337ad2a762f2ada0e0a39589",
+      "sha1": "fffabb1839c28dda0aca7b11244839bcc14cdbfc"
+    },
+    {
+      "identifier": "musopen-chopin-complete-works-flac/Waltz in G flat major, Op. 70 no. 1.flac",
+      "cluster": "Olga Gurevich",
+      "size": 13031839,
+      "md5": "527d58cc5938c9eab0a62ba40b013e77",
+      "sha1": "ec2607365bc0a272e5799ed4a612ed531428811a"
+    }
+  ]
+}
