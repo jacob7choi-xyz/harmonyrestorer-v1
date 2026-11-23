@@ -112,6 +112,22 @@ class TestRequest:
 class TestFailures:
     """An HTTP status is reported; a broken transfer raises OSError."""
 
+    @pytest.mark.parametrize(
+        ("value", "expected"),
+        [("120", 120.0), (" 5 ", 5.0), ("Wed, 21 Oct 2026 07:28:00 GMT", None)],
+    )
+    def test_a_numeric_retry_after_is_reported_in_seconds(
+        self, value: str, expected: float | None
+    ) -> None:
+        headers = Message()
+        headers["Retry-After"] = value
+
+        def limited(request: urllib.request.Request, timeout_s: float) -> IO[bytes]:
+            raise urllib.error.HTTPError(request.full_url, 429, "Too Many", headers, io.BytesIO())
+
+        result = get(URL, io.BytesIO(), max_bytes=10, timeout_s=5.0, opener=limited)
+        assert (result.status, result.retry_after) == (429, expected)
+
     def test_an_http_error_status_is_returned_with_nothing_written(self) -> None:
         def refusing(request: urllib.request.Request, timeout_s: float) -> IO[bytes]:
             raise urllib.error.HTTPError(
