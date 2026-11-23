@@ -374,8 +374,9 @@ _FRAME_IDENTIFIER = "canonical_sha256_and_frame_index"
 _RMS_REDUCTION = "numpy_mean_of_elementwise_square_float64"
 _GOLDEN_GENERATOR = "pcg64_full_range_integers_negative_rail_then_zero"
 _GOLDEN_REFERENCE_PLATFORM = "darwin_arm64"
-# The subtypes the generator can write: libsndfile 1.2.2 writes no PCM_32 FLAC.
-_GOLDEN_SUBTYPES = ("PCM_16", "PCM_24")
+# The subtypes the generator can write: libsndfile 1.2.2 writes no PCM_32 FLAC. FLOAT is
+# written as WAV under the float generator named in benchmark/golden_fixture.py.
+_GOLDEN_SUBTYPES = ("PCM_16", "PCM_24", "FLOAT")
 _GOLDEN_SCOPES = ("every_platform", "reference_platform")
 _ELIGIBILITY_COMPUTED_FROM = "canonical_waveform"
 _RMS_COMPARATOR = "greater_than"
