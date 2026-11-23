@@ -30,16 +30,10 @@ from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 
-from benchmark.adjudication import AdjudicationError, read_adjudications
+from benchmark.adjudication import read_adjudications
 from benchmark.atomic_write import write_atomically
-from benchmark.candidate_universe import (
-    CandidateUniverseError,
-    ListedFile,
-    load_universe,
-    zenodo_file_url,
-)
-from benchmark.duplicate_screen import ScreenError, unit_features
-from benchmark.eligibility import EligibilityArithmeticError
+from benchmark.candidate_universe import ListedFile, load_universe, zenodo_file_url
+from benchmark.duplicate_screen import unit_features
 from benchmark.fetch import (
     WAITS_S,
     Expected,
@@ -55,7 +49,7 @@ from benchmark.fetch import (
 )
 from benchmark.golden_fixture import platform_token
 from benchmark.https_get import get
-from benchmark.musicnet_archive import ArchiveError, Member, extract_members, fetch_archive
+from benchmark.musicnet_archive import Member, extract_members, fetch_archive
 from benchmark.protocol import (
     ArchiveItemStratum,
     Protocol,
@@ -64,17 +58,16 @@ from benchmark.protocol import (
     load_protocol,
 )
 from benchmark.run_preconditions import verify_run_preconditions
-from benchmark.runner import CanonicalFileError, run_source
-from benchmark.selection import SelectionError
+from benchmark.runner import run_source
 from benchmark.training_corpus import (
     RAW_DIR,
-    TrainingCorpusError,
     load_training_digests,
     load_training_identities,
     load_training_manifest,
 )
-from benchmark.training_references import TrainingReferenceError, training_references
+from benchmark.training_references import training_references
 from benchmark.walk import (
+    REPORTED_FAILURES,
     AwaitingAdjudication,
     ChamberPreparation,
     MetadataUnavailable,
@@ -104,19 +97,6 @@ EXIT_OK = 0
 EXIT_INVALID = 1
 EXIT_REFUSED = 2
 EXIT_HALTED = 3
-
-# Failures a run reports as invalid with their type, rather than crashing with a traceback.
-REPORTED_FAILURES = (
-    AdjudicationError,
-    ArchiveError,
-    CandidateUniverseError,
-    CanonicalFileError,
-    EligibilityArithmeticError,
-    ScreenError,
-    SelectionError,
-    TrainingCorpusError,
-    TrainingReferenceError,
-)
 
 
 def piano_fetch(
@@ -266,6 +246,7 @@ def _record_failure(layout: RunLayout, error: Exception) -> None:
     """Write `run_invalid.json` for a failure the protocol gives no code, naming its type."""
     payload = {
         "stratum": None,
+        "position": None,
         "identifier": None,
         "code": type(error).__name__,
         "detail": str(error),

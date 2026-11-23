@@ -61,6 +61,8 @@ UNIVERSE_SHA256: dict[str, str | None] = {
 }
 
 _HEX = {"md5": re.compile(r"[0-9a-f]{32}"), "sha1": re.compile(r"[0-9a-f]{40}")}
+# ASCII digits only: str.isdigit also accepts superscripts and other scripts, which int refuses.
+_ASCII_DIGITS = re.compile(r"[0-9]+")
 _FILE_KEYS = frozenset(
     {"description", "stratum", "source", "query", "enumerated_at", "count", "candidates"}
 )
@@ -123,7 +125,7 @@ def _size(value: object, name: str) -> int | None:
     """A listed size as a non-negative int; the archive gives it as a decimal string."""
     if value is None:
         return None
-    if not isinstance(value, str) or not value.isdigit():
+    if not isinstance(value, str) or not _ASCII_DIGITS.fullmatch(value):
         _refuse(f"{name}: listed size {value!r} is not a decimal byte count")
     return int(value)
 
@@ -203,7 +205,7 @@ def chamber_candidates(
         _refuse(f"{stratum.metadata} has md5 {actual}, the protocol freezes {stratum.metadata_md5}")
     rows: dict[int, list[dict[str, str]]] = {}
     for row in csv.DictReader(io.StringIO(metadata_csv.decode("utf-8"))):
-        if row.get("id", "").isdigit():
+        if _ASCII_DIGITS.fullmatch(row.get("id", "")):
             rows.setdefault(int(row["id"]), []).append(row)
     listed = []
     for identifier in stratum.candidate_ids:

@@ -14,6 +14,9 @@ network conditions choose the test set (`selection.transient_failure`,
 - **Oversize.** A body longer than `oversize_bound` is stopped at `oversize_bound + 1` bytes,
   the prefix is staged so the source-outcome stages exclude it without reading it, and no raw
   digest is reported for it. Its listed size, if recorded, is checked only to be above the bound.
+  An attempt writes at most one byte past the smaller of its listed size and the bound
+  (`_attempt_cap`), so a body longer than a listed size that is under the bound stops one byte
+  past that size, and the listing check then names the size.
 
 **Waits between attempts** are a harness setting, since they cannot change which candidates
 are admitted, but they decide whether a brief rate limit invalidates the run. `WAITS_S` holds
@@ -166,11 +169,12 @@ def _listing_check(
 def _transfer_failure(response: Response, expected: Expected) -> str | None:
     """Why a 200 response is not a whole transfer, or None if it is.
 
-    A body over the size bound is not short: an oversize candidate is staged as a prefix,
-    and an archive longer than its listed size fails the listing check on its size.
+    A body over the size bound, or longer than the attempt's cap, is not short: an oversize
+    candidate is staged as a prefix, and an archive longer than its listed size fails the listing
+    check on its size. The cap can be below the bound, so `exceeded` counts on its own.
     """
     bound = expected.oversize_bound
-    over = response.exceeded if bound is None else response.size > bound
+    over = response.exceeded or (bound is not None and response.size > bound)
     declared = response.content_length
     if not over and declared is not None and response.size != declared:
         return "transfer ended short"
@@ -231,13 +235,23 @@ def _reuse(identifier: str, expected: Expected, staged: Path, sidecar: Path) -> 
     )
 
 
+def _attempt_cap(expected: Expected) -> int:
+    """The most bytes one attempt writes: the listed size, capped at the oversize bound, plus one.
+
+    The extra byte lets the transfer show that it is longer than its listing. With no listed size,
+    the cap is the bound, or zero when there is no bound, plus one.
+    """
+    bound = expected.oversize_bound
+    if expected.size is None:
+        return (bound if bound is not None else 0) + 1
+    return (expected.size if bound is None else min(expected.size, bound)) + 1
+
+
 def _attempt_once(
     url: str, staging: Path, expected: Expected, get_: Getter
 ) -> tuple[Attempt, Response | None, Path | None]:
     """One attempt into a temporary file; the record, the response, and the temp if kept."""
-    cap = (
-        expected.oversize_bound if expected.oversize_bound is not None else expected.size or 0
-    ) + 1
+    cap = _attempt_cap(expected)
     fd, tmp_name = tempfile.mkstemp(prefix=".fetch.", dir=staging)
     tmp = Path(tmp_name)
     try:
