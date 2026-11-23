@@ -44,9 +44,10 @@ had already begun or the wait reported that the pid is not this process's child.
 > worker's exit and the `before_reap` hook. Both codes abort the run and neither charges the
 > source, so only the abort's label depends on it.
 
-Nothing calls `run_canonicalisation` yet: candidate selection does not exist, so the caller
-supplies the candidates. No engine is loaded here, so the requirement that the model files
-are checked before the UVR separator is built is not reached in this stage.
+The selection walk (`benchmark.run_walk`) calls `run_source` on each candidate it examines.
+Nothing outside the tests calls `run_canonicalisation`, so its only callers are in the test
+suite. No engine is loaded here, so the requirement that the model files are checked before the
+UVR separator is built is not reached in this stage.
 """
 
 from __future__ import annotations
