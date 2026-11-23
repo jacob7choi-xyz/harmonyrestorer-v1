@@ -111,8 +111,14 @@ class TestArchiveItemCandidates:
 
     @pytest.mark.parametrize(
         "values",
-        [{"size": "12kB"}, {"md5": MD5.upper()}, {"sha1": SHA1[:-1]}],
-        ids=["size_text", "md5_uppercase", "sha1_short"],
+        [
+            {"size": "12kB"},
+            {"md5": MD5.upper()},
+            {"sha1": SHA1[:-1]},
+            {"size": "\u00b2"},
+            {"size": "\u0663"},
+        ],
+        ids=["size_text", "md5_uppercase", "sha1_short", "size_superscript", "size_arabic_indic"],
     )
     def test_a_malformed_listing_value_refuses_the_listing(
         self, piano: ArchiveItemStratum, values: dict[str, Any]
@@ -148,6 +154,30 @@ class TestChamberCandidates:
     ) -> None:
         with pytest.raises(CandidateUniverseError, match="the protocol freezes"):
             chamber_candidates(CSV + b" ", chamber)
+
+    @pytest.mark.parametrize(
+        "identifier",
+        ["\u00b2", "\u0661\u0661"],
+        ids=["superscript", "arabic_indic_eleven"],
+    )
+    def test_a_row_whose_id_is_not_ascii_digits_is_not_a_candidate_row(
+        self, chamber: ZenodoArchiveStratum, identifier: str
+    ) -> None:
+        """A row whose id uses other digits is skipped.
+
+        str.isdigit accepted both ids. A superscript made int() raise, and the Arabic-Indic
+        pair read as 11 made a second row for id 11, which the listing then refused.
+        """
+        extra_row = f'{identifier},"C","W","1","Q","Z","t","K",3\n'
+        body = (CSV_HEADER + row(11, "A") + row(12, "B") + extra_row).encode()
+        narrowed = dataclasses.replace(
+            chamber, metadata_md5=hashlib.md5(body, usedforsecurity=False).hexdigest()
+        )
+
+        assert [listed.identifier for listed in chamber_candidates(body, narrowed)] == [
+            "musicnet/11",
+            "musicnet/12",
+        ]
 
     @pytest.mark.parametrize(
         ("body", "message"),

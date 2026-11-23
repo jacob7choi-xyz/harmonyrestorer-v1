@@ -15,6 +15,7 @@ from benchmark.run_preconditions import (
     degradation_golden_failure,
     file_sha256,
     model_file_failures,
+    uvr_file_failures,
     verify_run_preconditions,
 )
 from benchmark.source_outcome import AbortReason, RunAbortOutcome
@@ -22,6 +23,7 @@ from benchmark.source_outcome import AbortReason, RunAbortOutcome
 PROTOCOL = load_protocol()
 REFERENCE = PROTOCOL.golden_fixtures.reference_platform
 UVR_FILES = ("UVR-DeNoise.pth", "vr_model_data.json", "mdx_model_data.json")
+TORCH_OVERRIDE = "TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD"
 
 
 def model_files(root: Path) -> tuple[Path, Path, Protocol]:
@@ -42,6 +44,12 @@ def model_files(root: Path) -> tuple[Path, Path, Protocol]:
         uvr_mdx_model_data_sha256=digests[2],
     )
     return checkpoint, uvr_dir, dataclasses.replace(PROTOCOL, system_execution=execution)
+
+
+@pytest.fixture(autouse=True)
+def no_torch_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The tests run without the torch override, so the checks under test are the ones reached."""
+    monkeypatch.delenv(TORCH_OVERRIDE, raising=False)
 
 
 @pytest.fixture
@@ -174,6 +182,66 @@ def test_the_real_chain_passes_on_the_reference_platform(tmp_path: Path) -> None
     )
 
     assert outcome is None
+
+
+class TestTorchOverride:
+    """A set `TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD` refuses the run before any other check."""
+
+    def test_the_variable_refuses_the_run_before_any_other_check(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv(TORCH_OVERRIDE, "1")
+
+        def not_reached(*_: object, **__: object) -> None:
+            raise AssertionError("a check ran after the torch override was seen")
+
+        monkeypatch.setattr(run_preconditions, "verify_golden_fixtures", not_reached)
+        monkeypatch.setattr(run_preconditions, "golden_degraded_sha256", not_reached)
+        monkeypatch.setattr(run_preconditions, "model_file_failures", not_reached)
+        checkpoint, uvr_dir, protocol = model_files(tmp_path)
+
+        outcome = verify_run_preconditions(
+            protocol, runtime_platform=REFERENCE, opgan_checkpoint=checkpoint, uvr_model_dir=uvr_dir
+        )
+
+        assert isinstance(outcome, RunAbortOutcome)
+        assert outcome.reason is AbortReason.ENVIRONMENT_MISMATCH
+        assert TORCH_OVERRIDE in outcome.detail
+        assert outcome.logical_source_id is None
+
+    def test_the_variable_is_refused_by_presence_not_by_value(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv(TORCH_OVERRIDE, "")
+        checkpoint, uvr_dir, protocol = model_files(tmp_path)
+
+        outcome = verify_run_preconditions(
+            protocol, runtime_platform=REFERENCE, opgan_checkpoint=checkpoint, uvr_model_dir=uvr_dir
+        )
+
+        assert isinstance(outcome, RunAbortOutcome)
+        assert outcome.reason is AbortReason.ENVIRONMENT_MISMATCH
+
+
+class TestUvrFileFailures:
+    """The UVR check names only the three UVR files, so the systems stage's re-check is exact."""
+
+    def test_a_changed_uvr_file_is_named_and_the_checkpoint_is_not_checked(
+        self, tmp_path: Path
+    ) -> None:
+        checkpoint, uvr_dir, protocol = model_files(tmp_path)
+        (uvr_dir / "vr_model_data.json").write_bytes(b"edited by the load")
+        checkpoint.write_bytes(b"retrained")
+
+        failures = uvr_file_failures(protocol, uvr_dir)
+
+        assert len(failures) == 1
+        assert "vr_model_data.json has digest" in failures[0]
+
+    def test_matching_uvr_files_give_no_failures(self, tmp_path: Path) -> None:
+        _, uvr_dir, protocol = model_files(tmp_path)
+
+        assert uvr_file_failures(protocol, uvr_dir) == []
 
 
 class TestDegradationGolden:

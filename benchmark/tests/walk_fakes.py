@@ -1,4 +1,4 @@
-"""Fake fetch, worker and features for the walk tests.
+"""Fake fetch, worker and features for the walk tests, and the walk run harness they share.
 
 The worker is replaced by a function that writes the canonical bytes the candidate's samples
 produce. Features are fixed per candidate and keyed by content: a candidate whose features equal
@@ -7,15 +7,19 @@ a reference's scores 1.0 against it, and independent random unit features score 
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
+import json
+from collections.abc import Callable, Sequence
 from pathlib import Path
+from types import MappingProxyType
 from typing import Any
 
 import numpy as np
 import numpy.typing as npt
 
 from benchmark.adjudication import AdjudicationRecord
-from benchmark.candidate_universe import ListedFile
+from benchmark.candidate_universe import CandidateUniverse, ListedFile
 from benchmark.duplicate_screen import (
     Degenerate,
     Features,
@@ -27,7 +31,7 @@ from benchmark.fetch import (
     FetchOutcome,
     Staged,
 )
-from benchmark.protocol import Protocol, Stratum
+from benchmark.protocol import ArchiveItemStratum, Protocol, Stratum
 from benchmark.runner import Candidate, CanonicalFile, SourceRun
 from benchmark.selection import TrainingIdentities
 from benchmark.source_evidence import SourceIdentity
@@ -36,7 +40,17 @@ from benchmark.source_outcome import (
     RunAbortOutcome,
     SourceIneligibleOutcome,
 )
-from benchmark.walk import Outcome, Rejected, WalkDeps, WalkState, examine_candidate
+from benchmark.walk import (
+    ChamberPreparation,
+    MetadataUnavailable,
+    Outcome,
+    Rejected,
+    RunLayout,
+    WalkDeps,
+    WalkInputs,
+    WalkState,
+    examine_candidate,
+)
 
 PIANO_SOURCE = "musopen-chopin-complete-works-flac"
 CHAMBER_SOURCE = "musicnet"
@@ -233,3 +247,125 @@ def ineligible(
         identity=identity,
         protocol_sha256=protocol.source_sha256,
     )
+
+
+def shrunk(
+    protocol: Protocol,
+    *,
+    piano: dict[str, int],
+    chamber: dict[str, int],
+    cap: int = 5,
+) -> Protocol:
+    """The protocol with each stratum's partitions and cluster cap replaced for a small walk."""
+    strata: list[Stratum] = []
+    for stratum in protocol.selection.strata:
+        counts = piano if isinstance(stratum, ArchiveItemStratum) else chamber
+        order = tuple(name for name in ("test", "demo", "test_reserve") if name in counts)
+        strata.append(
+            dataclasses.replace(
+                stratum,
+                partitions=MappingProxyType(dict(counts)),
+                partition_order=order,
+                cluster_cap=cap,
+            )
+        )
+    return dataclasses.replace(
+        protocol, selection=dataclasses.replace(protocol.selection, strata=tuple(strata))
+    )
+
+
+def stratum_named(protocol: Protocol, name: str) -> Stratum:
+    """The protocol's stratum with *name*."""
+    return next(s for s in protocol.selection.strata if s.name == name)
+
+
+def piano_id(index: int) -> str:
+    """The identifier of the index-th test piano candidate."""
+    return f"{PIANO_SOURCE}/Chopin/Nocturne{index}.flac"
+
+
+def universe_of(protocol: Protocol, name: str, files: Sequence[ListedFile]) -> CandidateUniverse:
+    """A frozen universe holding *files*, for the stratum named *name*."""
+    stratum = stratum_named(protocol, name)
+    return CandidateUniverse(
+        stratum=name,
+        source=stratum.source,
+        query="fixture",
+        enumerated_at="fixture",
+        files=tuple(files),
+        sha256="f" * 64,
+    )
+
+
+def musicnet_csv(ids: Sequence[int]) -> bytes:
+    """A minimal MusicNet metadata file with one row per id."""
+    lines = ["id,composer,ensemble,source"]
+    lines += [f"{i},Bach,Ensemble,Soni Ventorum Wind Quintet" for i in ids]
+    return ("\n".join(lines) + "\n").encode("utf-8")
+
+
+class Harness:
+    """The walk's inputs built over one World, with the protocol and run layout it needs."""
+
+    def __init__(self, world: World, protocol: Protocol, layout: RunLayout) -> None:
+        self.world = world
+        self.protocol = protocol
+        self.layout = layout
+        self.training: list[Reference] = [training_reference(3)]
+        self.adjudications: list[AdjudicationRecord] = []
+        self.metadata: Callable[[], bytes] = self.no_metadata
+        self.chamber = ChamberPreparation("a" * 64, world.fetch)
+        self.metadata_calls = 0
+
+    def no_metadata(self) -> bytes:
+        """A metadata provider that must not be called on a piano halt."""
+        raise MetadataUnavailable("not expected in this test")
+
+    def counted_metadata(self, data: bytes) -> Callable[[], bytes]:
+        """A metadata provider that returns *data* and counts its calls."""
+
+        def provide() -> bytes:
+            self.metadata_calls += 1
+            return data
+
+        return provide
+
+    def inputs(self, universes: dict[str, CandidateUniverse]) -> WalkInputs:
+        """The walk inputs with the fake functions and the training state."""
+        refs = self.training
+        identities = TrainingIdentities(
+            filenames=frozenset(r.identity.identifier for r in refs),
+            raw_sha256=frozenset(r.identity.raw_sha256 for r in refs),
+            decoded_sha256=frozenset(r.identity.decoded_pcm_sha256 for r in refs),
+        )
+        return WalkInputs(
+            training=identities,
+            training_references=refs,
+            adjudications=tuple(self.adjudications),
+            universes=universes,
+            piano_fetch=self.world.fetch,
+            chamber=self.chamber,
+            canonicalise=self.world.canonicalise,
+            features=self.world.features_of,
+            musicnet_metadata=self.metadata,
+        )
+
+
+def add_piano(world: World, count: int) -> list[ListedFile]:
+    """Register *count* distinct piano candidates, each with its own features and digests."""
+    files = []
+    for index in range(count):
+        identifier = piano_id(index)
+        world.add(identifier, long_tone_variant(index), seed=100 + index)
+        files.append(ListedFile(identifier, "Pianist A", None, None, None))
+    return files
+
+
+def long_tone_variant(index: int) -> Any:
+    """A long tone whose amplitude is unique to *index*, so its decoded digest is too."""
+    return long_tone() * (0.5 + 0.01 * index)
+
+
+def read_lines(path: Path) -> list[dict[str, Any]]:
+    """The audit trail's records, one per line."""
+    return [json.loads(line) for line in path.read_text().splitlines()]

@@ -40,9 +40,9 @@ from typing import Any, ClassVar
 import numpy as np
 import numpy.typing as npt
 
-from benchmark.adjudication import AdjudicationRecord, answer_sets
+from benchmark.adjudication import AdjudicationError, AdjudicationRecord, answer_sets
 from benchmark.atomic_write import write_atomically
-from benchmark.candidate_universe import CandidateUniverse, ListedFile
+from benchmark.candidate_universe import CandidateUniverse, CandidateUniverseError, ListedFile
 from benchmark.canonicalisation import CanonicalWaveform
 from benchmark.duplicate_screen import (
     Decision,
@@ -51,11 +51,12 @@ from benchmark.duplicate_screen import (
     Flag,
     RecordingIdentity,
     Reference,
+    ScreenError,
     ScreenResult,
     adjudicate,
     screen,
 )
-from benchmark.eligibility import frame_floors, recording_floors
+from benchmark.eligibility import EligibilityArithmeticError, frame_floors, recording_floors
 from benchmark.eligibility_outcomes import (
     frame_verdicts,
     recording_floor_reasons,
@@ -70,18 +71,23 @@ from benchmark.fetch import (
     Staged,
 )
 from benchmark.framing import frame
+from benchmark.musicnet_archive import ArchiveError
 from benchmark.protocol import Protocol, Stratum, ZenodoArchiveStratum
-from benchmark.runner import Candidate, CanonicalFile, SourceRun
+from benchmark.runner import Candidate, CanonicalFile, CanonicalFileError, SourceRun
 from benchmark.selection import (
     ExclusionRule,
+    SelectionError,
     TrainingIdentities,
     identifier_well_formed,
     matches_training_source,
     walk_order,
 )
 from benchmark.source_outcome import RunAbortOutcome, SourceIneligibleOutcome
+from benchmark.training_corpus import TrainingCorpusError
+from benchmark.training_references import TrainingReferenceError
 
 __all__ = [
+    "REPORTED_FAILURES",
     "Admission",
     "Admitted",
     "AdmittedRule",
@@ -100,6 +106,22 @@ logger = logging.getLogger(__name__)
 FetchFn = Callable[[ListedFile], FetchOutcome]
 CanonicaliseFn = Callable[[Candidate, Path], SourceRun]
 FeatureFn = Callable[[npt.NDArray[np.float64]], tuple[Features, Degenerate]]
+
+# Failures a run reports as invalid under their type, rather than as a traceback. The walk's
+# driver catches them, and a failure raised while examining a candidate is first written to the
+# audit trail under the exception's class name, because the protocol gives those failures no code.
+REPORTED_FAILURES: tuple[type[Exception], ...] = (
+    AdjudicationError,
+    ArchiveError,
+    CandidateUniverseError,
+    CanonicalFileError,
+    EligibilityArithmeticError,
+    OSError,
+    ScreenError,
+    SelectionError,
+    TrainingCorpusError,
+    TrainingReferenceError,
+)
 
 
 class AdmittedRule(StrEnum):
@@ -140,6 +162,7 @@ class Evidence:
     raw_sha256: str | None = None
     decoded_pcm_sha256: str | None = None
     samples: int | None = None
+    canonical_sha256: str | None = None
     cluster_admitted: int | None = None
     recording_rms_dbfs: float | None = None
     frames: int | None = None
@@ -157,6 +180,7 @@ class Evidence:
             "raw_sha256": self.raw_sha256,
             "decoded_pcm_sha256": self.decoded_pcm_sha256,
             "samples": self.samples,
+            "canonical_sha256": self.canonical_sha256,
             "cluster_admitted": self.cluster_admitted,
             "recording_rms_dbfs": _finite(self.recording_rms_dbfs),
             "frames": self.frames,
@@ -398,6 +422,7 @@ def _decoded_digest_rules(
     evidence.raw_sha256 = canonical.raw_sha256
     evidence.decoded_pcm_sha256 = canonical.decoded_pcm_sha256
     evidence.samples = canonical.samples
+    evidence.canonical_sha256 = canonical.sha256
     if canonical.decoded_pcm_sha256 in state.training.decoded_sha256:
         return _reject(listed, ExclusionRule.DECODED_PCM_SHA256.value, evidence)
     if canonical.decoded_pcm_sha256 in state.admitted_decoded:
@@ -534,6 +559,21 @@ def examine_candidate(
     if not isinstance(waveform, CanonicalWaveform):
         return waveform
     return _screen_stage(protocol, listed, stratum.name, canonical, waveform, state, deps, evidence)
+
+
+def _examine_or_invalid(
+    ctx: WalkContext, stratum: Stratum, listed: ListedFile, deps: WalkDeps, out_dir: Path
+) -> Outcome:
+    """`examine_candidate`, with a reported failure returned as a run invalid under its class name.
+
+    The caller writes the candidate's audit line and the run's record, so the failure is recorded
+    against the candidate and position it came from. Other exceptions still propagate.
+    """
+    try:
+        return examine_candidate(ctx.protocol, stratum, listed, ctx.state, out_dir, deps)
+    except REPORTED_FAILURES as error:
+        logger.error("%s: %s: %s", listed.identifier, type(error).__name__, error)
+        return RunInvalid(listed.identifier, type(error).__name__, str(error), Evidence())
 
 
 class MetadataUnavailable(RuntimeError):
@@ -680,6 +720,16 @@ class AuditTrail:
         self._lines.append(json.dumps(record, sort_keys=True, allow_nan=False, ensure_ascii=True))
         write_atomically(self._path, ("\n".join(self._lines) + "\n").encode("utf-8"))
 
+    def finish(self) -> str:
+        """Return the SHA-256 of the trail's bytes as they now sit on disk.
+
+        A walk that examined no candidate has no trail yet, so an empty file is written first.
+        The digest is read back from the file, so the manifest binds the bytes a reader will see.
+        """
+        if not self._path.exists():
+            write_atomically(self._path, b"")
+        return hashlib.sha256(self._path.read_bytes()).hexdigest()
+
 
 def partition_plan(stratum: Stratum) -> tuple[str, ...]:
     """The partition of each admission position, in partition order: position k is element k-1."""
@@ -787,10 +837,17 @@ def _write_halt(
     )
 
 
-def _record_invalid(layout: RunLayout, stratum: str | None, outcome: RunInvalid) -> RunInvalid:
-    """Write why the run is invalid, and return the outcome unchanged."""
+def _record_invalid(
+    layout: RunLayout, stratum: str | None, outcome: RunInvalid, position: int | None = None
+) -> RunInvalid:
+    """Write why the run is invalid, and return the outcome unchanged.
+
+    The stratum, identifier and position name the candidate the failure came from. Each is null
+    when the failure happened outside any candidate.
+    """
     payload = {
         "stratum": stratum,
+        "position": position,
         "identifier": outcome.identifier,
         "code": outcome.code,
         "detail": outcome.detail,
@@ -816,9 +873,7 @@ def _walk_stratum(
         if len(placed) == len(plan):
             break
         out_dir = ctx.layout.candidate_dir(stratum.name, position)
-        outcome = examine_candidate(
-            ctx.protocol, stratum, by_id[identifier], ctx.state, out_dir, deps
-        )
+        outcome = _examine_or_invalid(ctx, stratum, by_id[identifier], deps, out_dir)
         if isinstance(outcome, Admitted):
             entry = PlacedAdmission(plan[len(placed)], len(placed) + 1, outcome.admission)
             placed.append(entry)
@@ -832,7 +887,7 @@ def _walk_stratum(
             _write_halt(ctx, stratum, position, outcome)
             return outcome
         else:
-            return _record_invalid(ctx.layout, stratum.name, outcome)
+            return _record_invalid(ctx.layout, stratum.name, outcome, position)
     status = "complete" if len(placed) == len(plan) else "short"
     logger.info(
         "Stratum %s %s with %d of %d admissions", stratum.name, status, len(placed), len(plan)
@@ -841,14 +896,22 @@ def _walk_stratum(
 
 
 def manifest_document(
-    protocol: Protocol, universes: Mapping[str, CandidateUniverse], run: WalkRun
+    protocol: Protocol,
+    universes: Mapping[str, CandidateUniverse],
+    run: WalkRun,
+    audit_trail_sha256: str,
 ) -> dict[str, Any]:
-    """The walk manifest, with exactly the keys and entry fields the systems stage reads."""
+    """The walk manifest, with exactly the keys and entry fields the systems stage reads.
+
+    The audit trail digest binds the manifest to the trail beside it, so an edited trail is
+    refused by the systems stage.
+    """
     return {
         "protocol_sha256": protocol.source_sha256,
         "universe_sha256": {s.name: universes[s.name].sha256 for s in protocol.selection.strata},
         "archive_sha256": run.archive_sha256,
         "strata": {w.name: {"status": w.status, "admitted": len(w.placed)} for w in run.strata},
+        "audit_trail_sha256": audit_trail_sha256,
         "admissions": [
             {
                 "stratum": walk.name,
@@ -918,7 +981,7 @@ def run_walk(
         walks.append(walk)
     run = WalkRun(tuple(walks), inputs.chamber.archive_sha256)
     body = json.dumps(
-        manifest_document(protocol, inputs.universes, run),
+        manifest_document(protocol, inputs.universes, run, ctx.audit.finish()),
         indent=2,
         allow_nan=False,
         ensure_ascii=True,
