@@ -8,6 +8,7 @@ from benchmark.frame_scoring import FrameScore, SystemFailure
 from benchmark.metrics import MetricResult
 from benchmark.protocol import Protocol, load_protocol
 from benchmark.scoring import (
+    BASELINE,
     OPGAN,
     UVR,
     PopulationError,
@@ -18,6 +19,7 @@ from benchmark.scoring import (
 )
 
 EXPECTED = {"a": [0, 2], "b": [1]}
+CLUSTERS = {"a": "performer-x", "b": "performer-y"}
 ALL_GATES = {
     "population_ids_equal_across_systems",
     "frame_population_ids_equal_across_systems",
@@ -33,10 +35,13 @@ def protocol() -> Protocol:
 
 
 def scored(value: float) -> FrameScore:
-    """A frame scored at `value` on every primary metric."""
+    """A frame scored at `value` on every primary metric and on both shift-tolerant metrics."""
     result = MetricResult(value, False)
     return FrameScore(
-        {"reconstruction_snr": result, "si_snr": result, "log_spectral_distance": result}, 0, 0
+        {"reconstruction_snr": result, "si_snr": result, "log_spectral_distance": result},
+        0,
+        0,
+        {"reconstruction_snr": result, "si_snr": result},
     )
 
 
@@ -132,14 +137,83 @@ class TestRecordingScores:
 
     def test_values_follow_the_expected_recording_and_frame_order(self, protocol: Protocol) -> None:
         uvr = list(reversed(results_for(10.0)))
-        scores = recording_scores(EXPECTED, {OPGAN: results_for(0.0), UVR: uvr}, protocol)
+        scores = recording_scores(
+            EXPECTED,
+            {OPGAN: results_for(0.0), UVR: uvr, BASELINE: results_for(20.0)},
+            protocol,
+            CLUSTERS,
+        )
         assert [s.recording_id for s in scores] == ["a", "b"]
-        assert scores[0].opgan["si_snr"] == [0.0, 2.0]
-        assert scores[0].uvr["log_spectral_distance"] == [10.0, 12.0]
-        assert scores[1].uvr["reconstruction_snr"] == [11.0]
+        assert [s.cluster for s in scores] == ["performer-x", "performer-y"]
+        assert scores[0].opgan.primary["si_snr"] == [0.0, 2.0]
+        assert scores[0].uvr.primary["log_spectral_distance"] == [10.0, 12.0]
+        assert scores[1].uvr.primary["reconstruction_snr"] == [11.0]
+
+    def test_the_baseline_and_the_shift_tolerant_values_are_carried(
+        self, protocol: Protocol
+    ) -> None:
+        scores = recording_scores(
+            EXPECTED,
+            {OPGAN: results_for(0.0), UVR: results_for(1.0), BASELINE: results_for(20.0)},
+            protocol,
+            CLUSTERS,
+        )
+        assert scores[0].baseline.primary["si_snr"] == [20.0, 22.0]
+        assert scores[1].opgan.shift_tolerant["reconstruction_snr"] == [1.0]
+        assert set(scores[0].uvr.shift_tolerant) == {"reconstruction_snr", "si_snr"}
 
     def test_incomplete_coverage_withholds_the_input(self, protocol: Protocol) -> None:
         opgan = results_for(0.0)
         opgan[2] = SystemFrameResult("b", 1, SystemFailure("exception in denoise"))
         with pytest.raises(PopulationError, match="coverage_opgan_complete"):
-            recording_scores(EXPECTED, {OPGAN: opgan, UVR: results_for(1.0)}, protocol)
+            recording_scores(
+                EXPECTED,
+                {OPGAN: opgan, UVR: results_for(1.0), BASELINE: results_for(2.0)},
+                protocol,
+                CLUSTERS,
+            )
+
+    def test_a_baseline_with_a_gap_withholds_the_input(self, protocol: Protocol) -> None:
+        """The baseline has no coverage gate, but a missing baseline frame still stops the run."""
+        baseline = [r for r in results_for(2.0) if r.recording_id != "b"]
+        with pytest.raises(PopulationError, match=BASELINE):
+            recording_scores(
+                EXPECTED,
+                {OPGAN: results_for(0.0), UVR: results_for(1.0), BASELINE: baseline},
+                protocol,
+                CLUSTERS,
+            )
+
+    def test_a_baseline_failure_withholds_the_input(self, protocol: Protocol) -> None:
+        baseline = results_for(2.0)
+        baseline[0] = SystemFrameResult("a", 0, SystemFailure("exception in denoise"))
+        with pytest.raises(PopulationError, match=r"no score|do not match"):
+            recording_scores(
+                EXPECTED,
+                {OPGAN: results_for(0.0), UVR: results_for(1.0), BASELINE: baseline},
+                protocol,
+                CLUSTERS,
+            )
+
+    def test_a_recording_without_a_cluster_withholds_the_input(self, protocol: Protocol) -> None:
+        with pytest.raises(PopulationError, match="performer cluster"):
+            recording_scores(
+                EXPECTED,
+                {OPGAN: results_for(0.0), UVR: results_for(1.0), BASELINE: results_for(2.0)},
+                protocol,
+                {"a": "performer-x"},
+            )
+
+    def test_a_missing_shift_tolerant_score_withholds_the_input(self, protocol: Protocol) -> None:
+        opgan = results_for(0.0)
+        primary_only = scored(0.0)
+        opgan[0] = SystemFrameResult(
+            "a", 0, FrameScore(primary_only.results, 0, 0, shift_tolerant={})
+        )
+        with pytest.raises(PopulationError, match="no reconstruction_snr"):
+            recording_scores(
+                EXPECTED,
+                {OPGAN: opgan, UVR: results_for(1.0), BASELINE: results_for(2.0)},
+                protocol,
+                CLUSTERS,
+            )
