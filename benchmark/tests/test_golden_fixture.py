@@ -1,6 +1,6 @@
 """Tests for the golden fixtures and the run-level precondition that checks them.
 
-The analytic fixture's digest is asserted on every platform. The resampler fixture's is
+The analytic and float fixtures' digests are asserted on every platform. The resampler's is
 asserted only on the reference platform, because resampler output differed between
 macOS arm64 and Linux x86_64 with the same pinned packages; elsewhere that test is
 skipped rather than passed.
@@ -19,7 +19,9 @@ import pytest
 import soundfile as sf
 
 from benchmark import golden_fixture
+from benchmark.canonicalisation import CanonicalWaveform
 from benchmark.golden_fixture import (
+    canonical_fixture,
     fixture_bytes,
     fixture_failure,
     fixture_float_samples,
@@ -67,6 +69,28 @@ class TestFixtureDigests:
     def test_resampler_fixture_on_the_reference_platform(self) -> None:
         """The digest measured on darwin_arm64."""
         assert fixture_failure(FIXTURES["resampler"], PROTOCOL.canonicalisation) is None
+
+    def test_float_fixture_on_every_platform(self) -> None:
+        """WAV FLOAT, 16 kHz mono: the target rate, so the resampler returns its input."""
+        assert fixture_failure(FIXTURES["float"], PROTOCOL.canonicalisation) is None
+
+    def test_float_digest_follows_from_its_samples(self) -> None:
+        """Computed without the decoder: float32 widened to float64, with negative zero made
+        positive, as little-endian doubles. That derivation is what justifies the scope."""
+        samples = fixture_float_samples(FIXTURES["float"]).astype(np.float64)[:, 0]
+        normalised = np.add(samples, 0.0)
+
+        digest = hashlib.sha256(normalised.astype("<f8").tobytes(order="C")).hexdigest()
+
+        assert digest == FIXTURES["float"].canonical_sha256
+
+    def test_float_fixture_canonical_waveform_has_no_negative_zero(self) -> None:
+        """The fixture holds a negative zero, and canonicalisation must remove its sign."""
+        result = canonical_fixture(FIXTURES["float"], PROTOCOL.canonicalisation)
+
+        assert isinstance(result, CanonicalWaveform)
+        assert np.signbit(fixture_float_samples(FIXTURES["float"])[1, 0])
+        assert not np.signbit(result.samples[1])
 
 
 class TestFixtureFailure:

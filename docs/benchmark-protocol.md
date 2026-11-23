@@ -1,16 +1,19 @@
-# Benchmark protocol v13
+# Benchmark protocol v14
 
-Frozen before candidate identities are selected, downloaded for evaluation,
-auditioned, or scored. The source collection has already been inspected in general
-terms; what has not happened is any decision about which recordings enter the
-benchmark.
+Frozen before any candidate is scored, and before any decision about which recordings
+enter the benchmark under this version. The source contract is the exception in one
+respect. v14 was written after the v13 walk of 2026-11-23 had selected candidate
+identities, acquired the chamber candidates, and rejected all of them, and after those
+candidates were measured. The [Amendment](#amendment) section records what was read first.
 
-> **Note:** v13 amends v12, which amended v11, which amended v10, which amended v9, which
-> amended v8, which amended v6, which amended v5, which amended v4, which amended v3, which
-> amended v2, which amended v1, all before any evaluation of the test population ran. The
-> operational values live in `benchmark/protocols/v13.json`, which is normative; this
-> document explains them and
-> its numbers are illustrative. Superseded versions are preserved unmodified, as
+> **Note:** v14 amends v13, which amended v12, which amended v11, which amended v10, which
+> amended v9, which amended v8, which amended v6, which amended v5, which amended v4,
+> which amended v3, which amended v2, which amended v1, all before any evaluation of the
+> test population ran. At the time of writing, the only recorded run is the v13 walk of
+> 2026-11-23, and its output holds walk records but no system output or score (checked by
+> listing its files). The operational values live in `benchmark/protocols/v14.json`, which
+> is normative; this document explains them and its numbers are illustrative. Superseded
+> versions are preserved unmodified, as
 > [benchmark-protocol-v1.md](benchmark-protocol-v1.md),
 > [benchmark-protocol-v2.md](benchmark-protocol-v2.md),
 > [benchmark-protocol-v3.md](benchmark-protocol-v3.md),
@@ -21,8 +24,9 @@ benchmark.
 > [benchmark-protocol-v8.md](benchmark-protocol-v8.md),
 > [benchmark-protocol-v9.md](benchmark-protocol-v9.md), and
 > [benchmark-protocol-v10.md](benchmark-protocol-v10.md),
-> [benchmark-protocol-v11.md](benchmark-protocol-v11.md), and
-> [benchmark-protocol-v12.md](benchmark-protocol-v12.md) with their configs, so an
+> [benchmark-protocol-v11.md](benchmark-protocol-v11.md),
+> [benchmark-protocol-v12.md](benchmark-protocol-v12.md), and
+> [benchmark-protocol-v13.md](benchmark-protocol-v13.md) with their configs, so an
 > artifact recording an older `protocol_version` stays interpretable. See
 > [Amendment](#amendment) for what changed and why.
 
@@ -401,12 +405,15 @@ The order is fixed: decode, validate the source, downmix, resample, normalise
 signed zero, validate the canonical result. Both orderings of the middle two are
 natural readings of "16 kHz mono", so the protocol names one.
 
-- **Decode** with soundfile 0.14.0 (libsndfile 1.2.2) to float64, `always_2d=True`,
-  from a buffer the harness has already read and hashed. Always two-dimensional so
-  the downmix step never branches on source shape. float64 is pinned for future
-  corpora rather than for this one: the corpus is PCM_24 and a signed 24-bit integer
-  is exactly representable in float32, so the two decode identically here, but a
-  32-bit or float source would not
+- **Decode** with soundfile 0.14.0 (libsndfile 1.2.2) to float64, `always_2d=True`, from a
+  buffer the harness has already read and hashed. Always two-dimensional so the downmix
+  step never branches on source shape. float64 is pinned for future corpora rather than
+  for this one: the training corpus is PCM_24, and a signed 24-bit integer is exactly
+  representable in float32, so the two decode identically there. A 32-bit integer source
+  would not decode identically under float32, because float32 cannot hold every 32-bit
+  integer. A WAV FLOAT source is exactly representable in float64: a probe on 2026-11-23
+  wrote 200,000 random float32 values in [-1, 1] as WAV FLOAT and read them back as
+  float64 with no change
 - **Downmix** in float64, stated per channel count rather than as a general mean: one
   channel passes through unchanged, two channels become `(left + right) / 2`, and any
   other count makes the source unsupported. At two channels there is no reduction
@@ -426,11 +433,16 @@ natural readings of "16 kHz mono", so the protocol names one.
   normalisation, gain adjustment. None belong in a fidelity measurement and all of
   them change the digest. The list is load-bearing rather than declarative, as the
   amplitude rules below show
-- **Signed zero** is normalised to positive. Positive and negative zero are
-  numerically equal and have different bytes, so identical audio would otherwise
-  produce different digests. The pipeline emits only positive zeros on the fixture
-  examined, which makes this latent rather than live, and it is cheaper to remove the
-  hazard than to argue it cannot fire
+- **Signed zero** is normalised to positive. Positive and negative zero are numerically
+  equal and have different bytes, so identical audio would otherwise produce different
+  digests. For the integer subtypes the pipeline emitted only positive zeros on the
+  fixture examined, which makes this latent. WAV FLOAT can carry a negative zero, and
+  decoding keeps its sign (probe of 2026-11-23), so for float sources the hazard is live.
+  Normalisation runs after the decoded-PCM digest is taken, so two float sources that
+  differ only in signed zeros have different decoded digests and identical canonical
+  waveforms. The duplicate screen compares canonical waveforms, and none of the 80
+  MusicNet chamber members has a negative zero. It is cheaper to remove the hazard than to
+  argue it cannot fire
 - **Non-finite samples** are rejected rather than repaired
 - **Hash bytes** are contiguous little-endian IEEE-754 float64 samples with no
   container or header. Byte order and dtype are pinned because both change the digest
@@ -440,25 +452,28 @@ natural readings of "16 kHz mono", so the protocol names one.
 
 ### Source domain
 
-The transformation is defined for a bounded class of sources, frozen now rather than
-after the candidate universe is acquired. Meeting an unexpected source later and
-widening the contract in response would be a rule changed once its population is
-visible, which is the shape this protocol exists to avoid.
+The transformation is defined for a bounded class of sources. Each version fixes that
+class before the candidates it admits are scored, because widening the contract in
+response to a population already visible is the shape this protocol exists to avoid. v14
+widens the class for WAV FLOAT after the walk and measurements described in the
+[Amendment](#amendment) section, which records them rather than leaving them implicit.
 
-Admissible sources are FLAC paired with `PCM_16`, `PCM_24`, or `PCM_32`, one or two
-channels, decoding to finite samples within `[-1.0, 1.0]` inclusive at a positive
-rate. Container and subtype are validated as pairs rather than as two independent
-sets, so a permitted container and a permitted subtype cannot be recombined into a
-pairing nobody approved.
+Admissible sources are FLAC paired with `PCM_16`, `PCM_24`, or `PCM_32`, and WAV paired
+with `FLOAT`, with one or two channels, decoding to finite samples within `[-1.0, 1.0]`
+inclusive at a positive rate. Container and subtype are validated as pairs rather than as
+two independent sets, so a permitted container and a permitted subtype cannot be
+recombined into a pairing nobody approved.
 
 Two separate reasons produce that set and they should not be conflated. **Determinism:**
-integer PCM converts exactly into float64 under the frozen full-scale convention and
-its decoded amplitude is bounded by construction, neither of which holds for float or
-lossy subtypes. **Reference fidelity:** bit depths below 16 are excluded because their
-quantisation noise would become part of the supposed clean reference. `PCM_8`
-satisfies the first reason and is refused under the second, which is why exact
-representability alone is not the rule. Admissibility is not a claim that the three
-subtypes are interchangeable in quality.
+integer PCM converts exactly into float64 under the frozen full-scale convention and its
+decoded amplitude is bounded by construction. WAV FLOAT also converts exactly, because
+every float32 value is exactly representable in float64, but its amplitude is bounded per
+sample by the waveform check rather than by construction, so whether a float source is
+excluded depends on its data. Lossy subtypes are not admitted. **Reference fidelity:** bit
+depths below 16 are excluded because their quantisation noise would become part of the
+supposed clean reference. `PCM_8` satisfies the first reason and is refused under the
+second, which is why exact representability alone is not the rule. Admissibility is not a
+claim that the admitted subtypes are interchangeable in quality.
 
 Container and subtype come from the decoder's own report, never from the filename. A
 file named `.wav` whose contents are FLAC reports `format=FLAC subtype=PCM_24`, so
@@ -578,9 +593,16 @@ shrinking the population.
 The source is bounded and the canonical waveform is not, and the asymmetry is a
 decision rather than an omission.
 
-The source bound follows from the permitted subtypes rather than being imposed on
-them: integer PCM decodes into `[-1.0, 1.0]` by construction, reaching exactly -1.0
-at the negative rail, which is why the bound is inclusive.
+The source bound follows from the integer subtypes rather than being imposed on them:
+integer PCM decodes into `[-1.0, 1.0]` by construction, reaching exactly -1.0 at the
+negative rail, which is why the bound is inclusive. WAV FLOAT is not bounded by
+construction, so the waveform check bounds each of its samples. A float source with a
+sample beyond the range, or a non-finite sample, is excluded (`INVALID_SOURCE_AMPLITUDE`
+or `NONFINITE_SOURCE`), and whether a float source is excluded depends on its data. The
+bound is inclusive for float as well, since a float source can hold exactly -1.0 or +1.0.
+Measured on 2026-11-23 on the 80 MusicNet chamber members, the check excluded none of
+them: no sample lay beyond the range and none was non-finite. One member has samples of
+magnitude exactly 1.0.
 
 The canonical waveform carries no amplitude bound. Band-limited interpolation
 overshoots: resampled to 16 kHz, a 0.999 square wave reaches 1.194538 and a
@@ -624,25 +646,32 @@ than an assumption.
 
 ### Golden fixtures
 
-Two fixtures are run through inspection, decode, and canonicalisation before any
-candidate is opened, and a run that cannot reproduce their frozen canonical digests
-aborts with `GOLDEN_FIXTURE_FAILURE`. Each is generated in code from seeded integers
-(PCG64, full signed range, the first frame at the negative rail and the second at
-zero) and encoded to FLAC in memory. The digest covers the decoded canonical samples,
-not the FLAC bytes, because the encoded bytes carry the libFLAC version and can differ
-between builds while decoded integer PCM cannot.
+Three fixtures are run through inspection, decode, and canonicalisation before any
+candidate is opened, and a run that cannot reproduce their frozen canonical digests aborts
+with `GOLDEN_FIXTURE_FAILURE`. The two integer fixtures are generated in code from seeded
+integers (PCG64, full signed range, the first frame at the negative rail and the second at
+zero) and encoded to FLAC in memory. The FLOAT fixture uses the same draw over 24 bits,
+divided by 2^23 and written to WAV FLOAT, with its first frame at -1.0, its second at
+negative zero, and its third at +1.0. The digest covers the decoded canonical samples, not
+the file bytes. The FLAC bytes carry the libFLAC version, and the WAV bytes carry a write
+time, so the encoded bytes can differ between builds or runs while the decoded samples do
+not.
 
 | Fixture | Source | Digest asserted on | Covers |
 |---|---|---|---|
 | `analytic` | 16 kHz mono PCM_16, 64,777 frames | every platform | inspection, the metadata and waveform checks, decode, the one-channel downmix, signed-zero normalisation, canonical validation, the digest |
 | `resampler` | 44.1 kHz stereo PCM_24, 132,423 frames | the reference platform | the same steps with the two-channel downmix, and the resampler |
+| `float` | 16 kHz mono WAV FLOAT, 40,003 frames | every platform | the same steps as `analytic`, with WAV FLOAT admission and normalisation of a negative zero |
 
-At the target rate the resampler returns its input, so the analytic fixture's
-canonical samples are its integers divided by full scale, and its digest can be
-recomputed without the decoder. Signed-zero normalisation runs on it but has nothing to
-change, because integer PCM decodes no negative zero. The resampler's output is not
-bit-identical across architectures, so its digest is asserted only on the reference
-platform, `darwin_arm64`, where canonical artifacts are generated.
+At the target rate the resampler returns its input, so the analytic fixture's canonical
+samples are its integers divided by full scale, and its digest can be recomputed without
+the decoder. Signed-zero normalisation runs on it but has nothing to change, because
+integer PCM decodes no negative zero. The resampler's output is not bit-identical across
+architectures, so its digest is asserted only on the reference platform, `darwin_arm64`,
+where canonical artifacts are generated. The float fixture is also at the target rate, so
+its canonical samples are its float32 values widened to float64, with the negative zero
+made positive. Its digest is asserted on every platform, and the test suite derives it
+from the samples without the decoder. Only `darwin_arm64` has been run for this version.
 
 The benchmark runs on the reference platform. A run on any other platform aborts with
 `ENVIRONMENT_MISMATCH` before any fixture is tried. "Digest asserted on" names where
@@ -1510,6 +1539,36 @@ defect discovered after results exist invalidates those results rather than
 retroactively changing the rules that produced them. Superseded versions stay in the
 tree rather than being replaced, and each version names its predecessor by digest;
 the loader recomputes those digests, so the chain is checked rather than asserted.
+
+### v13 to v14
+
+The v13 walk ran on 2026-11-23 (run `20261123T175457Z`). The chamber stratum's source, MusicNet,
+ships its 80 candidates as WAV, subtype FLOAT, 44100 Hz, mono. v13 admits only FLAC with
+`PCM_16`, `PCM_24`, or `PCM_32`, so the walk recorded `UNSUPPORTED_CONTAINER` for all 80 (80 of
+its 176 audit-trail rows), and the chamber stratum finished short with 0 of 36 admissions. The
+`solo_piano` stratum finished under v13 with 42 admissions.
+
+The 80 chamber files were then read on the same date with soundfile 0.14.0 and libsndfile 1.2.2
+on macOS. No sample lies outside [-1.0, 1.0], none is NaN or infinite, none is negative zero,
+none is a nonzero float32 subnormal, and one file (2119) has samples of magnitude exactly 1.0.
+Their sizes are 18.1 to 166.0 MB and their durations 102.8 to 941.2 s. Their whole-file RMS at
+the source rate of 44.1 kHz is -38.6 to -15.1 dBFS. That is not the per-frame RMS of the 16 kHz
+canonical waveform that the eligibility floors test, and it was not computed.
+
+This amendment was written after the walk and after those measurements, so the source contract
+was not fixed before them. v14 admits WAV with `FLOAT` only, and nothing else in the source
+contract changes. The FLAC pairs, their checks, and the existing golden digests are unchanged.
+That FLAC outcomes do not change is an inference from the unchanged code paths. The
+`solo_piano` admissions were not re-run under v14.
+
+The decoded-PCM digest is computed before the canonical signed-zero normalisation. Two float
+sources that differ only in signed zeros would therefore have different decoded digests while
+their canonical waveforms match. The duplicate screen compares canonical waveforms, and no
+chamber member has a negative zero.
+
+The golden fixture added here is a WAV FLOAT source at 16 kHz mono, with a digest pinned to the
+value this code produces on macOS (`darwin_arm64`). Its scope is `every_platform`, so the digest
+is asserted on every platform. The tests in this change ran on `darwin_arm64` only.
 
 ### v12 to v13
 

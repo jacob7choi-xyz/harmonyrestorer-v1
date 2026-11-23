@@ -1,6 +1,6 @@
 """Tests for the walk driver and the chamber archive path, on fakes and tiny tones.
 
-The protocol is the real v13 with the partitions and clusters shrunk for the test, through
+The protocol is the real one, with the partitions and clusters shrunk for the test, through
 `dataclasses.replace`, so a walk fills in a few candidates. Candidates and features come from
 `walk_fakes`, and the MusicNet archive is a small tar.gz served by a fake getter.
 """
@@ -103,7 +103,7 @@ NO_AUDIT = "audit_trail.jsonl"
 
 @pytest.fixture(scope="module")
 def protocol() -> Protocol:
-    """The real v13 protocol, once per module."""
+    """The real protocol, once per module."""
     return load_protocol()
 
 

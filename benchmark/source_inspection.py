@@ -17,8 +17,10 @@ compared against the frozen bounds first, and the live-memory projection is comp
 for metadata that passed, per v4's `metadata_validation`.
 
 **Container before subtype, as a pair.** v4 admits (container, subtype) pairs rather than
-two independent sets. A subtype is judged only inside a container some pair admits, so a
-WAV file records `UNSUPPORTED_CONTAINER` alone. v4 does not say whether a subtype under an
+two independent sets. A subtype is judged only inside a container some pair admits, so an
+AIFF file records `UNSUPPORTED_CONTAINER` alone, whatever its subtype. The WAV container is
+admitted in protocol v14 with FLOAT only, so a WAV file with PCM_16 is judged on its subtype
+and records `UNSUPPORTED_SUBTYPE` alone. v4 does not say whether a subtype under an
 unadmitted container is also "established" as unsupported; this module takes the reading
 that it is not evaluated, and protocol v5 states that reading as the rule.
 

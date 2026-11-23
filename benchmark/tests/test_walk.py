@@ -1,6 +1,6 @@
 """Tests for one candidate through the walk's predicates, with fake fetch, worker and features.
 
-The protocol is the real v13. The worker is replaced by a function that writes the canonical
+The protocol is the real one. The worker is replaced by a function that writes the canonical
 bytes the candidate's samples produce, so every predicate's code can be reached by a minimal
 fake. Features are fixed per candidate and keyed by content: a candidate whose features equal a
 reference's scores 1.0 against it, and independent random unit features score near 0.
@@ -66,13 +66,13 @@ from benchmark.walk import (
 
 @pytest.fixture(scope="module")
 def protocol() -> Protocol:
-    """The real v13 protocol, once per module."""
+    """The real protocol, once per module."""
     return load_protocol()
 
 
 @pytest.fixture(scope="module")
 def strata(protocol: Protocol) -> dict[str, Stratum]:
-    """The two v13 strata by name."""
+    """The two strata by name."""
     return {stratum.name: stratum for stratum in protocol.selection.strata}
 
 
@@ -102,7 +102,7 @@ class TestIdentityRulesBeforeAnyFetch:
         self, world: World, protocol: Protocol, strata: dict[str, Stratum]
     ) -> None:
         """Rule 1 needs an identifier in the training item's form, so the stratum's source is
-        replaced with the training collection to reach it, as v13 matches nothing otherwise.
+        replaced with the training collection to reach it, as the protocol matches nothing otherwise.
         """
         collection = protocol.selection.training_collection_identifier
         stratum = dataclasses.replace(strata["solo_piano"], source=collection)

@@ -1,6 +1,6 @@
 """Immutable, validated access to the frozen benchmark protocol.
 
-Two things share the authority here, with different jobs. `benchmark/protocols/v13.json`
+Two things share the authority here, with different jobs. `benchmark/protocols/v14.json`
 holds the frozen values a run executes against; its digest is what establishes *which*
 values those are. This module defines what counts as a *well-formed* protocol, which is
 why the gate set, the supported version, the transform vocabulary, and the
@@ -65,9 +65,9 @@ logger = logging.getLogger(__name__)
 # Private so that production code has no supported affordance for reading the file
 # itself. `load_protocol` is the way in.
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_PROTOCOL_PATH = _REPO_ROOT / "benchmark" / "protocols" / "v13.json"
+_PROTOCOL_PATH = _REPO_ROOT / "benchmark" / "protocols" / "v14.json"
 
-SUPPORTED_PROTOCOL_VERSION = 13
+SUPPORTED_PROTOCOL_VERSION = 14
 
 # Which protocol v2 supersedes, and the artifacts it supersedes, as historical facts
 # rather than as arithmetic. `SUPPORTED_PROTOCOL_VERSION - 1` would encode a universal
@@ -75,9 +75,9 @@ SUPPORTED_PROTOCOL_VERSION = 13
 # governance model promises. The paths are frozen here so the config cannot redirect
 # the amendment chain at another file whose digest it also records, and so a relative
 # path out of the tree is not reachable at all.
-_PREDECESSOR_VERSION = 12
-_PREDECESSOR_PROTOCOL_PATH = "benchmark/protocols/v12.json"
-_PREDECESSOR_DOCUMENT_PATH = "docs/benchmark-protocol-v12.md"
+_PREDECESSOR_VERSION = 13
+_PREDECESSOR_PROTOCOL_PATH = "benchmark/protocols/v13.json"
+_PREDECESSOR_DOCUMENT_PATH = "docs/benchmark-protocol-v13.md"
 
 # Closed vocabularies for the frozen LSD transform. Each admits exactly one value. The
 # fields exist so an independent implementer reads each convention from the
@@ -138,10 +138,18 @@ _FORBIDDEN_OPERATIONS = (
 
 # Two separate reasons produce this set, and conflating them is how PCM_8 would slip in.
 # Determinism: integer PCM converts exactly into float64 and its decoded amplitude is bounded
-# by construction. Reference fidelity: below 16 bits the quantisation noise becomes part of
-# the supposed clean reference. Pairs rather than two independent sets, so an unintended
-# combination cannot be assembled from two individually permitted values.
-_SOURCE_FORMATS = (("FLAC", "PCM_16"), ("FLAC", "PCM_24"), ("FLAC", "PCM_32"))
+# by construction. WAV FLOAT converts exactly as well, since every float32 value is exactly
+# representable in float64, but its amplitude is not bounded by construction, so the waveform
+# check bounds each sample and excludes an out-of-range or non-finite float source. Reference
+# fidelity: below 16 bits the quantisation noise becomes part of the supposed clean reference.
+# Pairs rather than two independent sets, so an unintended combination cannot be assembled
+# from two individually permitted values.
+_SOURCE_FORMATS = (
+    ("FLAC", "PCM_16"),
+    ("FLAC", "PCM_24"),
+    ("FLAC", "PCM_32"),
+    ("WAV", "FLOAT"),
+)
 
 _CANONICAL_AMPLITUDE_BOUND = "none"
 _RMS_OPERATION = "float64_mean_square_sqrt_dbfs_no_epsilon"
@@ -377,6 +385,9 @@ _GOLDEN_REFERENCE_PLATFORM = "darwin_arm64"
 # The subtypes the generator can write: libsndfile 1.2.2 writes no PCM_32 FLAC. FLOAT is
 # written as WAV under the float generator named in benchmark/golden_fixture.py.
 _GOLDEN_SUBTYPES = ("PCM_16", "PCM_24", "FLOAT")
+# Frames the generator sets explicitly: the negative rail and zero for the integer subtypes,
+# and the negative rail, negative zero, and +1.0 for FLOAT.
+_GOLDEN_FORCED_FRAMES = {"PCM_16": 2, "PCM_24": 2, "FLOAT": 3}
 _GOLDEN_SCOPES = ("every_platform", "reference_platform")
 _ELIGIBILITY_COMPUTED_FROM = "canonical_waveform"
 _RMS_COMPARATOR = "greater_than"
@@ -1854,13 +1865,14 @@ def _validate_source_domain(source: SourceValidation, decode: Decode, resample: 
     if source.amplitude_min != -1.0 or source.amplitude_max != 1.0:
         raise ProtocolValueError(
             "canonicalisation.source_validation must bound source amplitude to [-1.0, 1.0], "
-            "which is what integer PCM decoding guarantees by construction"
+            "which integer PCM decoding guarantees by construction and the waveform check "
+            "enforces per sample for WAV FLOAT"
         )
     if source.amplitude_bounds_inclusive is not True:
         raise ProtocolValueError(
             "canonicalisation.source_validation.amplitude_bounds_inclusive must be true; "
-            "PCM reaches exactly -1.0 at the negative rail, so an exclusive bound would "
-            "reject legitimate full-scale material"
+            "PCM reaches exactly -1.0 at the negative rail, and a float source can hold exactly "
+            "-1.0 or +1.0, so an exclusive bound would reject legitimate full-scale material"
         )
     if source.min_sample_rate != resample.target_sample_rate:
         raise ProtocolValueError(
@@ -2103,9 +2115,13 @@ def _validate_golden_fixture(fixture: GoldenFixture, canon: Canonicalisation) ->
         raise ProtocolValueError(f"{at}.channels must be within the downmix range")
     if fixture.sample_rate < canon.source_validation.min_sample_rate:
         raise ProtocolValueError(f"{at}.sample_rate must be at least the minimum source rate")
-    # The generator writes the negative rail and zero into the first two frames.
-    if not 2 <= fixture.frames <= canon.decode.max_source_duration_s * fixture.sample_rate:
-        raise ProtocolValueError(f"{at}.frames must be at least 2 and within the duration bound")
+    # The generator sets these frames explicitly before its draw, so a shorter fixture would
+    # index past its own end.
+    minimum = _GOLDEN_FORCED_FRAMES[fixture.subtype]
+    if not minimum <= fixture.frames <= canon.decode.max_source_duration_s * fixture.sample_rate:
+        raise ProtocolValueError(
+            f"{at}.frames must be at least {minimum} and within the duration bound"
+        )
     digest = fixture.canonical_sha256
     if len(digest) != 64 or not all(c in "0123456789abcdef" for c in digest):
         raise ProtocolValueError(f"{at}.canonical_sha256 must be 64 lowercase hex digits")

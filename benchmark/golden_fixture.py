@@ -55,8 +55,8 @@ logger = logging.getLogger(__name__)
 
 _BITS = {"PCM_16": 16, "PCM_24": 24}
 # The FLOAT generator's identity. It is pinned here rather than in the protocol file because
-# protocol v13 carries one generator field, for the integer subtypes, and the file's schema
-# does not change at an amendment that only adds a subtype. Every float sample is a signed
+# the protocol file carries one generator field, for the integer subtypes. Protocol v14 kept
+# that schema when it added the FLOAT subtype, so the float generator is not in the file. Every float sample is a signed
 # 24-bit integer divided by 2**23, so each is exactly representable in float32.
 FLOAT_GENERATOR = "pcg64_24bit_fraction_negative_rail_negative_zero_positive_rail"
 _FLOAT_SCALE = 2**23

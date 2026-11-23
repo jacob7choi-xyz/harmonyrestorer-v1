@@ -1,6 +1,6 @@
 """The engine boundary of the systems stage: one system's call on one degraded frame.
 
-Protocol v13 (`system_execution`, `scoring`) sorts every failure into one of two kinds, and the
+Protocol v13 and later (`system_execution`, `scoring`) sort every failure into one of two kinds, and the
 boundary keeps them apart:
 
 - An exception raised inside one system's `denoise` call is that system's failure for that
@@ -177,7 +177,7 @@ def _invoke(system: System, input_path: Path) -> Path | SystemFailed:
     try:
         return system.denoise(input_path)
     except Exception as error:
-        # Protocol v13: an exception inside the call is this system's failure for the frame.
+        # Protocol v13 and later: an exception inside the call is this system's failure for the frame.
         logger.warning(
             "System %s failed on %s: %s: %s",
             system.name,
