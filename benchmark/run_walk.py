@@ -1,6 +1,6 @@
 """The selection walk's command line: preconditions, a new run directory, and the walk.
 
-Order of work, as protocol v13 and the walk's contract require:
+Order of work, as protocol v13 and later and the walk's contract require:
 
 1. The run preconditions (golden fixtures, degradation golden, model digests). A failure
    refuses the run before anything is created.

@@ -103,6 +103,14 @@ class TestAdmitted:
         assert (result.metadata.channels, result.metadata.sample_rate) == (2, 44100)
         assert result.metadata.frames == 1000
 
+    def test_wav_float_is_admitted_as_reported(self) -> None:
+        """MusicNet's container and subtype pass inspection, mono at 44.1 kHz as its files are."""
+        result = inspect(encoded(frames=1000, channels=1, container="WAV", subtype="FLOAT"))
+
+        assert isinstance(result, InspectedSource)
+        assert (result.metadata.container, result.metadata.subtype) == ("WAV", "FLOAT")
+        assert (result.metadata.channels, result.metadata.sample_rate) == (1, 44100)
+
     def test_projection_is_the_live_bytes_rule(self) -> None:
         """Source bytes, decoded array, downmix, and canonical waveform, summed exactly."""
         data = encoded(frames=4801, channels=1, rate=48000)
@@ -158,7 +166,8 @@ class TestRejectedAtMetadataValidation:
     @pytest.mark.parametrize(
         ("kwargs", "reason"),
         [
-            ({"container": "WAV"}, IneligibleReason.UNSUPPORTED_CONTAINER),
+            ({"container": "AIFF"}, IneligibleReason.UNSUPPORTED_CONTAINER),
+            ({"container": "WAV"}, IneligibleReason.UNSUPPORTED_SUBTYPE),
             ({"subtype": "PCM_S8"}, IneligibleReason.UNSUPPORTED_SUBTYPE),
             ({"channels": 3}, IneligibleReason.UNSUPPORTED_CHANNEL_COUNT),
             ({"rate": 15999}, IneligibleReason.SOURCE_BELOW_MIN_SAMPLE_RATE),
@@ -175,15 +184,15 @@ class TestRejectedAtMetadataValidation:
         assert outcome.decoder_diagnostic is None
 
     def test_unadmitted_container_does_not_also_judge_the_subtype(self) -> None:
-        """WAV/FLOAT is no admitted pair, yet only the container is established."""
-        outcome = rejected(inspect(encoded(container="WAV", subtype="FLOAT")))
+        """AIFF/FLOAT is no admitted pair, yet only the container is established."""
+        outcome = rejected(inspect(encoded(container="AIFF", subtype="FLOAT")))
 
         assert outcome.primary_reason_code is IneligibleReason.UNSUPPORTED_CONTAINER
         assert outcome.supplemental_reason_codes == ()
 
     def test_every_violation_is_recorded_and_one_is_primary(self) -> None:
         """Container, channels, and rate all fail; precedence picks the container."""
-        outcome = rejected(inspect(encoded(container="WAV", channels=3, rate=8000)))
+        outcome = rejected(inspect(encoded(container="AIFF", channels=3, rate=8000)))
 
         assert outcome.primary_reason_code is IneligibleReason.UNSUPPORTED_CONTAINER
         assert outcome.supplemental_reason_codes == (

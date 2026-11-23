@@ -20,10 +20,12 @@ count is therefore a decode rejection, not an inconsistency, when the decoder ra
 **What the decoder was seen to do.** With soundfile 0.14.0 and libsndfile 1.2.2 on macOS,
 truncated buffers, overwritten bytes, and a header claiming more samples than the stream
 holds all raised `LibsndfileError` during decode. A header claiming fewer samples decoded
-exactly that many and dropped the rest without an error. No buffer tried produced a
-decoded shape that disagreed with inspection, an empty array, a non-finite sample, or a
-sample outside [-1.0, 1.0]. Those checks are here because v4 requires them and because the
-observations come from one platform and a limited set of buffers.
+exactly that many and dropped the rest without an error. No FLAC or integer PCM buffer tried
+produced a decoded shape that disagreed with inspection, an empty array, a non-finite sample,
+or a sample outside [-1.0, 1.0]. A WAV FLOAT buffer can hold those values, and libsndfile
+returns them as written: a probe on 2026-11-23 read back NaN, both infinities, 1.5, and -2.0
+unchanged. Those checks are here because v4 requires them and because the observations come
+from one platform and a limited set of buffers.
 
 A decode rejection may be charged to the source only after the run-level preconditions
 hold, the golden fixture among them. That ordering belongs to the runner, which is planned

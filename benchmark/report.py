@@ -1,7 +1,7 @@
 """Publication gates and the paired comparison, per stratum, read from the walk and systems outputs.
 
 The report reads a finished walk directory and a finished systems directory, and writes nothing.
-Protocol v13 reports each stratum on its own and never pools them, so this module evaluates the
+Protocol v13 and later report each stratum on its own and never pool them, so this module evaluates the
 seven `publication_gates.required` gates per stratum: each gate is decided from one stratum's
 walk and systems outputs. That per-stratum evaluation is a reading of v12's per-stratum
 reporting, made here because the protocol names the gates without naming the unit they apply to.

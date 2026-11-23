@@ -1,6 +1,6 @@
 """Tests for the golden fixtures and the run-level precondition that checks them.
 
-The analytic fixture's digest is asserted on every platform. The resampler fixture's is
+The analytic and float fixtures' digests are asserted on every platform. The resampler's is
 asserted only on the reference platform, because resampler output differed between
 macOS arm64 and Linux x86_64 with the same pinned packages; elsewhere that test is
 skipped rather than passed.
@@ -10,16 +10,23 @@ from __future__ import annotations
 
 import dataclasses
 import hashlib
+import io
 import platform
 import sys
 
 import numpy as np
 import pytest
+import soundfile as sf
 
 from benchmark import golden_fixture
+from benchmark.canonicalisation import CanonicalWaveform
 from benchmark.golden_fixture import (
+    canonical_fixture,
+    fixture_bytes,
     fixture_failure,
+    fixture_float_samples,
     fixture_integers,
+    fixture_wav_float,
     platform_token,
     verify_golden_fixtures,
 )
@@ -62,6 +69,28 @@ class TestFixtureDigests:
     def test_resampler_fixture_on_the_reference_platform(self) -> None:
         """The digest measured on darwin_arm64."""
         assert fixture_failure(FIXTURES["resampler"], PROTOCOL.canonicalisation) is None
+
+    def test_float_fixture_on_every_platform(self) -> None:
+        """WAV FLOAT, 16 kHz mono: the target rate, so the resampler returns its input."""
+        assert fixture_failure(FIXTURES["float"], PROTOCOL.canonicalisation) is None
+
+    def test_float_digest_follows_from_its_samples(self) -> None:
+        """Computed without the decoder: float32 widened to float64, with negative zero made
+        positive, as little-endian doubles. That derivation is what justifies the scope."""
+        samples = fixture_float_samples(FIXTURES["float"]).astype(np.float64)[:, 0]
+        normalised = np.add(samples, 0.0)
+
+        digest = hashlib.sha256(normalised.astype("<f8").tobytes(order="C")).hexdigest()
+
+        assert digest == FIXTURES["float"].canonical_sha256
+
+    def test_float_fixture_canonical_waveform_has_no_negative_zero(self) -> None:
+        """The fixture holds a negative zero, and canonicalisation must remove its sign."""
+        result = canonical_fixture(FIXTURES["float"], PROTOCOL.canonicalisation)
+
+        assert isinstance(result, CanonicalWaveform)
+        assert np.signbit(fixture_float_samples(FIXTURES["float"])[1, 0])
+        assert not np.signbit(result.samples[1])
 
 
 class TestFixtureFailure:
@@ -153,3 +182,52 @@ class TestPrecondition:
     def test_every_fixture_passes_on_the_reference_platform(self) -> None:
         """The precondition as a run would execute it here."""
         assert verify_golden_fixtures(PROTOCOL, runtime_platform=platform_token()) is None
+
+
+FLOAT_FIXTURE = dataclasses.replace(
+    FIXTURES["analytic"], subtype="FLOAT", container="WAV", frames=1000
+)
+
+
+class TestFloatFixtureSamples:
+    """The FLOAT generator writes exact 24-bit fractions, with three frames set explicitly."""
+
+    def test_every_value_is_an_exact_24_bit_fraction(self) -> None:
+        scaled = fixture_float_samples(FLOAT_FIXTURE).astype(np.float64) * 2**23
+
+        np.testing.assert_array_equal(scaled, np.round(scaled))
+        assert np.all(np.abs(scaled) <= 2**23)
+
+    def test_the_three_forced_frames_are_the_rails_and_negative_zero(self) -> None:
+        samples = fixture_float_samples(FLOAT_FIXTURE)
+
+        assert samples[0, 0] == -1.0
+        assert samples[1, 0] == 0.0
+        assert np.signbit(samples[1, 0])
+        assert samples[2, 0] == 1.0
+        assert not np.signbit(samples[2, 0])
+
+    def test_the_remaining_frames_are_the_pcg64_24_bit_draw(self) -> None:
+        generator = np.random.Generator(np.random.PCG64(FLOAT_FIXTURE.seed))
+        draw = generator.integers(
+            -(2**23), 2**23 - 1, size=(FLOAT_FIXTURE.frames, 1), endpoint=True, dtype=np.int64
+        )
+        expected = draw[3:, :].astype(np.float32) / np.float32(2**23)
+
+        np.testing.assert_array_equal(fixture_float_samples(FLOAT_FIXTURE)[3:], expected)
+
+    def test_the_wav_file_reads_back_to_the_same_samples(self) -> None:
+        data = fixture_wav_float(FLOAT_FIXTURE)
+        info = sf.info(io.BytesIO(data))
+        read, _ = sf.read(io.BytesIO(data), dtype="float64", always_2d=True)
+
+        assert (info.format, info.subtype, info.channels) == ("WAV", "FLOAT", 1)
+        assert (info.samplerate, info.frames) == (FLOAT_FIXTURE.sample_rate, FLOAT_FIXTURE.frames)
+        np.testing.assert_array_equal(read, fixture_float_samples(FLOAT_FIXTURE).astype(np.float64))
+        assert np.signbit(read[1, 0])
+
+    def test_the_file_type_follows_the_subtype(self) -> None:
+        float_format = sf.info(io.BytesIO(fixture_bytes(FLOAT_FIXTURE))).format
+        integer_format = sf.info(io.BytesIO(fixture_bytes(FIXTURES["analytic"]))).format
+
+        assert (float_format, integer_format) == ("WAV", "FLAC")

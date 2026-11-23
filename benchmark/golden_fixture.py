@@ -1,11 +1,14 @@
 """Golden fixtures: known inputs a run must reproduce before it opens any candidate.
 
 Protocol v5 freezes each fixture's recipe and the canonical digest it must produce. A
-fixture is generated in code rather than stored: seeded integer samples from NumPy's
-PCG64, written to FLAC in memory by the pinned soundfile, then run through the same
-inspect, decode, and canonicalise steps as a candidate. The digest covers the canonical
-samples, not the FLAC bytes, because the encoded bytes carry the libFLAC version and can
-differ between libsndfile builds while the decoded integer PCM cannot.
+fixture is generated in code rather than stored: seeded samples from NumPy's PCG64,
+written in memory by the pinned soundfile, then run through the same inspect, decode,
+and canonicalise steps as a candidate. Integer subtypes are written to FLAC. The FLOAT
+subtype is written to WAV, from float32 values that are exact 24-bit fractions. The digest
+covers the canonical samples, not the file bytes. The FLAC bytes carry the libFLAC version,
+which can differ between libsndfile builds while the decoded integer PCM cannot. The WAV
+bytes carry a PEAK chunk with a write time: two writes of the same samples 1.2 s apart
+produced different bytes on the reference platform, while the decoded samples are the same.
 
 **The reference platform is part of the runtime conformance check.** Resampler output was
 not bit-identical between macOS arm64 and Linux x86_64 with the same pinned packages, and
@@ -36,10 +39,14 @@ from benchmark.source_inspection import InspectedSource, inspect_source
 from benchmark.source_outcome import AbortReason, RunAbortOutcome, SourceIneligibleOutcome
 
 __all__ = [
+    "FLOAT_GENERATOR",
     "canonical_fixture",
+    "fixture_bytes",
     "fixture_failure",
     "fixture_flac",
+    "fixture_float_samples",
     "fixture_integers",
+    "fixture_wav_float",
     "platform_token",
     "verify_golden_fixtures",
 ]
@@ -47,6 +54,12 @@ __all__ = [
 logger = logging.getLogger(__name__)
 
 _BITS = {"PCM_16": 16, "PCM_24": 24}
+# The FLOAT generator's identity. It is pinned here rather than in the protocol file because
+# the protocol file carries one generator field, for the integer subtypes. Protocol v14 kept
+# that schema when it added the FLOAT subtype, so the float generator is not in the file. Every float sample is a signed
+# 24-bit integer divided by 2**23, so each is exactly representable in float32.
+FLOAT_GENERATOR = "pcg64_24bit_fraction_negative_rail_negative_zero_positive_rail"
+_FLOAT_SCALE = 2**23
 # Identifies the fixture in the records the pipeline builds along the way; those records
 # are only inspected here and never published as source outcomes.
 _FIXTURE_ID = "golden-fixture"
@@ -86,11 +99,57 @@ def fixture_flac(fixture: GoldenFixture) -> bytes:
     return out.getvalue()
 
 
+def fixture_float_samples(fixture: GoldenFixture) -> npt.NDArray[np.float32]:
+    """The FLOAT fixture's samples, shaped (frames, channels), each exact in float32.
+
+    A signed 24-bit integer from PCG64 with the fixture's seed, over the range the PCM_24
+    fixture draws from, divided by 2**23. Three frames are then written explicitly: the first
+    is the negative rail, -1.0, the second is negative zero, and the third is +1.0. The uniform
+    draw never reaches +1.0, and the negative zero gives signed-zero normalisation a value to
+    change. Frames 3 onward are the draw, so they match the PCM_24 stream under the same seed.
+    """
+    generator = np.random.Generator(np.random.PCG64(fixture.seed))
+    integers = generator.integers(
+        -(2**23),
+        2**23 - 1,
+        size=(fixture.frames, fixture.channels),
+        endpoint=True,
+        dtype=np.int64,
+    )
+    # Both operations are exact: the integers have at most 24 significant bits, and dividing
+    # by a power of two only moves the exponent.
+    samples = integers.astype(np.float32) / np.float32(_FLOAT_SCALE)
+    samples[0, :] = -1.0
+    samples[1, :] = -0.0
+    samples[2, :] = 1.0
+    return samples
+
+
+def fixture_wav_float(fixture: GoldenFixture) -> bytes:
+    """The FLOAT fixture written as WAV in memory, from its float32 samples."""
+    out = io.BytesIO()
+    sf.write(
+        out,
+        fixture_float_samples(fixture),
+        fixture.sample_rate,
+        format="WAV",
+        subtype="FLOAT",
+    )
+    return out.getvalue()
+
+
+def fixture_bytes(fixture: GoldenFixture) -> bytes:
+    """The fixture's file bytes: WAV for the FLOAT subtype, FLAC for the integer subtypes."""
+    if fixture.subtype == "FLOAT":
+        return fixture_wav_float(fixture)
+    return fixture_flac(fixture)
+
+
 def canonical_fixture(
     fixture: GoldenFixture, config: Canonicalisation
 ) -> CanonicalWaveform | SourceIneligibleOutcome | RunAbortOutcome:
     """Run the fixture through inspection, decode, and canonicalisation."""
-    data = fixture_flac(fixture)
+    data = fixture_bytes(fixture)
     identity = SourceIdentity(len(data), hashlib.sha256(data).hexdigest(), config.decode)
     artifact = ArtifactBuffered(identity=identity, data=data)
     inspected = inspect_source(

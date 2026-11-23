@@ -1,4 +1,4 @@
-"""Frame metrics to recording means to the paired comparison, as protocol v13 aggregates them.
+"""Frame metrics to recording means to the paired comparison, as protocol v13 and later aggregate them.
 
 1. Within a recording, the unweighted arithmetic mean of its eligible frames' values.
 2. Across recordings, the unweighted macro mean and the median; with an even number of

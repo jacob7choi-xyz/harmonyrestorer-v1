@@ -1,4 +1,4 @@
-"""One candidate through the selection walk's predicates, in protocol v13's order.
+"""One candidate through the selection walk's predicates, in the protocol's order (v13 and later).
 
 `examine_candidate` takes a candidate in its stratum's frozen universe, the walk state that
 earlier decisions leave behind, and three injected functions: the fetch for the stratum, the
@@ -16,7 +16,7 @@ exceptions for the driver to record. Every outcome carries an `Evidence` record 
 predicate compared, for the audit trail.
 
 Rule 1 (training source identity) can match only an identifier inside the training collection's
-item. The v13 strata are not that item, so the syntax predicate rejects every candidate before
+item. The strata are not that item, so the syntax predicate rejects every candidate before
 rule 1 runs. Rule 1 is still evaluated, in order, so the predicate is in place if a stratum
 names that item.
 """

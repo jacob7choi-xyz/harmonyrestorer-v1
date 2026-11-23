@@ -123,6 +123,12 @@ SUPERSEDED_ARTIFACTS = {
     "docs/benchmark-protocol-v12.md": (
         "dd8008906ac07e04a7d9fe3ac3bd7bbd7ff1b2f222d945367b722a0426f2f918"  # pragma: allowlist secret
     ),
+    "benchmark/protocols/v13.json": (
+        "af20c5b6e3ac8f1ae7a6d9bfa74c15f4eaf2a1196114156fbf39f6fe777f9406"  # pragma: allowlist secret
+    ),
+    "docs/benchmark-protocol-v13.md": (
+        "01486bbff18fce9c2eb11d0b7b5cde84cf4c034d59dcd4f0fd138a1386f2f18d"  # pragma: allowlist secret
+    ),
 }
 
 
@@ -163,7 +169,7 @@ class TestRealProtocol:
     """The checked-in config must load and describe itself accurately."""
 
     def test_it_loads(self) -> None:
-        assert load_protocol().protocol_version == 13
+        assert load_protocol().protocol_version == 14
 
     def test_digest_is_of_the_exact_file_bytes(self) -> None:
         """The provenance claim is 'these bytes governed this run', so the digest
@@ -287,8 +293,8 @@ class TestVersionCommitments:
     """Protocol promises are enforced at load, so weakening one requires a version bump."""
 
     def test_unsupported_version(self, tmp_path: Path) -> None:
-        path = variant(tmp_path, lambda d: d.update({"protocol_version": 14}))
-        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 14"):
+        path = variant(tmp_path, lambda d: d.update({"protocol_version": 15}))
+        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 15"):
             _load_from_path(path)
 
     def test_composite_score_cannot_be_enabled(self, tmp_path: Path) -> None:
@@ -579,7 +585,7 @@ class TestOnlyOneApprovedConfiguration:
             d["aggregation"]["bootstrap"]["iterations"] = 50_000
 
         parsed = _load_from_path(variant(tmp_path, alternate))
-        assert parsed.protocol_version == 13
+        assert parsed.protocol_version == 14
         assert parsed.selection.seed == 999
 
         approved = load_protocol()
@@ -594,9 +600,9 @@ class TestAmendmentChain:
 
     def test_chain_names_the_immediately_superseded_artifacts(self) -> None:
         amends = load_protocol().amends
-        assert amends.protocol_version == 12
-        assert amends.protocol_path == "benchmark/protocols/v12.json"
-        assert amends.document_path == "docs/benchmark-protocol-v12.md"
+        assert amends.protocol_version == 13
+        assert amends.protocol_path == "benchmark/protocols/v13.json"
+        assert amends.document_path == "docs/benchmark-protocol-v13.md"
 
     def test_recorded_digests_match_the_archived_files(self) -> None:
         amends = load_protocol().amends
@@ -636,14 +642,15 @@ class TestAmendmentChain:
 
     def test_the_predecessor_must_be_the_immediately_previous_version(self, tmp_path: Path) -> None:
         path = variant(tmp_path, lambda d: d["amends"].update({"protocol_version": 0}))
-        with pytest.raises(ProtocolValueError, match=r"amends\.protocol_version must be 12"):
+        with pytest.raises(ProtocolValueError, match=r"amends\.protocol_version must be 13"):
             _load_from_path(path)
 
-    def test_the_superseded_config_is_not_loadable_as_current(self) -> None:
-        """Proof the version bump is real rather than cosmetic: the archived v1 file
-        still parses, and the current validator refuses it."""
-        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 12"):
-            _load_from_path(REPO_ROOT / "benchmark" / "protocols" / "v12.json")
+    def test_the_superseded_configs_are_not_loadable_as_current(self) -> None:
+        """Proof the version bump is real rather than cosmetic: each archived config still
+        parses, and the current validator refuses it by its declared version."""
+        for version in (12, 13):
+            with pytest.raises(ProtocolValueError, match=f"unsupported protocol_version {version}"):
+                _load_from_path(REPO_ROOT / "benchmark" / "protocols" / f"v{version}.json")
 
 
 class TestFrozenTransform:
@@ -994,14 +1001,17 @@ class TestCanonicalWaveformIsPinned:
 
 
 class TestSourceDomainIsFrozenBeforeAcquisition:
-    """The source contract is chosen now, before the candidate universe exists.
+    """The source contract is fixed before the candidates it admits are scored.
 
     Pinning only the subtype the 145 training files happen to carry would mean meeting a
     PCM_16 candidate later and widening the contract after inspecting the population, which
-    is the governance shape this protocol exists to prevent. The admitted set instead rests
-    on a proof: integer PCM converts exactly into float64 and its decoded amplitude is
-    bounded by construction. PCM_8 satisfies that proof and is still excluded, for the
-    separate reason that its quantisation noise would become part of the clean reference.
+    is the governance shape this protocol exists to prevent. The integer subtypes rest on a
+    proof: integer PCM converts exactly into float64 and its decoded amplitude is bounded by
+    construction. PCM_8 satisfies that proof and is still excluded, for the separate reason
+    that its quantisation noise would become part of the clean reference. WAV FLOAT converts
+    exactly as well, but its amplitude is bounded per sample by the waveform check, not by
+    construction. Protocol v14 admitted it after the chamber candidates were measured, and the
+    amendment record says so.
     """
 
     @pytest.mark.parametrize(
@@ -1014,11 +1024,25 @@ class TestSourceDomainIsFrozenBeforeAcquisition:
             ),
             (
                 [["FLAC", "PCM_16"], ["FLAC", "PCM_24"], ["FLAC", "FLOAT"]],
-                "float subtype, where neither the bound nor exactness holds",
+                "FLAC with FLOAT, a pair no version admits",
+            ),
+            (
+                [["FLAC", "PCM_16"], ["FLAC", "PCM_24"], ["FLAC", "PCM_32"]],
+                "the v13 set, without WAV FLOAT",
+            ),
+            (
+                [
+                    ["FLAC", "PCM_16"],
+                    ["FLAC", "PCM_24"],
+                    ["FLAC", "PCM_32"],
+                    ["WAV", "FLOAT"],
+                    ["WAV", "PCM_16"],
+                ],
+                "WAV with PCM_16 admitted beside WAV FLOAT",
             ),
             (
                 [["WAV", "PCM_24"], ["FLAC", "PCM_16"], ["FLAC", "PCM_24"], ["FLAC", "PCM_32"]],
-                "container outside the analysed acquisition path",
+                "WAV with PCM_24, a subtype no WAV pair admits",
             ),
         ],
     )
@@ -1033,8 +1057,8 @@ class TestSourceDomainIsFrozenBeforeAcquisition:
             _load_from_path(path)
 
     def test_formats_are_pairs_so_they_cannot_be_recombined(self) -> None:
-        """Two independent sets would bless FLAC+FLOAT from a permitted container and a
-        permitted subtype that were never approved together."""
+        """Two independent sets would bless FLAC with FLOAT, because FLAC and FLOAT are each
+        admitted with some other partner, and no version approved that pair."""
         formats = load_protocol().canonicalisation.decode.source_formats
         assert all(isinstance(pair, tuple) and len(pair) == 2 for pair in formats)
 
@@ -2062,11 +2086,15 @@ class TestGoldenFixtures:
     """v5 freezes the fixtures v4 required but never defined, and where each is binding."""
 
     def test_the_real_fixtures(self) -> None:
-        """An analytic fixture binding everywhere and a resampler fixture binding on the
+        """Analytic and float fixtures binding everywhere, and a resampler fixture binding on the
         reference platform, whose digests differed between macOS arm64 and Linux x86_64."""
         golden = load_protocol().golden_fixtures
         scopes = {fixture.name: fixture.verified_on for fixture in golden.fixtures}
-        assert scopes == {"analytic": "every_platform", "resampler": "reference_platform"}
+        assert scopes == {
+            "analytic": "every_platform",
+            "resampler": "reference_platform",
+            "float": "every_platform",
+        }
         assert golden.reference_platform == "darwin_arm64"
 
     @pytest.mark.parametrize(
@@ -2099,7 +2127,8 @@ class TestGoldenFixtures:
         """Otherwise a decoder fault off the reference platform reaches a candidate first."""
 
         def only_reference(d: dict[str, Any]) -> None:
-            d["golden_fixtures"]["fixtures"][0]["verified_on"] = "reference_platform"
+            for fixture in d["golden_fixtures"]["fixtures"]:
+                fixture["verified_on"] = "reference_platform"
 
         with pytest.raises(ProtocolValueError, match="must include an every_platform fixture"):
             _load_from_path(variant(tmp_path, only_reference))
@@ -2132,6 +2161,20 @@ class TestGoldenFixtures:
         path = variant(tmp_path, lambda d: d["golden_fixtures"]["fixtures"][0].update(changes))
         with pytest.raises(ProtocolValueError, match=message):
             _load_from_path(path)
+
+    def test_a_float_fixture_needs_the_three_frames_its_generator_sets(
+        self, tmp_path: Path
+    ) -> None:
+        """The FLOAT generator writes the rail, negative zero, and +1.0 before its draw."""
+
+        def shorten(d: dict[str, Any]) -> None:
+            float_fixture = next(
+                f for f in d["golden_fixtures"]["fixtures"] if f["subtype"] == "FLOAT"
+            )
+            float_fixture["frames"] = 2
+
+        with pytest.raises(ProtocolValueError, match="frames must be at least 3"):
+            _load_from_path(variant(tmp_path, shorten))
 
 
 class TestRulesV4LeftOpen:

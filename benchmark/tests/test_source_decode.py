@@ -1,11 +1,12 @@
 """Tests for decoding an inspected source and validating what the decoder returned.
 
 Buffers are written by libsndfile, then sometimes cut or given a different sample count in
-their header, and every one passes through `inspect_source` before it is decoded. Four
-reasons were not produced by any buffer tried: a decoded shape that disagrees with
-inspection, an empty array, a non-finite sample, and a sample outside [-1.0, 1.0]. Their
-checks are tested as pure functions on constructed arrays, and two tests replace the
-decoder to show those results reach the record at the right stage.
+their header, and every one passes through `inspect_source` before it is decoded. No FLAC or
+integer PCM buffer tried produced four results: a decoded shape that disagrees with
+inspection, an empty array, a non-finite sample, and a sample outside [-1.0, 1.0]. WAV FLOAT
+buffers can hold the last two, so `TestWavFloatSources` writes them and decodes them through
+the real pipeline. The checks themselves are tested as pure functions on constructed arrays,
+and two tests replace the decoder to show those results reach the record at the right stage.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ import pytest
 import soundfile as sf
 
 from benchmark import source_decode
+from benchmark.canonicalisation import CanonicalWaveform, canonicalise
 from benchmark.protocol import load_protocol
 from benchmark.source_acquisition import ArtifactBuffered
 from benchmark.source_decode import decode_source, decoded_metadata_matches, waveform_violations
@@ -243,6 +245,86 @@ class TestRecordsFromAReplacedDecoder:
         assert outcome.supplemental_reason_codes == (IneligibleReason.INVALID_SOURCE_AMPLITUDE,)
         assert outcome.terminating_evaluation_stage is EvaluationStage.WAVEFORM_VALIDATION
         assert outcome.decoder_diagnostic is None
+
+
+def encoded_float(samples: npt.NDArray[np.float32], *, rate: int = 44100) -> bytes:
+    """A WAV FLOAT buffer libsndfile wrote from the given float32 samples."""
+    out = io.BytesIO()
+    sf.write(out, samples, rate, format="WAV", subtype="FLOAT")
+    return out.getvalue()
+
+
+class TestWavFloatSources:
+    """WAV FLOAT buffers through the real pipeline: admitted in range, refused outside it."""
+
+    @pytest.mark.parametrize(
+        ("value", "primary", "supplemental"),
+        [
+            pytest.param(1.5, IneligibleReason.INVALID_SOURCE_AMPLITUDE, (), id="above-range"),
+            pytest.param(np.nan, IneligibleReason.NONFINITE_SOURCE, (), id="nan"),
+            pytest.param(
+                np.inf,
+                IneligibleReason.NONFINITE_SOURCE,
+                (IneligibleReason.INVALID_SOURCE_AMPLITUDE,),
+                id="infinity",
+            ),
+        ],
+    )
+    def test_an_out_of_range_or_non_finite_sample_is_refused(
+        self,
+        value: float,
+        primary: IneligibleReason,
+        supplemental: tuple[IneligibleReason, ...],
+    ) -> None:
+        """The decoder returns a record in place of samples, so nothing downstream receives them."""
+        samples = np.zeros((1000, 1), dtype=np.float32)
+        samples[10, 0] = value
+
+        _, result = decode(encoded_float(samples))
+
+        outcome = rejected(result)
+        assert outcome.primary_reason_code is primary
+        assert outcome.supplemental_reason_codes == supplemental
+        assert outcome.terminating_evaluation_stage is EvaluationStage.WAVEFORM_VALIDATION
+        assert outcome.decoder_diagnostic is None
+
+    def test_in_range_samples_decode_exactly_and_keep_their_sign(self) -> None:
+        """Every float32 value reads back unchanged, including both rails and a negative zero."""
+        samples = np.random.default_rng(3).uniform(-1, 1, (1000, 1)).astype(np.float32)
+        samples[0, 0], samples[1, 0], samples[2, 0] = -1.0, 1.0, -0.0
+
+        _, result = decode(encoded_float(samples))
+
+        decoded_samples = decoded(result)
+        np.testing.assert_array_equal(decoded_samples, samples.astype(np.float64))
+        assert decoded_samples[0, 0] == -1.0
+        assert decoded_samples[1, 0] == 1.0
+        assert np.signbit(decoded_samples[2, 0])
+
+    def test_negative_zeros_change_the_decoded_digest_and_not_the_canonical_one(self) -> None:
+        """Decoding keeps the sign of zero, so the decoded digest differs. Canonicalisation
+        normalises it, so the canonical digest does not."""
+        inspected_positive, result_positive = decode(encoded_float(np.zeros((1000, 1), np.float32)))
+        inspected_negative, result_negative = decode(
+            encoded_float(np.full((1000, 1), -0.0, dtype=np.float32))
+        )
+        positive, negative = decoded(result_positive), decoded(result_negative)
+
+        assert not np.any(np.signbit(positive))
+        assert np.all(np.signbit(negative))
+        assert source_decode.decoded_pcm_sha256(positive) != source_decode.decoded_pcm_sha256(
+            negative
+        )
+        canonical_positive = canonicalise(
+            positive, inspected_positive, logical_source_id=SOURCE_ID, config=CONFIG
+        )
+        canonical_negative = canonicalise(
+            negative, inspected_negative, logical_source_id=SOURCE_ID, config=CONFIG
+        )
+        assert isinstance(canonical_positive, CanonicalWaveform)
+        assert isinstance(canonical_negative, CanonicalWaveform)
+        assert canonical_positive.sha256 == canonical_negative.sha256
+        assert not np.any(np.signbit(canonical_negative.samples))
 
 
 class TestDecodedMetadataMatches:
