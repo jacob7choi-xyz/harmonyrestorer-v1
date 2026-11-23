@@ -90,7 +90,7 @@ class TestIdentityRulesBeforeAnyFetch:
     def test_a_malformed_identifier_is_rejected_before_any_fetch(
         self, world: World, protocol: Protocol, strata: dict[str, Stratum]
     ) -> None:
-        """A dot-dot segment is malformed; the candidate is never fetched."""
+        """A dot-dot segment is malformed, and the candidate is rejected before any fetch."""
         identifier = f"{PIANO_SOURCE}/../escape.flac"
         outcome = examine(
             world, protocol, strata["solo_piano"], identifier, state_for([training_reference(2)])

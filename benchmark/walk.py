@@ -23,10 +23,15 @@ names that item.
 
 from __future__ import annotations
 
+import csv
+import hashlib
+import io
+import json
 import logging
 import math
+import shutil
 from collections import Counter
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -36,7 +41,8 @@ import numpy as np
 import numpy.typing as npt
 
 from benchmark.adjudication import AdjudicationRecord, answer_sets
-from benchmark.candidate_universe import ListedFile
+from benchmark.atomic_write import write_atomically
+from benchmark.candidate_universe import CandidateUniverse, ListedFile
 from benchmark.canonicalisation import CanonicalWaveform
 from benchmark.duplicate_screen import (
     Decision,
@@ -64,13 +70,14 @@ from benchmark.fetch import (
     Staged,
 )
 from benchmark.framing import frame
-from benchmark.protocol import Protocol, Stratum
+from benchmark.protocol import Protocol, Stratum, ZenodoArchiveStratum
 from benchmark.runner import Candidate, CanonicalFile, SourceRun
 from benchmark.selection import (
     ExclusionRule,
     TrainingIdentities,
     identifier_well_formed,
     matches_training_source,
+    walk_order,
 )
 from benchmark.source_outcome import RunAbortOutcome, SourceIneligibleOutcome
 
@@ -242,6 +249,11 @@ class Admitted:
     admission: Admission
     evidence: Evidence
     outcome: ClassVar[str] = "admitted"
+
+    @property
+    def identifier(self) -> str:
+        """The admitted candidate's source identifier."""
+        return self.admission.identifier
 
 
 @dataclass(frozen=True)
@@ -522,3 +534,395 @@ def examine_candidate(
     if not isinstance(waveform, CanonicalWaveform):
         return waveform
     return _screen_stage(protocol, listed, stratum.name, canonical, waveform, state, deps, evidence)
+
+
+class MetadataUnavailable(RuntimeError):
+    """Raised by a metadata provider when the MusicNet metadata file cannot be obtained."""
+
+
+MusicNetMetadata = Callable[[], bytes]
+
+
+@dataclass(frozen=True)
+class ChamberPreparation:
+    """The chamber stratum's archive, as the walk needs it.
+
+    `archive_sha256` is None when the archive was not fetched as a whole, so no digest exists.
+    `fetch` answers each chamber candidate, from the extracted member or the archive's failure.
+    """
+
+    archive_sha256: str | None
+    fetch: FetchFn
+
+
+@dataclass(frozen=True)
+class WalkInputs:
+    """Everything a run needs that touches the network, the worker or the disk, injected."""
+
+    training: TrainingIdentities
+    training_references: Sequence[Reference]
+    adjudications: Sequence[AdjudicationRecord]
+    universes: Mapping[str, CandidateUniverse]
+    piano_fetch: FetchFn
+    chamber: ChamberPreparation
+    canonicalise: CanonicaliseFn
+    features: FeatureFn
+    musicnet_metadata: MusicNetMetadata
+
+
+@dataclass(frozen=True)
+class RunLayout:
+    """Where one run writes. The root is a directory that the caller created for this run.
+
+    Attributes:
+        root: The absolute run directory.
+    """
+
+    root: Path
+
+    def __post_init__(self) -> None:
+        """Refuse a relative root, since every recorded path must be absolute."""
+        if not self.root.is_absolute():
+            logger.error("Run directory must be absolute: %s", self.root)
+            raise ValueError(f"run directory must be absolute, got {self.root}")
+
+    @property
+    def audit_path(self) -> Path:
+        """One JSON line per candidate examined."""
+        return self.root / "audit_trail.jsonl"
+
+    @property
+    def manifest_path(self) -> Path:
+        """The walk manifest, written only when the run completes validly."""
+        return self.root / "walk_manifest.json"
+
+    @property
+    def halt_path(self) -> Path:
+        """The adjudication request, written when the walk halts on a flagged candidate."""
+        return self.root / "adjudication_needed.json"
+
+    @property
+    def invalid_path(self) -> Path:
+        """The reason the run is invalid, written when it is."""
+        return self.root / "run_invalid.json"
+
+    @property
+    def chamber_members_dir(self) -> Path:
+        """Where the chamber stratum's members are extracted."""
+        return self.root / "chamber_members"
+
+    @property
+    def training_work_dir(self) -> Path:
+        """Where the training references' workers write."""
+        return self.root / "training_work"
+
+    def candidate_dir(self, stratum: str, position: int) -> Path:
+        """The worker output directory for the candidate at *position* in *stratum*'s walk."""
+        return self.root / "candidates" / f"{stratum}-{position:06d}"
+
+    def ensure_dirs(self) -> None:
+        """Create the directories the run writes into, if they are missing."""
+        for directory in (
+            self.root / "candidates",
+            self.training_work_dir,
+            self.chamber_members_dir,
+        ):
+            directory.mkdir(exist_ok=True)
+
+
+@dataclass(frozen=True)
+class PlacedAdmission:
+    """An admission with its partition and its 1-based position among the stratum's admissions."""
+
+    partition: str
+    position: int
+    admission: Admission
+
+
+@dataclass(frozen=True)
+class StratumWalk:
+    """One stratum's walk: complete when its partitions filled, short when its universe ran out."""
+
+    name: str
+    status: str
+    placed: tuple[PlacedAdmission, ...]
+
+
+@dataclass(frozen=True)
+class WalkRun:
+    """A run that finished validly: every stratum walked, the manifest written."""
+
+    strata: tuple[StratumWalk, ...]
+    archive_sha256: str | None
+
+
+@dataclass(frozen=True)
+class WalkContext:
+    """What every stratum's walk shares: the protocol, the run, the audit trail and the state."""
+
+    protocol: Protocol
+    layout: RunLayout
+    audit: AuditTrail
+    state: WalkState
+    musicnet_metadata: MusicNetMetadata
+
+
+class AuditTrail:
+    """The audit trail, rewritten whole and atomically after each line, so each write replaces the file as one unit."""
+
+    def __init__(self, path: Path) -> None:
+        """Start an empty trail at *path*."""
+        self._path = path
+        self._lines: list[str] = []
+
+    def append(self, record: dict[str, Any]) -> None:
+        """Add one candidate's record and write the trail."""
+        self._lines.append(json.dumps(record, sort_keys=True, allow_nan=False, ensure_ascii=True))
+        write_atomically(self._path, ("\n".join(self._lines) + "\n").encode("utf-8"))
+
+
+def partition_plan(stratum: Stratum) -> tuple[str, ...]:
+    """The partition of each admission position, in partition order: position k is element k-1."""
+    return tuple(name for name in stratum.partition_order for _ in range(stratum.partitions[name]))
+
+
+def _fetch_for(stratum: Stratum, inputs: WalkInputs) -> FetchFn:
+    """The fetch that applies to *stratum*: the archive's for chamber, the item's otherwise."""
+    if isinstance(stratum, ZenodoArchiveStratum):
+        return inputs.chamber.fetch
+    return inputs.piano_fetch
+
+
+def _code_of(outcome: Admitted | Rejected | AwaitingAdjudication | RunInvalid) -> str | None:
+    """The protocol code the outcome carries, or None for an admission or a halt."""
+    return outcome.code if isinstance(outcome, (Rejected, RunInvalid)) else None
+
+
+def _audit_line(
+    stratum: str,
+    position: int,
+    outcome: Admitted | Rejected | AwaitingAdjudication | RunInvalid,
+    placed: PlacedAdmission | None,
+) -> dict[str, Any]:
+    """One candidate's audit record: where it sat in the walk, what happened, and the evidence."""
+    return {
+        "stratum": stratum,
+        "position": position,
+        "identifier": outcome.identifier,
+        "outcome": outcome.outcome,
+        "code": _code_of(outcome),
+        "partition": None if placed is None else placed.partition,
+        "admission_position": None if placed is None else placed.position,
+        "details": outcome.evidence.to_json(),
+    }
+
+
+def _discard(out_dir: Path) -> None:
+    """Remove a rejected candidate's worker output, which no later step reads."""
+    if out_dir.exists():
+        shutil.rmtree(out_dir)
+
+
+def _metadata_section(
+    musicnet: ZenodoArchiveStratum | None, identifiers: Sequence[str], provider: MusicNetMetadata
+) -> dict[str, Any]:
+    """The MusicNet metadata rows for the MusicNet identifiers named, or why none could be given.
+
+    The file's MD5 is checked against the stratum's frozen value, and a mismatch is reported
+    without rows rather than trusted.
+    """
+    if musicnet is None:
+        return {"status": "not_required"}
+    prefix = f"{musicnet.source}/"
+    ids = sorted({int(i.removeprefix(prefix)) for i in identifiers if i.startswith(prefix)})
+    if not ids:
+        return {"status": "not_required"}
+    try:
+        data = provider()
+        text = data.decode("utf-8")
+    except (MetadataUnavailable, UnicodeDecodeError) as error:
+        logger.error("MusicNet metadata unavailable for the halt file: %s", error)
+        return {"status": "unavailable", "reason": str(error)}
+    actual = hashlib.md5(data, usedforsecurity=False).hexdigest()
+    if actual != musicnet.metadata_md5:
+        return {"status": "md5_mismatch", "expected": musicnet.metadata_md5, "actual": actual}
+    wanted = set(ids)
+    rows = [row for row in csv.DictReader(io.StringIO(text)) if row.get("id", "").isdigit()]
+    matching = [row for row in rows if int(row["id"]) in wanted]
+    return {
+        "status": "verified",
+        "file": musicnet.metadata,
+        "md5": actual,
+        "ids": ids,
+        "rows": matching,
+    }
+
+
+def _write_halt(
+    ctx: WalkContext, stratum: Stratum, position: int, outcome: AwaitingAdjudication
+) -> None:
+    """Write the adjudication request: the candidate, every flagged reference, and the metadata."""
+    musicnet = next(
+        (s for s in ctx.protocol.selection.strata if isinstance(s, ZenodoArchiveStratum)), None
+    )
+    named = [outcome.identifier, *(flag.identity.identifier for flag in outcome.flagged)]
+    payload = {
+        "stratum": stratum.name,
+        "position": position,
+        "identifier": outcome.identifier,
+        "candidate": _identity_json(outcome.identity),
+        "flagged": [
+            {"group": flag.group.value, "score": flag.score, **_identity_json(flag.identity)}
+            for flag in outcome.flagged
+        ],
+        "musicnet_metadata": _metadata_section(musicnet, named, ctx.musicnet_metadata),
+    }
+    body = json.dumps(payload, indent=2, sort_keys=True, allow_nan=False, ensure_ascii=True)
+    write_atomically(ctx.layout.halt_path, (body + "\n").encode("utf-8"))
+    logger.error(
+        "Walk halted at %s position %d: %s awaits adjudication",
+        stratum.name,
+        position,
+        outcome.identifier,
+    )
+
+
+def _record_invalid(layout: RunLayout, stratum: str | None, outcome: RunInvalid) -> RunInvalid:
+    """Write why the run is invalid, and return the outcome unchanged."""
+    payload = {
+        "stratum": stratum,
+        "identifier": outcome.identifier,
+        "code": outcome.code,
+        "detail": outcome.detail,
+    }
+    body = json.dumps(payload, indent=2, sort_keys=True, allow_nan=False, ensure_ascii=True)
+    write_atomically(layout.invalid_path, (body + "\n").encode("utf-8"))
+    logger.error("Run invalid (%s): %s", outcome.code, outcome.detail)
+    return outcome
+
+
+def _walk_stratum(
+    ctx: WalkContext, stratum: Stratum, universe: CandidateUniverse, deps: WalkDeps
+) -> StratumWalk | RunInvalid | AwaitingAdjudication:
+    """Walk one stratum in its seeded order until its partitions fill or its universe runs out.
+
+    A halt or a run invalid is returned to the caller, which stops the whole run. Its record is
+    written here, where the stratum and position are known.
+    """
+    plan = partition_plan(stratum)
+    by_id = {listed.identifier: listed for listed in universe.files}
+    placed: list[PlacedAdmission] = []
+    for position, identifier in enumerate(walk_order(by_id, ctx.protocol.selection.seed), start=1):
+        if len(placed) == len(plan):
+            break
+        out_dir = ctx.layout.candidate_dir(stratum.name, position)
+        outcome = examine_candidate(
+            ctx.protocol, stratum, by_id[identifier], ctx.state, out_dir, deps
+        )
+        if isinstance(outcome, Admitted):
+            entry = PlacedAdmission(plan[len(placed)], len(placed) + 1, outcome.admission)
+            placed.append(entry)
+            ctx.state.record_admission(outcome.admission)
+            ctx.audit.append(_audit_line(stratum.name, position, outcome, entry))
+            continue
+        ctx.audit.append(_audit_line(stratum.name, position, outcome, None))
+        if isinstance(outcome, Rejected):
+            _discard(out_dir)
+        elif isinstance(outcome, AwaitingAdjudication):
+            _write_halt(ctx, stratum, position, outcome)
+            return outcome
+        else:
+            return _record_invalid(ctx.layout, stratum.name, outcome)
+    status = "complete" if len(placed) == len(plan) else "short"
+    logger.info(
+        "Stratum %s %s with %d of %d admissions", stratum.name, status, len(placed), len(plan)
+    )
+    return StratumWalk(stratum.name, status, tuple(placed))
+
+
+def manifest_document(
+    protocol: Protocol, universes: Mapping[str, CandidateUniverse], run: WalkRun
+) -> dict[str, Any]:
+    """The walk manifest, with exactly the keys and entry fields the systems stage reads."""
+    return {
+        "protocol_sha256": protocol.source_sha256,
+        "universe_sha256": {s.name: universes[s.name].sha256 for s in protocol.selection.strata},
+        "archive_sha256": run.archive_sha256,
+        "strata": {w.name: {"status": w.status, "admitted": len(w.placed)} for w in run.strata},
+        "admissions": [
+            {
+                "stratum": walk.name,
+                "partition": entry.partition,
+                "position": entry.position,
+                "identifier": entry.admission.identifier,
+                "cluster": entry.admission.cluster,
+                "canonical_path": str(entry.admission.canonical.path),
+                "canonical_sha256": entry.admission.canonical.sha256,
+                "samples": entry.admission.canonical.samples,
+                "raw_sha256": entry.admission.raw_sha256,
+                "decoded_pcm_sha256": entry.admission.decoded_pcm_sha256,
+            }
+            for walk in run.strata
+            for entry in walk.placed
+        ],
+    }
+
+
+def archive_retries_invalid(
+    protocol: Protocol, layout: RunLayout, error: RetriesExhausted
+) -> RunInvalid:
+    """Record that the MusicNet archive's fetch exhausted its retries, which invalidates the run."""
+    outcome = RunInvalid(
+        error.identifier,
+        protocol.selection.retries_exhausted_code,
+        str(error),
+        Evidence(attempts=error.attempts),
+    )
+    return _record_invalid(layout, None, outcome)
+
+
+def run_walk(
+    protocol: Protocol, layout: RunLayout, inputs: WalkInputs
+) -> WalkRun | RunInvalid | AwaitingAdjudication:
+    """Prepare the chamber archive, walk each stratum in protocol order, and write the manifest.
+
+    The manifest is written only when every stratum was walked without a halt or an invalid
+    condition. A halt or an invalid run leaves its own record and no manifest.
+
+    Args:
+        protocol: The loaded protocol.
+        layout: The run directory, already created and empty.
+        inputs: The injected functions, training identities and references, and universes.
+
+    Returns:
+        The completed run, or the halt or invalid outcome that stopped it.
+    """
+    layout.ensure_dirs()
+    ctx = WalkContext(
+        protocol=protocol,
+        layout=layout,
+        audit=AuditTrail(layout.audit_path),
+        state=WalkState(
+            training=inputs.training,
+            training_references=inputs.training_references,
+            adjudications=inputs.adjudications,
+        ),
+        musicnet_metadata=inputs.musicnet_metadata,
+    )
+    walks: list[StratumWalk] = []
+    for stratum in protocol.selection.strata:
+        deps = WalkDeps(_fetch_for(stratum, inputs), inputs.canonicalise, inputs.features)
+        walk = _walk_stratum(ctx, stratum, inputs.universes[stratum.name], deps)
+        if not isinstance(walk, StratumWalk):
+            return walk
+        walks.append(walk)
+    run = WalkRun(tuple(walks), inputs.chamber.archive_sha256)
+    body = json.dumps(
+        manifest_document(protocol, inputs.universes, run),
+        indent=2,
+        allow_nan=False,
+        ensure_ascii=True,
+    )
+    write_atomically(layout.manifest_path, (body + "\n").encode("utf-8"))
+    logger.info("Walk complete; manifest written to %s", layout.manifest_path)
+    return run
