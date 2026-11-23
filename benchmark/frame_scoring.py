@@ -30,13 +30,13 @@ protocol version up to v8 names this case.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import numpy as np
 import numpy.typing as npt
 
 from benchmark.conditioning import InvalidSystemOutput, condition_pair
-from benchmark.metrics import PRIMARY_METRICS, MetricInputError, MetricResult
+from benchmark.metrics import PRIMARY_METRICS, MetricInputError, MetricResult, shift_tolerant
 from benchmark.protocol import Protocol
 
 __all__ = ["FrameScore", "FrameScoringError", "SystemFailure", "reference_frame", "score_output"]
@@ -52,11 +52,14 @@ class FrameScore:
 
     `results` holds the metrics in protocol order. The discard counts record what
     conditioning truncated from each side, so the manifest shows how the pair was formed.
+    `shift_tolerant` holds v13's diagnostic for each sample-wise metric it names; it sits
+    beside `results` and never replaces a primary score.
     """
 
     results: Mapping[str, MetricResult]
     reference_samples_discarded: int
     estimate_samples_discarded: int
+    shift_tolerant: Mapping[str, MetricResult] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -83,6 +86,9 @@ def score_output(
     reference: npt.NDArray[np.float64], estimate: npt.NDArray[np.float64], protocol: Protocol
 ) -> FrameOutcome:
     """Condition a system's output against the reference and score every primary metric.
+
+    Each sample-wise metric is also scored with v13's shift-tolerant diagnostic. The degraded
+    input is scored through this same function as v13's input baseline.
 
     Args:
         reference: The frame's clean reference, from `reference_frame`.
@@ -114,4 +120,32 @@ def score_output(
         results=results,
         reference_samples_discarded=conditioned.reference_samples_discarded,
         estimate_samples_discarded=conditioned.estimate_samples_discarded,
+        shift_tolerant=_shift_tolerant(conditioned.reference, conditioned.estimate, protocol),
     )
+
+
+def _shift_tolerant(
+    reference: npt.NDArray[np.float64], estimate: npt.NDArray[np.float64], protocol: Protocol
+) -> dict[str, MetricResult]:
+    """v13's diagnostic for each metric `metrics.shift_tolerant` names, on a conditioned pair.
+
+    Raises:
+        FrameScoringError: If a shifted pair is refused, which the reference is blamed for,
+            as for the primary metrics.
+    """
+    shift = protocol.metrics.shift_tolerant
+    scores = {}
+    for name in shift.metrics:
+        try:
+            scores[name] = shift_tolerant(
+                PRIMARY_METRICS[name],
+                reference,
+                estimate,
+                getattr(protocol.metrics, name),
+                shift.max_shift_samples,
+            )
+        except MetricInputError as error:
+            raise FrameScoringError(
+                f"{name} refused a shifted pair that conditioned successfully: {error}"
+            ) from error
+    return scores
