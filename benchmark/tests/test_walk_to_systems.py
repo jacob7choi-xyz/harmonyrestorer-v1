@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from systems_fakes import echo_factory, passing
+from systems_fakes import echo_factory, passing, passing_uvr
 from walk_fakes import (
     CHAMBER_SOURCE,
     Harness,
@@ -85,6 +85,7 @@ def run_stage(walk: Path, run_dir: Path, protocol: Protocol) -> dict[str, Any]:
         uvr_model_dir=run_dir.parent / "models",
         build_systems=echo_factory(fail_uvr_frame=None),
         preconditions=passing,
+        uvr_check=passing_uvr,
     )
 
 

@@ -6,24 +6,32 @@ Usage, from the repository root:
         --run-dir NEW_DIR --uvr-model-dir DIR [--opgan-checkpoint PATH]
 
 The run directory must not exist, because runs are never overwritten. The run writes
-`systems_results.jsonl` (one line per recording, frame, and system, the baseline included) and
-then `systems_summary.json`. A run that aborts writes neither, so a summary is present only for
-a run that finished.
+`systems_results.jsonl` (one line per recording, frame, and system, the baseline included),
+`systems_population.jsonl` (every candidate frame's verdict), and then `systems_summary.json`,
+which names the SHA-256 of the two JSONL files and of the walk manifest it parsed. A run that
+aborts writes none of them, so a summary is present only for a run that finished.
 
 Engines are built once, after the run preconditions pass. Each engine loads its model lazily,
 inside its first `denoise` call, so before the frame loop the run warms each engine up on a fixed
 tone (see `benchmark.systems_pipeline`). A load fault therefore aborts the run as a harness
-failure, and only calls on admitted frames are inside the engine boundary.
+failure, and only calls on admitted frames are inside the engine boundary. After each warm-up
+the run compares the UVR model files with their frozen digests again. audio-separator downloads
+any of these files that is missing when it loads the model (download_file_if_not_exists,
+audio-separator 0.44.2). The preconditions require all of them to be present, so the re-check
+confirms that the load left them unchanged. A file that is missing or differs aborts the run as
+a harness failure.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import os
 import sys
 from collections.abc import Callable, Sequence
+from functools import partial
 from pathlib import Path
 from typing import Protocol as Interface
 
@@ -34,7 +42,7 @@ from app.services.opgan_denoiser import OpGANDenoiserService
 from benchmark.atomic_write import write_atomically
 from benchmark.golden_fixture import platform_token
 from benchmark.protocol import Protocol, load_protocol
-from benchmark.run_preconditions import file_sha256, verify_run_preconditions
+from benchmark.run_preconditions import uvr_file_failures, verify_run_preconditions
 from benchmark.scoring import OPGAN, UVR
 from benchmark.source_outcome import RunAbortOutcome
 from benchmark.systems_pipeline import (
@@ -43,8 +51,9 @@ from benchmark.systems_pipeline import (
     StageContext,
     WalkManifest,
     build_summary,
-    load_walk_manifest,
+    parse_walk_manifest,
     population_to_json,
+    read_walk_manifest_bytes,
     record_to_json,
     score_manifest,
     warm_up_all,
@@ -88,6 +97,7 @@ class NamedSystem:
 
 SystemsFactory = Callable[[Protocol, Path, Path, Path], Sequence[System]]
 PreconditionCheck = Callable[..., RunAbortOutcome | None]
+UvrCheck = Callable[[Protocol, Path], list[str]]
 
 
 def build_production_systems(
@@ -179,27 +189,41 @@ def _create_run_dir(run_dir: Path) -> None:
         raise HarnessFailure(f"run directory {run_dir} cannot be created: {error}") from error
 
 
+def _write_lines(path: Path, lines: Sequence[str]) -> str:
+    """Write one JSON object per line, atomically, and return the SHA-256 of the bytes written."""
+    data = "".join(f"{line}\n" for line in lines).encode("utf-8")
+    write_atomically(path, data)
+    return hashlib.sha256(data).hexdigest()
+
+
 def _write_run(
     run_dir: Path,
     results: Sequence[AdmissionResult],
     manifest: WalkManifest,
     manifest_sha256: str,
 ) -> dict[str, object]:
-    """Write the results, the population, then the summary, each atomically; the summary is last."""
+    """Write the results, the population, then the summary, each atomically; the summary is last.
+
+    The summary names the SHA-256 of the exact bytes of the results and population files.
+    """
     lines = [
         json.dumps(record_to_json(record), sort_keys=True, allow_nan=False)
         for result in results
         for record in result.records
     ]
-    write_atomically(run_dir / RESULTS_NAME, "".join(f"{line}\n" for line in lines).encode())
+    results_sha256 = _write_lines(run_dir / RESULTS_NAME, lines)
     population = [
         json.dumps(population_to_json(result), sort_keys=True, allow_nan=False)
         for result in results
     ]
-    write_atomically(
-        run_dir / POPULATION_NAME, "".join(f"{line}\n" for line in population).encode()
+    population_sha256 = _write_lines(run_dir / POPULATION_NAME, population)
+    summary = build_summary(
+        manifest,
+        manifest_sha256,
+        results,
+        results_sha256=results_sha256,
+        population_sha256=population_sha256,
     )
-    summary = build_summary(manifest, manifest_sha256, results)
     text = json.dumps(summary, sort_keys=True, indent=2, allow_nan=False) + "\n"
     write_atomically(run_dir / SUMMARY_NAME, text.encode("utf-8"))
     logger.info("Wrote %d result lines to %s", len(lines), run_dir / RESULTS_NAME)
@@ -207,17 +231,30 @@ def _write_run(
 
 
 def _load_manifest(walk_dir: Path, protocol: Protocol) -> tuple[WalkManifest, str]:
-    """The validated walk manifest and the digest of its file, which the summary names.
+    """The validated walk manifest and the digest of the bytes it was parsed from.
+
+    The file is read once. The digest and the parse both come from those same bytes, so the
+    summary's `walk_manifest_sha256` names what was parsed.
 
     Raises:
-        HarnessFailure: If the manifest is refused or is not a regular file.
+        HarnessFailure: If the manifest cannot be read or is refused.
     """
-    manifest_path = walk_dir / MANIFEST_NAME
-    manifest = load_walk_manifest(manifest_path, protocol.source_sha256)
-    digest = file_sha256(manifest_path)
-    if digest is None:
-        raise HarnessFailure(f"walk manifest {manifest_path} is not a regular file")
-    return manifest, digest
+    raw = read_walk_manifest_bytes(walk_dir / MANIFEST_NAME)
+    manifest = parse_walk_manifest(raw, walk_dir, protocol.source_sha256)
+    return manifest, hashlib.sha256(raw).hexdigest()
+
+
+def _require_uvr_files(protocol: Protocol, uvr_model_dir: Path, check: UvrCheck) -> None:
+    """Abort the run unless the UVR model files still match their frozen digests.
+
+    Raises:
+        HarnessFailure: If any UVR file is missing or differs, so a warm-up changed it.
+    """
+    failures = check(protocol, uvr_model_dir)
+    if failures:
+        detail = "; ".join(failures)
+        logger.error("UVR model files changed after warm-up: %s", detail)
+        raise HarnessFailure(f"UVR model files changed after warm-up: {detail}")
 
 
 def _stage_context(protocol: Protocol, systems: Sequence[System], run_dir: Path) -> StageContext:
@@ -240,6 +277,7 @@ def run_systems(
     uvr_model_dir: Path,
     build_systems: SystemsFactory = build_production_systems,
     preconditions: PreconditionCheck = verify_run_preconditions,
+    uvr_check: UvrCheck = uvr_file_failures,
 ) -> dict[str, object]:
     """Run the systems stage over the walk manifest in `walk_dir`, writing results to `run_dir`.
 
@@ -252,6 +290,7 @@ def run_systems(
         uvr_model_dir: The directory holding the UVR model and its parameter files.
         build_systems: Builds the two systems after the preconditions pass.
         preconditions: The run-level precondition check.
+        uvr_check: Lists the UVR model files that fail their digests. It runs after each warm-up.
 
     Returns:
         The summary that was written.
@@ -271,7 +310,13 @@ def run_systems(
     )
     _create_run_dir(run_dir)
     systems = build_systems(protocol, run_dir, opgan_checkpoint, uvr_model_dir)
-    warm_up_all(systems, run_dir, protocol, run_dir / PROGRESS_NAME)
+    warm_up_all(
+        systems,
+        run_dir,
+        protocol,
+        run_dir / PROGRESS_NAME,
+        after_warm_up=partial(_require_uvr_files, protocol, uvr_model_dir, uvr_check),
+    )
     results = score_manifest(manifest, _stage_context(protocol, systems, run_dir))
     return _write_run(run_dir, results, manifest, manifest_sha256)
 

@@ -3,6 +3,9 @@
 Protocol semantics and runtime conformance are checked when the protocol loads. What
 remains is checked here, in this order:
 
+0. **Torch loading override.** A process with `TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD` set in its
+   environment aborts with `ENVIRONMENT_MISMATCH`, because that variable changes how
+   `torch.load` treats the UVR weights (see below). The check is by presence, not value.
 1. **Golden fixtures.** A runtime other than the reference platform aborts with
    `ENVIRONMENT_MISMATCH` before any fixture is tried; a fixture that does not reproduce
    its frozen digest aborts with `GOLDEN_FIXTURE_FAILURE` (protocol v5).
@@ -11,7 +14,8 @@ remains is checked here, in this order:
 3. **Model files.** The OpGAN checkpoint, the UVR model, and the two UVR parameter files are
    hashed and compared with their frozen digests (protocol v7); a missing or different file
    aborts with the code `runner.model_digest_mismatch_abort` names (protocol v8). Every
-   mismatching file is reported, not only the first.
+   mismatching file is reported, not only the first. The systems stage compares the UVR files
+   again after each warm-up (`benchmark.run_systems`), through `uvr_file_failures`.
 
 None of these aborts names a source, because no candidate has been opened yet. Three callers run
 these checks. The canonicalisation runner (`benchmark/runner.py`) calls this module before any
@@ -39,6 +43,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 from pathlib import Path
 
 from benchmark.degradation import golden_degraded_sha256
@@ -50,6 +55,7 @@ __all__ = [
     "degradation_golden_failure",
     "file_sha256",
     "model_file_failures",
+    "uvr_file_failures",
     "verify_run_preconditions",
 ]
 
@@ -58,6 +64,7 @@ logger = logging.getLogger(__name__)
 _CHUNK_BYTES = 1 << 20
 _VR_MODEL_DATA = "vr_model_data.json"
 _MDX_MODEL_DATA = "mdx_model_data.json"
+_TORCH_FORCE_ENV = "TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD"
 
 
 def file_sha256(path: Path, chunk_bytes: int = _CHUNK_BYTES) -> str | None:
@@ -91,6 +98,42 @@ def degradation_golden_failure(protocol: Protocol) -> str | None:
     return None
 
 
+def _digest_failures(files: tuple[tuple[Path, str], ...]) -> list[str]:
+    """Each (path, frozen digest) pair whose file is missing or differs from the digest."""
+    failures = []
+    for path, frozen in files:
+        actual = file_sha256(path)
+        if actual is None:
+            failures.append(f"{path} is missing or not a regular file")
+        elif actual != frozen:
+            failures.append(f"{path} has digest {actual}, expected {frozen}")
+    return failures
+
+
+def uvr_file_failures(protocol: Protocol, uvr_model_dir: Path) -> list[str]:
+    """Each UVR model file that is missing or differs from its frozen digest.
+
+    The UVR model and its two parameter files are read from `uvr_model_dir`, the directory
+    audio-separator loads them from. The systems stage calls this after each warm-up, since the
+    warm-up is the call that loads the model.
+
+    Args:
+        protocol: The loaded protocol.
+        uvr_model_dir: The directory audio-separator loads the UVR files from.
+
+    Returns:
+        One description per failing file, empty when all three match.
+    """
+    execution = protocol.system_execution
+    return _digest_failures(
+        (
+            (uvr_model_dir / execution.uvr_model, execution.uvr_model_sha256),
+            (uvr_model_dir / _VR_MODEL_DATA, execution.uvr_vr_model_data_sha256),
+            (uvr_model_dir / _MDX_MODEL_DATA, execution.uvr_mdx_model_data_sha256),
+        )
+    )
+
+
 def model_file_failures(
     protocol: Protocol, *, opgan_checkpoint: Path, uvr_model_dir: Path
 ) -> list[str]:
@@ -104,20 +147,22 @@ def model_file_failures(
     Returns:
         One description per failing file, empty when all four match.
     """
-    execution = protocol.system_execution
-    failures = []
-    for path, frozen in (
-        (opgan_checkpoint, execution.opgan_checkpoint_sha256),
-        (uvr_model_dir / execution.uvr_model, execution.uvr_model_sha256),
-        (uvr_model_dir / _VR_MODEL_DATA, execution.uvr_vr_model_data_sha256),
-        (uvr_model_dir / _MDX_MODEL_DATA, execution.uvr_mdx_model_data_sha256),
-    ):
-        actual = file_sha256(path)
-        if actual is None:
-            failures.append(f"{path} is missing or not a regular file")
-        elif actual != frozen:
-            failures.append(f"{path} has digest {actual}, expected {frozen}")
-    return failures
+    opgan = ((opgan_checkpoint, protocol.system_execution.opgan_checkpoint_sha256),)
+    return _digest_failures(opgan) + uvr_file_failures(protocol, uvr_model_dir)
+
+
+def _weights_only_override() -> RunAbortOutcome | None:
+    """An abort when `TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD` is set, or None when it is not.
+
+    audio-separator loads the UVR model with `torch.load` and no `weights_only` argument, so this
+    variable decides how the UVR weights are unpickled. A run that sets it would load weights
+    the protocol's loading assumptions do not cover, so the run is refused before anything else.
+    """
+    if _TORCH_FORCE_ENV not in os.environ:
+        return None
+    detail = f"{_TORCH_FORCE_ENV} is set, which changes how torch.load treats the UVR weights"
+    logger.error("Run refused: %s", detail)
+    return RunAbortOutcome(reason=AbortReason.ENVIRONMENT_MISMATCH, detail=detail)
 
 
 def verify_run_preconditions(
@@ -127,7 +172,7 @@ def verify_run_preconditions(
     opgan_checkpoint: Path,
     uvr_model_dir: Path,
 ) -> RunAbortOutcome | None:
-    """Run the golden fixtures, the degradation golden, and the model checks, in order.
+    """Run the override, golden, degradation, and model checks, in that order.
 
     Args:
         protocol: The loaded protocol.
@@ -138,6 +183,9 @@ def verify_run_preconditions(
     Returns:
         None when every precondition holds, otherwise the first abort, which names no source.
     """
+    override = _weights_only_override()
+    if override is not None:
+        return override
     golden = verify_golden_fixtures(protocol, runtime_platform=runtime_platform)
     if golden is not None:
         return golden

@@ -54,6 +54,11 @@ def passing(protocol: Protocol, **_: object) -> None:
     return None
 
 
+def passing_uvr(protocol: Protocol, uvr_model_dir: Path) -> list[str]:
+    """A UVR file check that every run passes, for runs whose model directory holds no files."""
+    return []
+
+
 def echo_factory(fail_uvr_frame: int | None = 1) -> Any:
     """A systems factory: OpGAN echoes; UVR echoes except for one frame index."""
 

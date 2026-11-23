@@ -13,9 +13,17 @@ import numpy as np
 import numpy.typing as npt
 import pytest
 import soundfile as sf
-from systems_fakes import AUDIT_DIGEST, EchoSystem, echo_factory, passing, write_audit_trail
+from systems_fakes import (
+    AUDIT_DIGEST,
+    EchoSystem,
+    echo_factory,
+    passing,
+    passing_uvr,
+    write_audit_trail,
+)
 
 from benchmark.protocol import Protocol, load_protocol
+from benchmark.run_preconditions import uvr_file_failures
 from benchmark.run_systems import (
     POPULATION_NAME,
     PROGRESS_NAME,
@@ -143,6 +151,7 @@ def run(walk: Path, run_dir: Path, protocol: Protocol, **overrides: Any) -> dict
         "uvr_model_dir": run_dir.parent / "models",
         "build_systems": echo_factory(),
         "preconditions": passing,
+        "uvr_check": passing_uvr,
     }
     arguments.update(overrides)
     return run_systems(**arguments)
@@ -439,3 +448,126 @@ class TestWarmUpInTheRun:
         text = (run_dir / RESULTS_NAME).read_text(encoding="utf-8")
         assert "warm_up" not in text
         assert len(text.splitlines()) == 2 * 3
+
+
+class TestDigestsAndManifestRead:
+    """The summary names the bytes it reports, and the walk manifest is opened exactly once."""
+
+    def test_the_summary_names_the_results_population_and_manifest_bytes(
+        self, tmp_path: Path, protocol: Protocol
+    ) -> None:
+        walk = standard_walk(tmp_path, protocol)
+        run_dir = tmp_path / "run"
+
+        summary = run(walk, run_dir, protocol)
+
+        def digest(path: Path) -> str:
+            return hashlib.sha256(path.read_bytes()).hexdigest()
+
+        assert summary["systems_results_sha256"] == digest(run_dir / RESULTS_NAME)
+        assert summary["systems_population_sha256"] == digest(run_dir / POPULATION_NAME)
+        assert summary["walk_manifest_sha256"] == digest(walk / MANIFEST_NAME)
+
+    def test_the_walk_manifest_is_opened_exactly_once(
+        self, tmp_path: Path, protocol: Protocol, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        walk = standard_walk(tmp_path, protocol)
+        opened: list[Path] = []
+        real_open = Path.open
+
+        def counting_open(self: Path, *args: Any, **kwargs: Any) -> Any:
+            if self.name == MANIFEST_NAME:
+                opened.append(self)
+            return real_open(self, *args, **kwargs)
+
+        monkeypatch.setattr(Path, "open", counting_open)
+
+        run(walk, tmp_path / "run", protocol)
+
+        assert len(opened) == 1
+
+
+UVR_DATA_NAMES = ("vr_model_data.json", "mdx_model_data.json")
+
+
+def uvr_models(root: Path, protocol: Protocol) -> tuple[Path, Protocol]:
+    """A UVR model directory of stand-in files, and a protocol whose UVR digests name them."""
+    models = root / "models"
+    models.mkdir()
+    names = (protocol.system_execution.uvr_model, *UVR_DATA_NAMES)
+    digests = []
+    for name in names:
+        data = name.encode("utf-8")
+        (models / name).write_bytes(data)
+        digests.append(hashlib.sha256(data).hexdigest())
+    execution = dataclasses.replace(
+        protocol.system_execution,
+        uvr_model_sha256=digests[0],
+        uvr_vr_model_data_sha256=digests[1],
+        uvr_mdx_model_data_sha256=digests[2],
+    )
+    return models, dataclasses.replace(protocol, system_execution=execution)
+
+
+class ModelRewritingSystem(EchoSystem):
+    """An echo system whose calls rewrite its model file, as a load that changes it would."""
+
+    def __init__(self, name: str, output_dir: Path, model: Path) -> None:
+        """Store the echo system's name and output folder, and the model file to rewrite."""
+        super().__init__(name, output_dir)
+        self._model = model
+
+    def denoise(self, input_path: Path) -> Path:
+        """Rewrite the model file, then echo the input."""
+        self._model.write_bytes(b"rewritten by the load")
+        return super().denoise(input_path)
+
+
+class TestUvrFilesAfterWarmUp:
+    """The UVR files are compared with their frozen digests again after each warm-up."""
+
+    def test_a_warm_up_that_rewrites_a_uvr_file_aborts_before_any_result_is_written(
+        self, tmp_path: Path, protocol: Protocol
+    ) -> None:
+        walk = standard_walk(tmp_path, protocol)
+        models, pinned = uvr_models(tmp_path, protocol)
+        model = models / protocol.system_execution.uvr_model
+        run_dir = tmp_path / "run"
+        opgan = LoadOnFirstCall("opgan", tmp_path / "fake_opgan")
+        uvr = ModelRewritingSystem("uvr", tmp_path / "fake_uvr", model)
+
+        with pytest.raises(HarnessFailure) as caught:
+            run(
+                walk,
+                run_dir,
+                pinned,
+                build_systems=system_factory(opgan, uvr),
+                uvr_model_dir=models,
+                uvr_check=uvr_file_failures,
+            )
+
+        assert "changed after warm-up" in str(caught.value)
+        assert str(model) in str(caught.value)
+        assert opgan.calls == ["warm_up.wav"]
+        assert not (run_dir / RESULTS_NAME).exists()
+        assert not (run_dir / POPULATION_NAME).exists()
+        assert not (run_dir / SUMMARY_NAME).exists()
+
+    def test_the_run_completes_when_the_uvr_files_are_unchanged_after_warm_up(
+        self, tmp_path: Path, protocol: Protocol
+    ) -> None:
+        walk = standard_walk(tmp_path, protocol)
+        models, pinned = uvr_models(tmp_path, protocol)
+        opgan = LoadOnFirstCall("opgan", tmp_path / "fake_opgan")
+        uvr = EchoSystem("uvr", tmp_path / "fake_uvr")
+
+        summary = run(
+            walk,
+            tmp_path / "run",
+            pinned,
+            build_systems=system_factory(opgan, uvr),
+            uvr_model_dir=models,
+            uvr_check=uvr_file_failures,
+        )
+
+        assert summary["strata"][SOLO]["coverage"] == {"opgan": 1.0, "uvr": 1.0}
