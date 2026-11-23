@@ -83,7 +83,11 @@ class TestBody:
         assert result.sha256 == hashlib.sha256(body[:100]).hexdigest()
         assert fake.bytes_read == 101
 
-    @pytest.mark.parametrize("length", [None, "12abc", "-5"])
+    @pytest.mark.parametrize(
+        "length",
+        [None, "12abc", "-5", "\u00b2", "\u0663", "1" * 5000],
+        ids=["absent", "letters", "sign", "superscript", "arabic_indic", "too_long_for_int"],
+    )
     def test_a_missing_or_malformed_length_is_reported_as_none(self, length: str | None) -> None:
         result, _, _ = fetch(b"abc", 10, length=length)
         assert result.content_length is None
@@ -114,7 +118,13 @@ class TestFailures:
 
     @pytest.mark.parametrize(
         ("value", "expected"),
-        [("120", 120.0), (" 5 ", 5.0), ("Wed, 21 Oct 2026 07:28:00 GMT", None)],
+        [
+            ("120", 120.0),
+            (" 5 ", 5.0),
+            ("Wed, 21 Oct 2026 07:28:00 GMT", None),
+            ("\u00b2", None),
+            ("\u0663", None),
+        ],
     )
     def test_a_numeric_retry_after_is_reported_in_seconds(
         self, value: str, expected: float | None
@@ -127,6 +137,14 @@ class TestFailures:
 
         result = get(URL, io.BytesIO(), max_bytes=10, timeout_s=5.0, opener=limited)
         assert (result.status, result.retry_after) == (429, expected)
+
+    def test_a_superscript_retry_after_on_a_whole_response_is_ignored(self) -> None:
+        fake = FakeResponse(b"abc")
+        fake.headers["Retry-After"] = "\u00b2"
+
+        result = get(URL, io.BytesIO(), max_bytes=10, timeout_s=5.0, opener=serving(fake))
+
+        assert (result.status, result.retry_after) == (200, None)
 
     def test_an_http_error_status_is_returned_with_nothing_written(self) -> None:
         def refusing(request: urllib.request.Request, timeout_s: float) -> IO[bytes]:

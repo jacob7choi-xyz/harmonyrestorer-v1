@@ -48,9 +48,11 @@ class Script:
     def __init__(self, *steps: Any) -> None:
         self.steps = list(steps)
         self.calls = 0
+        self.caps: list[int] = []
 
     def __call__(self, url: str, sink: BinaryIO, *, max_bytes: int, timeout_s: float) -> Response:
         self.calls += 1
+        self.caps.append(max_bytes)
         step = self.steps.pop(0)
         if isinstance(step, BaseException):
             raise step
@@ -254,6 +256,28 @@ class TestOversize:
         body = b"x" * 500
         outcome = run(tmp_path, Script(body, body, body, body), Expected(90, None, None, 100))
         assert isinstance(outcome, ListingMismatch)
+
+    def test_an_attempt_is_capped_at_the_listed_size_plus_one_under_a_larger_bound(
+        self, tmp_path: Path
+    ) -> None:
+        script = Script(BODY)
+        outcome = run(tmp_path, script, listed(oversize_bound=10_000))
+        assert isinstance(outcome, Staged)
+        assert script.caps == [len(BODY) + 1]
+
+    def test_a_body_longer_than_its_listing_under_a_larger_bound_is_a_listing_mismatch(
+        self, tmp_path: Path
+    ) -> None:
+        """The cap stops the body one byte past the listed size, and the listing check names it.
+
+        The body declares its full length. Read as a short transfer it would be a transient
+        failure, which would invalidate the run, so every attempt is asserted to mismatch.
+        """
+        body = BODY + b"0123456789"
+        script = Script(body, body, body, body)
+        outcome = run(tmp_path, script, listed(oversize_bound=10_000))
+        assert isinstance(outcome, ListingMismatch)
+        assert script.caps == [len(BODY) + 1] * 4
 
     def test_without_a_bound_a_longer_body_is_a_size_mismatch(self, tmp_path: Path) -> None:
         """An archive fetched whole: more bytes than listed fails the listing check."""

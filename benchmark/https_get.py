@@ -23,6 +23,7 @@ from __future__ import annotations
 import hashlib
 import http.client
 import logging
+import re
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -39,6 +40,9 @@ logger = logging.getLogger(__name__)
 USER_AGENT = "harmonyrestorer-benchmark"
 _CHUNK_BYTES = 1 << 20
 _HTTPS = "https"
+# ASCII digits only. str.isdigit also accepts superscripts and other scripts, which int and
+# float then refuse, so a header carrying them would raise instead of being ignored.
+_ASCII_DIGITS = re.compile(r"[0-9]+")
 
 
 class InsecureRedirectError(urllib.error.URLError):
@@ -98,19 +102,28 @@ def _open(request: urllib.request.Request, timeout_s: float) -> IO[bytes]:
 
 
 def _retry_after(headers: Message | None) -> float | None:
-    """The Retry-After header as seconds, or None if absent or not a number of seconds."""
+    """The Retry-After header as seconds, or None if absent or not a number of ASCII digits."""
     value = None if headers is None else headers.get("Retry-After")
-    if value is None or not value.strip().isdigit():
+    if value is None or not _ASCII_DIGITS.fullmatch(value.strip()):
         return None
     return float(value.strip())
 
 
 def _declared_length(headers: Message) -> int | None:
-    """The Content-Length header as a non-negative int, or None if absent or malformed."""
+    """The Content-Length header as a non-negative int, or None if absent or malformed.
+
+    A malformed value is treated as absent, as is one too long for `int` to convert.
+    """
     value = headers.get("Content-Length")
-    if value is None or not value.isdigit():
+    if value is None or not _ASCII_DIGITS.fullmatch(value):
         return None
-    return int(value)
+    try:
+        return int(value)
+    except ValueError:
+        logger.warning(
+            "Content-Length of %d digits is too long to read, so it is ignored", len(value)
+        )
+        return None
 
 
 def get(
@@ -142,33 +155,55 @@ def get(
         raise ValueError(f"only HTTPS URLs are fetched, got {url}")
     if max_bytes < 0:
         raise ValueError(f"max_bytes must be non-negative, got {max_bytes}")
-    digests = (
+    digests = _new_digests()
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    try:
+        return _transfer(url, request, sink, max_bytes, timeout_s, opener, digests)
+    except http.client.HTTPException as error:
+        logger.warning("GET %s failed inside the response: %r", url, error)
+        raise TransferError(f"GET {url} failed inside the response: {error!r}") from error
+
+
+def _new_digests() -> tuple[Any, ...]:
+    """The SHA-256, MD5 and SHA-1 hashes, which the bytes written are fed to as they stream."""
+    return (
         hashlib.sha256(),
         hashlib.md5(usedforsecurity=False),
         hashlib.sha1(usedforsecurity=False),
     )
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    try:
-        try:
-            response = opener(request, timeout_s)
-        except urllib.error.HTTPError as error:
-            logger.info("GET %s returned %d", url, error.code)
-            error.close()
-            wait = _retry_after(error.headers)
-            sha256, md5, sha1 = (d.hexdigest() for d in digests)
-            return Response(error.code, 0, False, None, sha256, md5, sha1, wait)
-        with response:
-            status = getattr(response, "status", 200)
-            headers = getattr(response, "headers", Message())
-            declared = _declared_length(headers)
-            size, exceeded = _stream(response, sink, max_bytes, digests)
-    except http.client.HTTPException as error:
-        logger.warning("GET %s failed inside the response: %r", url, error)
-        raise TransferError(f"GET {url} failed inside the response: {error!r}") from error
-    logger.info("GET %s returned %d, %d bytes%s", url, status, size, " (cap)" if exceeded else "")
-    wait = _retry_after(headers)
+
+
+def _hexdigests(digests: tuple[Any, ...]) -> tuple[str, str, str]:
+    """The SHA-256, MD5 and SHA-1 hex digests of the hashes, in that order."""
     sha256, md5, sha1 = (d.hexdigest() for d in digests)
-    return Response(status, size, exceeded, declared, sha256, md5, sha1, wait)
+    return sha256, md5, sha1
+
+
+def _transfer(
+    url: str,
+    request: urllib.request.Request,
+    sink: BinaryIO,
+    max_bytes: int,
+    timeout_s: float,
+    opener: Opener,
+    digests: tuple[Any, ...],
+) -> Response:
+    """Open the request and stream its body to *sink*. An HTTP error status writes nothing."""
+    try:
+        response = opener(request, timeout_s)
+    except urllib.error.HTTPError as error:
+        logger.info("GET %s returned %d", url, error.code)
+        error.close()
+        sha256, md5, sha1 = _hexdigests(digests)
+        return Response(error.code, 0, False, None, sha256, md5, sha1, _retry_after(error.headers))
+    with response:
+        status = getattr(response, "status", 200)
+        headers = getattr(response, "headers", Message())
+        declared = _declared_length(headers)
+        size, exceeded = _stream(response, sink, max_bytes, digests)
+    logger.info("GET %s returned %d, %d bytes%s", url, status, size, " (cap)" if exceeded else "")
+    sha256, md5, sha1 = _hexdigests(digests)
+    return Response(status, size, exceeded, declared, sha256, md5, sha1, _retry_after(headers))
 
 
 def _stream(

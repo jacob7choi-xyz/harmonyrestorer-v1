@@ -54,6 +54,7 @@ from benchmark.protocol import (
     load_protocol,
 )
 from benchmark.run_walk import main, new_run_layout, prepare_chamber
+from benchmark.runner import CanonicalFileError
 from benchmark.selection import walk_order
 from benchmark.walk import (
     AwaitingAdjudication,
@@ -364,6 +365,38 @@ class TestManifest:
         manifest = json.loads((layout.root / NO_MANIFEST).read_text())
         assert manifest["audit_trail_sha256"] == hashlib.sha256(b"").hexdigest()
 
+    def test_an_admitted_line_repeats_the_digests_and_places_of_its_manifest_admission(
+        self, layout: RunLayout, protocol: Protocol
+    ) -> None:
+        """Each admitted audit line carries the digests, samples, and placement its admission holds."""
+        world = World(layout.root, protocol)
+        files = add_piano(world, 3)
+        proto = shrunk(protocol, piano={"test": 2}, chamber={"test": 1})
+        chamber_files = [ListedFile(f"{CHAMBER_SOURCE}/1", "Ensemble", None, None, None)]
+        world.add(chamber_files[0].identifier, long_tone_variant(91), seed=401)
+        universes = {
+            "solo_piano": universe_of(proto, "solo_piano", files),
+            "chamber": universe_of(proto, "chamber", chamber_files),
+        }
+        assert isinstance(
+            run_walk(proto, layout, Harness(world, proto, layout).inputs(universes)), WalkRun
+        )
+        manifest = json.loads(layout.manifest_path.read_text(encoding="utf-8"))
+        admissions = {entry["identifier"]: entry for entry in manifest["admissions"]}
+        admitted = [line for line in read_lines(layout.audit_path) if line["outcome"] == "admitted"]
+        assert len(admitted) == len(admissions) == 3
+        for line in admitted:
+            admission = admissions[line["identifier"]]
+            details = line["details"]
+            assert details["canonical_sha256"] == admission["canonical_sha256"]
+            assert details["raw_sha256"] == admission["raw_sha256"]
+            assert details["decoded_pcm_sha256"] == admission["decoded_pcm_sha256"]
+            assert details["samples"] == admission["samples"]
+            assert (line["partition"], line["admission_position"]) == (
+                admission["partition"],
+                admission["position"],
+            )
+
 
 class TestAcrossStrata:
     """An admission in one stratum is compared by the other stratum's walk, in both directions."""
@@ -603,8 +636,72 @@ class TestInvalidRuns:
         assert outcome.code == protocol.selection.retries_exhausted_code
         record = json.loads(layout.invalid_path.read_text())
         assert record["identifier"] == f"{CHAMBER_SOURCE}/musicnet.tar.gz"
+        assert record["stratum"] is None
+        assert record["position"] is None
         assert not layout.audit_path.exists()
         assert not (layout.root / NO_MANIFEST).exists()
+
+    @pytest.mark.parametrize(
+        "failure",
+        [OSError("staging write failed"), CanonicalFileError("canonical file changed")],
+        ids=["os_error", "canonical_file_error"],
+    )
+    def test_a_reported_failure_while_examining_a_candidate_is_audited_then_recorded(
+        self, layout: RunLayout, protocol: Protocol, failure: Exception
+    ) -> None:
+        """The candidate's audit line names the exception class, and the record names its position."""
+        world = World(layout.root, protocol)
+        files = add_piano(world, 2)
+        order = walk_order([f.identifier for f in files], protocol.selection.seed)
+        world.fetch_results[order[0]] = failure
+        proto = shrunk(protocol, piano={"test": 2}, chamber={"test": 1})
+        chamber_files = [ListedFile(f"{CHAMBER_SOURCE}/1", "Ensemble", None, None, None)]
+        universes = {
+            "solo_piano": universe_of(proto, "solo_piano", files),
+            "chamber": universe_of(proto, "chamber", chamber_files),
+        }
+
+        outcome = run_walk(proto, layout, Harness(world, proto, layout).inputs(universes))
+
+        code = type(failure).__name__
+        assert isinstance(outcome, RunInvalid)
+        assert outcome.code == code
+        record = json.loads(layout.invalid_path.read_text(encoding="utf-8"))
+        assert record == {
+            "stratum": "solo_piano",
+            "position": 1,
+            "identifier": order[0],
+            "code": code,
+            "detail": str(failure),
+        }
+        lines = read_lines(layout.audit_path)
+        assert [
+            (line["stratum"], line["position"], line["identifier"], line["outcome"], line["code"])
+            for line in lines
+        ] == [("solo_piano", 1, order[0], "run_invalid", code)]
+        assert not (layout.root / NO_MANIFEST).exists()
+        assert not layout.halt_path.exists()
+
+    def test_a_failure_outside_the_reported_types_propagates_and_writes_no_record(
+        self, layout: RunLayout, protocol: Protocol
+    ) -> None:
+        """Only the reported types become a run invalid, so any other failure reaches the caller."""
+        world = World(layout.root, protocol)
+        files = add_piano(world, 2)
+        order = walk_order([f.identifier for f in files], protocol.selection.seed)
+        world.fetch_results[order[0]] = ValueError("not a reported failure")
+        proto = shrunk(protocol, piano={"test": 2}, chamber={"test": 1})
+        chamber_files = [ListedFile(f"{CHAMBER_SOURCE}/1", "Ensemble", None, None, None)]
+        universes = {
+            "solo_piano": universe_of(proto, "solo_piano", files),
+            "chamber": universe_of(proto, "chamber", chamber_files),
+        }
+
+        with pytest.raises(ValueError, match="not a reported failure"):
+            run_walk(proto, layout, Harness(world, proto, layout).inputs(universes))
+
+        assert not layout.invalid_path.exists()
+        assert not layout.audit_path.exists()
 
 
 class TestChamberArchive:
