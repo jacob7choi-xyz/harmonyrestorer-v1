@@ -16,6 +16,10 @@ The four gates computed here are named as `publication_gates.required` names the
 others (the protocol and candidate universe digests, and the training screen) are decided
 elsewhere.
 
+The degraded input (v13's diagnostic baseline) is scored like a system output and passed under
+`BASELINE`. It must cover the expected frames exactly, but it has no coverage gate, because it is
+not a system and a gap in it is a harness fault rather than a system's failure.
+
 A recording whose frames were all ineligible is not part of the expected population here.
 v6 to v10 kept it in its partition and left it out of the across-recording count; from v11
 the selection walk rejects it before admission, so no admitted recording has none.
@@ -23,14 +27,17 @@ the selection walk rejects it before admission, so no admitted recording has non
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from operator import attrgetter
 
-from benchmark.aggregation import RecordingScores
+from benchmark.aggregation import RecordingScores, SystemValues
 from benchmark.frame_scoring import FrameOutcome, FrameScore
+from benchmark.metrics import MetricResult
 from benchmark.protocol import Protocol
 
 __all__ = [
+    "BASELINE",
     "OPGAN",
     "SYSTEMS",
     "UVR",
@@ -44,6 +51,9 @@ __all__ = [
 OPGAN = "opgan"
 UVR = "uvr"
 SYSTEMS = (OPGAN, UVR)
+# The degraded input, scored like a system output (v13). It is not a system, so it has no
+# coverage gate and is not in SYSTEMS. Its results are keyed by this name in `results`.
+BASELINE = "degraded_input"
 
 _RECORDINGS_GATE = "population_ids_equal_across_systems"
 _FRAMES_GATE = "frame_population_ids_equal_across_systems"
@@ -119,6 +129,10 @@ def population_gates(
     return gates
 
 
+_primary_table = attrgetter("results")
+_shift_table = attrgetter("shift_tolerant")
+
+
 def _lookup(results: Sequence[SystemFrameResult]) -> dict[tuple[str, int], FrameScore]:
     """One system's scored frames by recording and frame index, built once per system.
 
@@ -136,28 +150,95 @@ def _lookup(results: Sequence[SystemFrameResult]) -> dict[tuple[str, int], Frame
     return lookup
 
 
+def _column(
+    lookup: Mapping[tuple[str, int], FrameScore],
+    recording: str,
+    indices: Sequence[int],
+    table: Callable[[FrameScore], Mapping[str, MetricResult]],
+    metric: str,
+) -> list[float]:
+    """One metric's value on each expected frame of one recording, from one table of a score.
+
+    Raises:
+        PopulationError: If a frame has no score for the metric in that table.
+    """
+    values = []
+    for index in indices:
+        scores = table(lookup[(recording, index)])
+        if metric not in scores:
+            raise PopulationError(f"frame {index} of {recording} has no {metric} score")
+        values.append(scores[metric].value)
+    return values
+
+
+def _system_values(
+    lookup: Mapping[tuple[str, int], FrameScore],
+    recording: str,
+    indices: Sequence[int],
+    protocol: Protocol,
+) -> SystemValues:
+    """One source's values for one recording: every primary and shift-tolerant metric."""
+    primary = {
+        metric: _column(lookup, recording, indices, _primary_table, metric)
+        for metric in protocol.metrics.primary
+    }
+    shift = {
+        metric: _column(lookup, recording, indices, _shift_table, metric)
+        for metric in protocol.metrics.shift_tolerant.metrics
+    }
+    return SystemValues(primary, shift)
+
+
+def _check_baseline(expected: Expected, results: Sequence[SystemFrameResult]) -> None:
+    """The baseline must score every expected frame, once, with no failure.
+
+    Raises:
+        PopulationError: If the baseline's population differs from the expected one, or any
+            baseline frame has no score. The baseline is not a system, so it has no coverage
+            gate; a gap in it is a harness fault, not a system's failure.
+    """
+    recordings_equal, frames_equal = _matches(expected, results)
+    if not (recordings_equal and frames_equal):
+        raise PopulationError(f"the {BASELINE} results do not match the expected frames")
+    _lookup(results)
+
+
 def recording_scores(
-    expected: Expected, results: Mapping[str, Sequence[SystemFrameResult]], protocol: Protocol
+    expected: Expected,
+    results: Mapping[str, Sequence[SystemFrameResult]],
+    protocol: Protocol,
+    clusters: Mapping[str, str],
 ) -> list[RecordingScores]:
     """Aggregation input, one entry per expected recording in the expected order.
 
+    Args:
+        expected: The frozen eligible frames of each recording.
+        results: Each system's results under its name, and the degraded input's under BASELINE.
+        protocol: The loaded protocol.
+        clusters: Each expected recording's performer cluster.
+
     Raises:
-        PopulationError: If any of the four gates does not hold; the gates that failed are
-            named.
+        PopulationError: If any of the four gates does not hold, if the baseline does not cover
+            the expected frames, or if a recording has no cluster; the gates that failed are named.
     """
     gates = population_gates(expected, results, protocol)
     failed = [name for name, held in gates.items() if not held]
     if failed:
         raise PopulationError(f"gates do not hold: {failed}")
+    _check_baseline(expected, results.get(BASELINE, ()))
     lookups = {system: _lookup(results[system]) for system in SYSTEMS}
+    baseline = _lookup(results[BASELINE])
     scores = []
     for recording, indices in expected.items():
-        per_system = {
-            system: {
-                metric: [lookups[system][(recording, i)].results[metric].value for i in indices]
-                for metric in protocol.metrics.primary
-            }
-            for system in SYSTEMS
-        }
-        scores.append(RecordingScores(recording, per_system[OPGAN], per_system[UVR]))
+        if recording not in clusters:
+            raise PopulationError(f"recording {recording} has no performer cluster")
+        scores.append(
+            RecordingScores(
+                recording,
+                clusters[recording],
+                _system_values(lookups[OPGAN], recording, indices, protocol),
+                _system_values(lookups[UVR], recording, indices, protocol),
+                _system_values(baseline, recording, indices, protocol),
+            )
+        )
     return scores
