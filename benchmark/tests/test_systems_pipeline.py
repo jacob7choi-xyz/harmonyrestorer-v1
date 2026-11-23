@@ -12,11 +12,13 @@ import numpy as np
 import numpy.typing as npt
 import pytest
 import soundfile as sf
+from systems_fakes import AUDIT_DIGEST, write_audit_trail
 
 from benchmark.degradation import degrade_frame, frame_seed
 from benchmark.frame_scoring import FrameScore, SystemFailure
 from benchmark.protocol import Protocol, load_protocol
 from benchmark.systems_pipeline import (
+    AUDIT_NAME,
     BASELINE,
     MANIFEST_NAME,
     Admission,
@@ -372,6 +374,7 @@ def valid_manifest(admissions: list[dict[str, Any]]) -> dict[str, Any]:
             STRATUM: {"status": "complete", "admitted": len(admissions)},
             "chamber": {"status": "short", "admitted": 0},
         },
+        "audit_trail_sha256": AUDIT_DIGEST,
         "admissions": admissions,
     }
 
@@ -399,6 +402,7 @@ def write_manifest(directory: Path, data: object) -> Path:
     """Write the manifest JSON into the directory and return the manifest's path."""
     path = directory / MANIFEST_NAME
     path.write_text(json.dumps(data), encoding="utf-8")
+    write_audit_trail(directory)
     return path
 
 
@@ -417,6 +421,7 @@ class TestLoadWalkManifest:
         assert [a.position for a in manifest.admissions] == [1, 2]
         assert manifest.admissions[0].partition is Partition.TEST
         assert manifest.archive_sha256 is None
+        assert manifest.audit_trail_sha256 == AUDIT_DIGEST
 
     @pytest.mark.parametrize(
         "mutate",
@@ -425,6 +430,7 @@ class TestLoadWalkManifest:
             pytest.param(lambda d: d.pop("strata"), id="missing_top_level_key"),
             pytest.param(lambda d: d["strata"].pop("chamber"), id="stratum_missing_from_strata"),
             pytest.param(lambda d: d.update(protocol_sha256="8" * 64), id="other_protocol"),
+            pytest.param(lambda d: d.pop("audit_trail_sha256"), id="audit_digest_missing"),
             pytest.param(lambda d: d["universe_sha256"].pop("chamber"), id="universe_key_missing"),
             pytest.param(
                 lambda d: d["strata"][STRATUM].update(status="partial"), id="unknown_status"
@@ -472,6 +478,30 @@ class TestLoadWalkManifest:
     def test_a_missing_file_is_refused(self, tmp_path: Path) -> None:
         with pytest.raises(HarnessFailure, match="cannot be read"):
             load_walk_manifest(tmp_path / MANIFEST_NAME, PROTOCOL_DIGEST)
+
+    def test_a_missing_audit_trail_is_refused(self, tmp_path: Path) -> None:
+        path = write_manifest(tmp_path, valid_manifest([admission_entry(1), admission_entry(2)]))
+        (tmp_path / AUDIT_NAME).unlink()
+
+        with pytest.raises(HarnessFailure, match=r"audit_trail\.jsonl is missing"):
+            load_walk_manifest(path, PROTOCOL_DIGEST)
+
+    def test_an_edited_audit_trail_is_refused(self, tmp_path: Path) -> None:
+        path = write_manifest(tmp_path, valid_manifest([admission_entry(1), admission_entry(2)]))
+        write_audit_trail(tmp_path, b'{"edited": true}\n')
+
+        with pytest.raises(HarnessFailure, match="hashes to"):
+            load_walk_manifest(path, PROTOCOL_DIGEST)
+
+    def test_an_audit_digest_that_is_not_64_lowercase_hex_is_refused_before_the_trail_is_read(
+        self, tmp_path: Path
+    ) -> None:
+        data = valid_manifest([admission_entry(1), admission_entry(2)])
+        data["audit_trail_sha256"] = "ABC"
+        path = write_manifest(tmp_path, data)
+
+        with pytest.raises(HarnessFailure, match="audit_trail_sha256 must be 64 lowercase hex"):
+            load_walk_manifest(path, PROTOCOL_DIGEST)
 
 
 class TestPopulation:

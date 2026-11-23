@@ -680,6 +680,16 @@ class AuditTrail:
         self._lines.append(json.dumps(record, sort_keys=True, allow_nan=False, ensure_ascii=True))
         write_atomically(self._path, ("\n".join(self._lines) + "\n").encode("utf-8"))
 
+    def finish(self) -> str:
+        """Return the SHA-256 of the trail's bytes as they now sit on disk.
+
+        A walk that examined no candidate has no trail yet, so an empty file is written first.
+        The digest is read back from the file, so the manifest binds the bytes a reader will see.
+        """
+        if not self._path.exists():
+            write_atomically(self._path, b"")
+        return hashlib.sha256(self._path.read_bytes()).hexdigest()
+
 
 def partition_plan(stratum: Stratum) -> tuple[str, ...]:
     """The partition of each admission position, in partition order: position k is element k-1."""
@@ -841,14 +851,22 @@ def _walk_stratum(
 
 
 def manifest_document(
-    protocol: Protocol, universes: Mapping[str, CandidateUniverse], run: WalkRun
+    protocol: Protocol,
+    universes: Mapping[str, CandidateUniverse],
+    run: WalkRun,
+    audit_trail_sha256: str,
 ) -> dict[str, Any]:
-    """The walk manifest, with exactly the keys and entry fields the systems stage reads."""
+    """The walk manifest, with exactly the keys and entry fields the systems stage reads.
+
+    The audit trail digest binds the manifest to the trail beside it, so an edited trail is
+    refused by the systems stage.
+    """
     return {
         "protocol_sha256": protocol.source_sha256,
         "universe_sha256": {s.name: universes[s.name].sha256 for s in protocol.selection.strata},
         "archive_sha256": run.archive_sha256,
         "strata": {w.name: {"status": w.status, "admitted": len(w.placed)} for w in run.strata},
+        "audit_trail_sha256": audit_trail_sha256,
         "admissions": [
             {
                 "stratum": walk.name,
@@ -918,7 +936,7 @@ def run_walk(
         walks.append(walk)
     run = WalkRun(tuple(walks), inputs.chamber.archive_sha256)
     body = json.dumps(
-        manifest_document(protocol, inputs.universes, run),
+        manifest_document(protocol, inputs.universes, run, ctx.audit.finish()),
         indent=2,
         allow_nan=False,
         ensure_ascii=True,

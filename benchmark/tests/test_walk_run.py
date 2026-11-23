@@ -15,23 +15,29 @@ import tarfile
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from types import MappingProxyType
 from typing import Any
 
 import numpy as np
 import pytest
 from walk_fakes import (
     CHAMBER_SOURCE,
-    PIANO_SOURCE,
+    Harness,
     World,
-    long_tone,
+    add_piano,
+    long_tone_variant,
+    musicnet_csv,
+    piano_id,
+    read_lines,
+    shrunk,
+    stratum_named,
     tone,
     training_reference,
     unit_features,
+    universe_of,
 )
 
 from benchmark.adjudication import AdjudicationRecord
-from benchmark.candidate_universe import CandidateUniverse, ListedFile, zenodo_file_url
+from benchmark.candidate_universe import ListedFile, zenodo_file_url
 from benchmark.duplicate_screen import Answer, RecordingIdentity, Reference
 from benchmark.fetch import (
     Attempt,
@@ -44,19 +50,17 @@ from benchmark.https_get import Response
 from benchmark.protocol import (
     ArchiveItemStratum,
     Protocol,
-    Stratum,
     ZenodoArchiveStratum,
     load_protocol,
 )
 from benchmark.run_walk import main, new_run_layout, prepare_chamber
-from benchmark.selection import TrainingIdentities, walk_order
+from benchmark.selection import walk_order
 from benchmark.walk import (
     AwaitingAdjudication,
     ChamberPreparation,
     MetadataUnavailable,
     RunInvalid,
     RunLayout,
-    WalkInputs,
     WalkRun,
     archive_retries_invalid,
     run_walk,
@@ -89,117 +93,17 @@ MANIFEST_KEYS = {
     "universe_sha256",
     "archive_sha256",
     "strata",
+    "audit_trail_sha256",
     "admissions",
 }
 NO_MANIFEST = "walk_manifest.json"
+NO_AUDIT = "audit_trail.jsonl"
 
 
 @pytest.fixture(scope="module")
 def protocol() -> Protocol:
     """The real v13 protocol, once per module."""
     return load_protocol()
-
-
-def shrunk(
-    protocol: Protocol,
-    *,
-    piano: dict[str, int],
-    chamber: dict[str, int],
-    cap: int = 5,
-) -> Protocol:
-    """The protocol with each stratum's partitions and cluster cap replaced for a small walk."""
-    strata: list[Stratum] = []
-    for stratum in protocol.selection.strata:
-        counts = piano if isinstance(stratum, ArchiveItemStratum) else chamber
-        order = tuple(name for name in ("test", "demo", "test_reserve") if name in counts)
-        strata.append(
-            dataclasses.replace(
-                stratum,
-                partitions=MappingProxyType(dict(counts)),
-                partition_order=order,
-                cluster_cap=cap,
-            )
-        )
-    return dataclasses.replace(
-        protocol, selection=dataclasses.replace(protocol.selection, strata=tuple(strata))
-    )
-
-
-def stratum_named(protocol: Protocol, name: str) -> Stratum:
-    """The protocol's stratum with *name*."""
-    return next(s for s in protocol.selection.strata if s.name == name)
-
-
-def piano_id(index: int) -> str:
-    """The identifier of the index-th test piano candidate."""
-    return f"{PIANO_SOURCE}/Chopin/Nocturne{index}.flac"
-
-
-def universe_of(protocol: Protocol, name: str, files: Sequence[ListedFile]) -> CandidateUniverse:
-    """A frozen universe holding *files*, for the stratum named *name*."""
-    stratum = stratum_named(protocol, name)
-    return CandidateUniverse(
-        stratum=name,
-        source=stratum.source,
-        query="fixture",
-        enumerated_at="fixture",
-        files=tuple(files),
-        sha256="f" * 64,
-    )
-
-
-def musicnet_csv(ids: Sequence[int]) -> bytes:
-    """A minimal MusicNet metadata file with one row per id."""
-    lines = ["id,composer,ensemble,source"]
-    lines += [f"{i},Bach,Ensemble,Soni Ventorum Wind Quintet" for i in ids]
-    return ("\n".join(lines) + "\n").encode("utf-8")
-
-
-class Harness:
-    """The walk's inputs built over one World, with the protocol and run layout it needs."""
-
-    def __init__(self, world: World, protocol: Protocol, layout: RunLayout) -> None:
-        self.world = world
-        self.protocol = protocol
-        self.layout = layout
-        self.training: list[Reference] = [training_reference(3)]
-        self.adjudications: list[AdjudicationRecord] = []
-        self.metadata: Callable[[], bytes] = self.no_metadata
-        self.chamber = ChamberPreparation("a" * 64, world.fetch)
-        self.metadata_calls = 0
-
-    def no_metadata(self) -> bytes:
-        """A metadata provider that must not be called on a piano halt."""
-        raise MetadataUnavailable("not expected in this test")
-
-    def counted_metadata(self, data: bytes) -> Callable[[], bytes]:
-        """A metadata provider that returns *data* and counts its calls."""
-
-        def provide() -> bytes:
-            self.metadata_calls += 1
-            return data
-
-        return provide
-
-    def inputs(self, universes: dict[str, CandidateUniverse]) -> WalkInputs:
-        """The walk inputs with the fake functions and the training state."""
-        refs = self.training
-        identities = TrainingIdentities(
-            filenames=frozenset(r.identity.identifier for r in refs),
-            raw_sha256=frozenset(r.identity.raw_sha256 for r in refs),
-            decoded_sha256=frozenset(r.identity.decoded_pcm_sha256 for r in refs),
-        )
-        return WalkInputs(
-            training=identities,
-            training_references=refs,
-            adjudications=tuple(self.adjudications),
-            universes=universes,
-            piano_fetch=self.world.fetch,
-            chamber=self.chamber,
-            canonicalise=self.world.canonicalise,
-            features=self.world.features_of,
-            musicnet_metadata=self.metadata,
-        )
 
 
 @pytest.fixture
@@ -210,26 +114,6 @@ def layout(tmp_path: Path) -> RunLayout:
     layout = RunLayout(root)
     layout.ensure_dirs()
     return layout
-
-
-def add_piano(world: World, count: int) -> list[ListedFile]:
-    """Register *count* distinct piano candidates, each with its own features and digests."""
-    files = []
-    for index in range(count):
-        identifier = piano_id(index)
-        world.add(identifier, long_tone_variant(index), seed=100 + index)
-        files.append(ListedFile(identifier, "Pianist A", None, None, None))
-    return files
-
-
-def long_tone_variant(index: int) -> Any:
-    """A long tone whose amplitude is unique to *index*, so its decoded digest is too."""
-    return long_tone() * (0.5 + 0.01 * index)
-
-
-def read_lines(path: Path) -> list[dict[str, Any]]:
-    """The audit trail's records, one per line."""
-    return [json.loads(line) for line in path.read_text().splitlines()]
 
 
 class TestWalkCompletes:
@@ -453,6 +337,32 @@ class TestManifest:
                 entry["decoded_pcm_sha256"],
             ).load()
             assert loaded.size == entry["samples"]
+
+    def test_the_manifest_binds_the_audit_trail_as_it_sits_on_disk(
+        self, finished: tuple[Path, dict[str, Any]]
+    ) -> None:
+        """The digest is the SHA-256 of the trail file the run left, not of the lines in memory."""
+        root, manifest = finished
+        trail = (root / NO_AUDIT).read_bytes()
+        assert trail
+        assert manifest["audit_trail_sha256"] == hashlib.sha256(trail).hexdigest()
+
+    def test_a_walk_that_examines_no_candidate_writes_an_empty_trail_and_binds_it(
+        self, layout: RunLayout, protocol: Protocol
+    ) -> None:
+        """With both universes empty, no candidate is examined. The trail is still written, empty,
+        so the manifest has a trail to name, and it names the digest of zero bytes."""
+        world = World(layout.root, protocol)
+        proto = shrunk(protocol, piano={"test": 1}, chamber={"test": 1})
+        universes = {
+            "solo_piano": universe_of(proto, "solo_piano", []),
+            "chamber": universe_of(proto, "chamber", []),
+        }
+        outcome = run_walk(proto, layout, Harness(world, proto, layout).inputs(universes))
+        assert isinstance(outcome, WalkRun)
+        assert (layout.root / NO_AUDIT).read_bytes() == b""
+        manifest = json.loads((layout.root / NO_MANIFEST).read_text())
+        assert manifest["audit_trail_sha256"] == hashlib.sha256(b"").hexdigest()
 
 
 class TestAcrossStrata:
@@ -1004,7 +914,7 @@ class TestRealWorker:
     ) -> None:
         """The worker's canonical file, its digests and its loaded samples satisfy the walk."""
         import soundfile as sf
-        from walk_fakes import state_for, training_reference
+        from walk_fakes import state_for
 
         from benchmark.duplicate_screen import Degenerate
         from benchmark.fetch import Staged

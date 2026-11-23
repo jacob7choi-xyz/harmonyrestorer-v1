@@ -13,9 +13,10 @@ remains is checked here, in this order:
    aborts with the code `runner.model_digest_mismatch_abort` names (protocol v8). Every
    mismatching file is reported, not only the first.
 
-None of these aborts names a source, because no candidate has been opened yet. The canonicalisation
-runner (`benchmark/runner.py`) calls this module before any worker starts, and the systems stage
-(`benchmark/run_systems.py`) calls it before it builds any engine.
+None of these aborts names a source, because no candidate has been opened yet. Three callers run
+these checks. The canonicalisation runner (`benchmark/runner.py`) calls this module before any
+worker starts. The selection walk (`benchmark/run_walk.py`) calls it before it opens a candidate.
+The systems stage (`benchmark/run_systems.py`) calls it before it builds any engine.
 
 **Check before the engines load, and never download mid-run.** The caller supplies the file
 locations: audio-separator reads its model directory from `AUDIO_SEPARATOR_MODEL_DIR` when

@@ -1,8 +1,9 @@
 """The systems stage's pipeline: the walk manifest, and each test recording's frames scored.
 
-The walk writes `walk_manifest.json` (the walk-to-systems contract). This module reads it with
-exact keys and types, refusing anything else. Then, for each test admission of each complete
-stratum, it:
+The walk writes `walk_manifest.json` (the walk-to-systems contract) and `audit_trail.jsonl`
+beside it. This module reads the manifest with exact keys and types, refusing anything else, and
+refuses it unless the audit trail beside it exists and hashes to the digest the manifest names.
+Then, for each test admission of each complete stratum, it:
 
 1. loads the canonical file, which re-checks its bytes against the recorded digest;
 2. cuts the frames and takes the eligible ones from `frame_verdicts`, the function the walk's
@@ -30,6 +31,7 @@ failure raises `HarnessFailure` and aborts the run.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import math
@@ -72,6 +74,7 @@ from benchmark.systems_stage import (
 )
 
 __all__ = [
+    "AUDIT_NAME",
     "BASELINE",
     "MANIFEST_NAME",
     "Admission",
@@ -98,12 +101,21 @@ logger = logging.getLogger(__name__)
 
 BASELINE = "degraded_input"
 MANIFEST_NAME = "walk_manifest.json"
+# The walk writes this trail beside the manifest; its digest is the manifest's audit_trail_sha256.
+AUDIT_NAME = "audit_trail.jsonl"
 WARM_UP_NAME = "warm_up.wav"
 WARM_UP_PHASE = "warm_up"
 _WARM_UP_TONES = ((440.0, 0.3), (1234.5, 0.2))
 _SHA256 = re.compile(r"[0-9a-f]{64}")
 _TOP_KEYS = frozenset(
-    {"protocol_sha256", "universe_sha256", "archive_sha256", "strata", "admissions"}
+    {
+        "protocol_sha256",
+        "universe_sha256",
+        "archive_sha256",
+        "strata",
+        "audit_trail_sha256",
+        "admissions",
+    }
 )
 _UNIVERSE_KEYS = frozenset({"solo_piano", "chamber"})
 _STRATUM_KEYS = frozenset({"status", "admitted"})
@@ -172,11 +184,12 @@ class Admission:
 
 @dataclass(frozen=True)
 class WalkManifest:
-    """The walk manifest, validated: its digests, its strata, and its admissions."""
+    """The walk manifest, validated: its digests, its strata, its admissions, and its trail."""
 
     protocol_sha256: str
     universe_sha256: Mapping[str, str]
     archive_sha256: str | None
+    audit_trail_sha256: str
     strata: Mapping[str, StratumEntry]
     admissions: tuple[Admission, ...]
 
@@ -321,8 +334,29 @@ def _decode(raw: bytes) -> Any:
         raise HarnessFailure(f"walk manifest is not UTF-8 JSON: {error}") from error
 
 
+def _check_audit_trail(walk_dir: Path, expected: str) -> None:
+    """Refuse unless the audit trail beside the manifest exists and hashes to `expected`.
+
+    Raises:
+        HarnessFailure: If the trail is missing, cannot be read, or hashes to another digest.
+    """
+    audit_path = walk_dir / AUDIT_NAME
+    if not audit_path.is_file():
+        _refuse(f"{AUDIT_NAME} is missing from {walk_dir}, so the manifest cannot be checked")
+    try:
+        actual = hashlib.sha256(audit_path.read_bytes()).hexdigest()
+    except OSError as error:
+        logger.error("Cannot read audit trail %s: %s", audit_path, error)
+        raise HarnessFailure(f"audit trail {audit_path} cannot be read: {error}") from error
+    if actual != expected:
+        _refuse(f"{AUDIT_NAME} hashes to {actual}, but the manifest names {expected}")
+
+
 def load_walk_manifest(path: Path, protocol_sha256: str) -> WalkManifest:
     """Read and validate a walk manifest, refusing anything the contract does not allow.
+
+    The audit trail is read from the manifest's own directory, so the manifest and its trail
+    must sit together, as the walk writes them.
 
     Args:
         path: The manifest file.
@@ -333,7 +367,7 @@ def load_walk_manifest(path: Path, protocol_sha256: str) -> WalkManifest:
 
     Raises:
         HarnessFailure: If the file cannot be read, is not UTF-8 JSON, has a shape other than the
-            contract's, or names another protocol.
+            contract's, names another protocol, or has an audit trail that is missing or edited.
     """
     try:
         raw = path.read_bytes()
@@ -347,6 +381,7 @@ def load_walk_manifest(path: Path, protocol_sha256: str) -> WalkManifest:
     universe_digests = {k: _sha256(v, f"universe_sha256.{k}") for k, v in universe.items()}
     archive = data["archive_sha256"]
     archive_digest = None if archive is None else _sha256(archive, "archive_sha256")
+    audit_digest = _sha256(data["audit_trail_sha256"], "audit_trail_sha256")
     if not isinstance(data["strata"], dict):
         _refuse("strata must be an object")
     strata = {name: _stratum_entry(entry, name) for name, entry in data["strata"].items()}
@@ -357,11 +392,13 @@ def load_walk_manifest(path: Path, protocol_sha256: str) -> WalkManifest:
     admissions = [_admission(item, i, strata) for i, item in enumerate(data["admissions"])]
     _check_strata(strata, admissions)
     _check_unique_recordings(admissions)
+    _check_audit_trail(path.parent, audit_digest)
     logger.info("Walk manifest %s: %d strata, %d admissions", path, len(strata), len(admissions))
     return WalkManifest(
         protocol_sha256=protocol_sha256,
         universe_sha256=universe_digests,
         archive_sha256=archive_digest,
+        audit_trail_sha256=audit_digest,
         strata=strata,
         admissions=tuple(admissions),
     )

@@ -13,6 +13,7 @@ import numpy as np
 import numpy.typing as npt
 import pytest
 import soundfile as sf
+from systems_fakes import AUDIT_DIGEST, EchoSystem, echo_factory, passing, write_audit_trail
 
 from benchmark.protocol import Protocol, load_protocol
 from benchmark.run_systems import (
@@ -99,6 +100,7 @@ def manifest(protocol: Protocol, strata: dict[str, Any], admissions: list[dict[s
         "universe_sha256": {"solo_piano": "3" * 64, "chamber": "4" * 64},
         "archive_sha256": None,
         "strata": every_stratum,
+        "audit_trail_sha256": AUDIT_DIGEST,
         "admissions": admissions,
     }
 
@@ -107,6 +109,7 @@ def write_walk(directory: Path, data: dict[str, Any]) -> Path:
     """Write the walk directory's manifest and return the directory."""
     directory.mkdir(exist_ok=True)
     (directory / MANIFEST_NAME).write_text(json.dumps(data), encoding="utf-8")
+    write_audit_trail(directory)
     return directory
 
 
@@ -129,44 +132,6 @@ def standard_walk(tmp_path: Path, protocol: Protocol) -> Path:
     return write_walk(tmp_path / "walk", data)
 
 
-class EchoSystem:
-    """A system that echoes its input, or raises for one frame index if asked to."""
-
-    def __init__(self, name: str, output_dir: Path, fail_frame: int | None = None) -> None:
-        """Store the name, the output folder, and the frame index that fails, if any."""
-        self.name = name
-        self._output_dir = output_dir
-        self._output_dir.mkdir(parents=True, exist_ok=True)
-        self._fail_frame = fail_frame
-
-    def denoise(self, input_path: Path) -> Path:
-        """Raise for the failing frame, otherwise write the input back as the output."""
-        if self._fail_frame is not None and input_path.stem.endswith(f"-{self._fail_frame:06d}"):
-            raise RuntimeError("engine fault")
-        samples, _ = sf.read(input_path, dtype="float32", always_2d=False)
-        output = self._output_dir / f"{input_path.stem}_out.wav"
-        sf.write(output, samples, RATE, subtype="FLOAT")
-        return output
-
-
-def passing(protocol: Protocol, **_: object) -> None:
-    """A precondition check that every run passes."""
-    return None
-
-
-def factory(fail_uvr_frame: int | None = 1) -> Any:
-    """A systems factory: OpGAN echoes; UVR echoes except for one frame index."""
-
-    def build(protocol: Protocol, run_dir: Path, checkpoint: Path, models: Path) -> list[Any]:
-        outputs = run_dir / "outputs"
-        return [
-            EchoSystem("opgan", outputs / "opgan"),
-            EchoSystem("uvr", outputs / "uvr", fail_frame=fail_uvr_frame),
-        ]
-
-    return build
-
-
 def run(walk: Path, run_dir: Path, protocol: Protocol, **overrides: Any) -> dict[str, Any]:
     """Run the stage with passing preconditions and fake systems, overriding any argument."""
     arguments: dict[str, Any] = {
@@ -176,7 +141,7 @@ def run(walk: Path, run_dir: Path, protocol: Protocol, **overrides: Any) -> dict
         "runtime_platform": protocol.golden_fixtures.reference_platform,
         "opgan_checkpoint": run_dir.parent / "final.pt",
         "uvr_model_dir": run_dir.parent / "models",
-        "build_systems": factory(),
+        "build_systems": echo_factory(),
         "preconditions": passing,
     }
     arguments.update(overrides)
