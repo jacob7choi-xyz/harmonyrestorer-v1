@@ -117,6 +117,12 @@ SUPERSEDED_ARTIFACTS = {
     "docs/benchmark-protocol-v11.md": (
         "62d2bcb280075ed57b88fe284add73f0188b7d061209d5de1342d872b876457e"  # pragma: allowlist secret
     ),
+    "benchmark/protocols/v12.json": (
+        "405c83655cb4a3d8ebf0b9f3e3b6ed2be7de803404797bad73a0fce008808dfb"  # pragma: allowlist secret
+    ),
+    "docs/benchmark-protocol-v12.md": (
+        "dd8008906ac07e04a7d9fe3ac3bd7bbd7ff1b2f222d945367b722a0426f2f918"  # pragma: allowlist secret
+    ),
 }
 
 
@@ -157,7 +163,7 @@ class TestRealProtocol:
     """The checked-in config must load and describe itself accurately."""
 
     def test_it_loads(self) -> None:
-        assert load_protocol().protocol_version == 12
+        assert load_protocol().protocol_version == 13
 
     def test_digest_is_of_the_exact_file_bytes(self) -> None:
         """The provenance claim is 'these bytes governed this run', so the digest
@@ -281,8 +287,8 @@ class TestVersionCommitments:
     """Protocol promises are enforced at load, so weakening one requires a version bump."""
 
     def test_unsupported_version(self, tmp_path: Path) -> None:
-        path = variant(tmp_path, lambda d: d.update({"protocol_version": 13}))
-        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 13"):
+        path = variant(tmp_path, lambda d: d.update({"protocol_version": 14}))
+        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 14"):
             _load_from_path(path)
 
     def test_composite_score_cannot_be_enabled(self, tmp_path: Path) -> None:
@@ -573,7 +579,7 @@ class TestOnlyOneApprovedConfiguration:
             d["aggregation"]["bootstrap"]["iterations"] = 50_000
 
         parsed = _load_from_path(variant(tmp_path, alternate))
-        assert parsed.protocol_version == 12
+        assert parsed.protocol_version == 13
         assert parsed.selection.seed == 999
 
         approved = load_protocol()
@@ -588,9 +594,9 @@ class TestAmendmentChain:
 
     def test_chain_names_the_immediately_superseded_artifacts(self) -> None:
         amends = load_protocol().amends
-        assert amends.protocol_version == 11
-        assert amends.protocol_path == "benchmark/protocols/v11.json"
-        assert amends.document_path == "docs/benchmark-protocol-v11.md"
+        assert amends.protocol_version == 12
+        assert amends.protocol_path == "benchmark/protocols/v12.json"
+        assert amends.document_path == "docs/benchmark-protocol-v12.md"
 
     def test_recorded_digests_match_the_archived_files(self) -> None:
         amends = load_protocol().amends
@@ -630,14 +636,14 @@ class TestAmendmentChain:
 
     def test_the_predecessor_must_be_the_immediately_previous_version(self, tmp_path: Path) -> None:
         path = variant(tmp_path, lambda d: d["amends"].update({"protocol_version": 0}))
-        with pytest.raises(ProtocolValueError, match=r"amends\.protocol_version must be 11"):
+        with pytest.raises(ProtocolValueError, match=r"amends\.protocol_version must be 12"):
             _load_from_path(path)
 
     def test_the_superseded_config_is_not_loadable_as_current(self) -> None:
         """Proof the version bump is real rather than cosmetic: the archived v1 file
         still parses, and the current validator refuses it."""
-        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 11"):
-            _load_from_path(REPO_ROOT / "benchmark" / "protocols" / "v11.json")
+        with pytest.raises(ProtocolValueError, match="unsupported protocol_version 12"):
+            _load_from_path(REPO_ROOT / "benchmark" / "protocols" / "v12.json")
 
 
 class TestFrozenTransform:
@@ -3160,3 +3166,77 @@ def _add_demo_to_chamber(d: dict[str, Any]) -> None:
     chamber = d["selection"]["strata"][1]
     chamber["partitions"]["demo"] = 6
     chamber["partition_order"] = ["test", "demo", "test_reserve"]
+
+
+class TestRulesV12LeftOpen:
+    """What v13 defines: a delay diagnostic beside the primaries and an input baseline."""
+
+    def test_the_real_protocol_states_each_rule(self) -> None:
+        metrics = load_protocol().metrics
+        shift = metrics.shift_tolerant
+        assert shift.metrics == ("reconstruction_snr", "si_snr")
+        assert shift.max_shift_samples == 1
+        assert shift.role == "diagnostic_beside_primary_never_headline"
+        assert metrics.input_baseline == "degraded_input_scored_as_a_system_diagnostic_only"
+        assert metrics.primary == ("reconstruction_snr", "si_snr", "log_spectral_distance")
+
+    def test_the_claim_scope_states_the_filter_delay(self) -> None:
+        assert "filter delay" in load_protocol().reporting.claim_scope_note
+
+    @pytest.mark.parametrize(
+        ("mutate", "message"),
+        [
+            (
+                lambda d: d["metrics"]["shift_tolerant"].update(max_shift_samples=0),
+                r"max_shift_samples must be positive",
+            ),
+            (
+                lambda d: d["metrics"]["shift_tolerant"].update(
+                    metrics=["reconstruction_snr", "si_snr", "log_spectral_distance"]
+                ),
+                r"shift_tolerant\.metrics must be",
+            ),
+            (
+                lambda d: d["metrics"]["shift_tolerant"].update(metrics=["pesq"]),
+                r"must be primary metrics",
+            ),
+            (
+                lambda d: d["metrics"]["shift_tolerant"].update(selection="full_search"),
+                r"shift_tolerant\.selection must be",
+            ),
+            (
+                lambda d: d["metrics"]["shift_tolerant"].update(role="headline"),
+                r"shift_tolerant\.role must be",
+            ),
+            (
+                lambda d: d["metrics"]["shift_tolerant"].update(aggregation="median_only"),
+                r"shift_tolerant\.aggregation must be",
+            ),
+            (
+                lambda d: d["metrics"].update(input_baseline="scored_as_a_system"),
+                r"metrics\.input_baseline must be",
+            ),
+        ],
+        ids=[
+            "zero_window",
+            "spectral_metric_added",
+            "not_primary",
+            "selection_closed",
+            "role_closed",
+            "aggregation_closed",
+            "baseline_closed",
+        ],
+    )
+    def test_each_rule_refuses_a_variant(
+        self, tmp_path: Path, mutate: Callable[[dict[str, Any]], None], message: str
+    ) -> None:
+        with pytest.raises(ProtocolValueError, match=message):
+            _load_from_path(variant(tmp_path, mutate))
+
+    @pytest.mark.parametrize("value", [1.0, True, "1"], ids=["float", "bool", "string"])
+    def test_the_window_must_be_an_integer(self, tmp_path: Path, value: object) -> None:
+        def mutate(d: dict[str, Any]) -> None:
+            d["metrics"]["shift_tolerant"]["max_shift_samples"] = value
+
+        with pytest.raises(ProtocolSchemaError, match="wrong JSON type"):
+            _load_from_path(variant(tmp_path, mutate))

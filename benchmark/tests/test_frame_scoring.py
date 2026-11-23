@@ -98,3 +98,35 @@ class TestScoreOutput:
         reference = reference_frame(frame, 1.0)
         with pytest.raises(FrameScoringError, match="si_snr"):
             score_output(reference, reference[:-130], protocol)
+
+
+def delayed(signal: npt.NDArray[np.float64], samples: int) -> npt.NDArray[np.float64]:
+    """*signal* delayed by *samples*, the same length, the start filled with zeros."""
+    return np.concatenate([np.zeros(samples), signal[: len(signal) - samples]])
+
+
+class TestShiftTolerantDiagnostic:
+    """v13's diagnostic sets a one-sample delay aside and leaves the primaries unchanged."""
+
+    def test_a_one_sample_delay_costs_the_primary_but_not_the_diagnostic(
+        self, protocol: Protocol
+    ) -> None:
+        reference = reference_frame(music(), 1.0)
+
+        outcome = score_output(reference, delayed(reference, 1), protocol)
+
+        assert isinstance(outcome, FrameScore)
+        assert tuple(outcome.shift_tolerant) == protocol.metrics.shift_tolerant.metrics
+        assert outcome.results["reconstruction_snr"].value < 10.0
+        assert outcome.shift_tolerant["reconstruction_snr"].capped
+        assert outcome.shift_tolerant["si_snr"].value > outcome.results["si_snr"].value + 30.0
+
+    def test_the_spectral_metric_has_no_diagnostic(self, protocol: Protocol) -> None:
+        reference = reference_frame(music(), 1.0)
+        outcome = score_output(reference, reference * 0.9, protocol)
+        assert isinstance(outcome, FrameScore)
+        assert "log_spectral_distance" not in outcome.shift_tolerant
+
+    def test_a_rejected_output_has_no_diagnostic_to_report(self, protocol: Protocol) -> None:
+        reference = reference_frame(music(), 1.0)
+        assert isinstance(score_output(reference, reference[:-500], protocol), SystemFailure)

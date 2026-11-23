@@ -454,3 +454,55 @@ class TestPrimaryMetricsTable:
         assert metrics.PRIMARY_METRICS["log_spectral_distance"] is metrics.log_spectral_distance
         for name in metrics.PRIMARY_METRICS:
             assert hasattr(METRICS, name)
+
+
+class TestShiftTolerant:
+    """v13's diagnostic: the best score over integer shifts within a small window."""
+
+    @staticmethod
+    def signal(samples: int = 16000, seed: int = 3) -> np.ndarray:
+        return np.random.default_rng(seed).uniform(-0.3, 0.3, samples)
+
+    @staticmethod
+    def delayed(signal: np.ndarray, samples: int) -> np.ndarray:
+        return np.concatenate([np.zeros(samples), signal[: len(signal) - samples]])
+
+    @pytest.mark.parametrize("direction", [1, -1], ids=["estimate_late", "estimate_early"])
+    def test_a_shift_inside_the_window_is_set_aside(self, direction: int) -> None:
+        config = load_protocol().metrics.reconstruction_snr
+        reference = self.signal()
+        estimate = self.delayed(reference, 1) if direction == 1 else np.append(reference[1:], 0.0)
+        primary = metrics.reconstruction_snr(reference, estimate, config)
+        tolerant = metrics.shift_tolerant(
+            metrics.reconstruction_snr, reference, estimate, config, 1
+        )
+        assert primary.value < 10.0
+        assert tolerant.capped
+
+    def test_a_shift_outside_the_window_is_not_searched_for(self) -> None:
+        config = load_protocol().metrics.reconstruction_snr
+        reference = self.signal()
+        estimate = self.delayed(reference, 2)
+        within_one = metrics.shift_tolerant(
+            metrics.reconstruction_snr, reference, estimate, config, 1
+        )
+        within_two = metrics.shift_tolerant(
+            metrics.reconstruction_snr, reference, estimate, config, 2
+        )
+        assert within_one.value < 10.0
+        assert within_two.capped
+
+    def test_the_diagnostic_is_never_below_the_unshifted_score(self) -> None:
+        config = load_protocol().metrics.si_snr
+        reference = self.signal()
+        estimate = reference + np.random.default_rng(9).normal(0, 0.05, reference.size)
+        primary = metrics.si_snr(reference, estimate, config)
+        tolerant = metrics.shift_tolerant(metrics.si_snr, reference, estimate, config, 1)
+        assert tolerant.value >= primary.value
+
+    @pytest.mark.parametrize("window", [0, -1, 16000], ids=["zero", "negative", "whole_signal"])
+    def test_a_window_out_of_range_is_refused(self, window: int) -> None:
+        config = load_protocol().metrics.reconstruction_snr
+        reference = self.signal()
+        with pytest.raises(ValueError, match="max_shift_samples"):
+            metrics.shift_tolerant(metrics.reconstruction_snr, reference, reference, config, window)

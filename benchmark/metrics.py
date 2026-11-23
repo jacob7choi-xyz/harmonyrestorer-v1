@@ -315,6 +315,49 @@ def log_spectral_distance(
 
 PrimaryMetric = Callable[[np.ndarray, np.ndarray, Any], MetricResult]
 
+
+def shift_tolerant(
+    metric: PrimaryMetric,
+    reference: np.ndarray,
+    estimate: np.ndarray,
+    config: Any,
+    max_shift_samples: int,
+) -> MetricResult:
+    """The best of a higher-is-better *metric* over integer shifts within the window.
+
+    Protocol v13's diagnostic (`metrics.shift_tolerant`). For each shift `s` from
+    `-max_shift_samples` to `+max_shift_samples`, sample `t + s` of the reference is paired
+    with sample `t` of the estimate, both trimmed to their overlap, and the highest score is
+    kept. Shift 0 is the primary score, so the diagnostic is never below it. The window is
+    a few samples at most, set by the protocol, so this sets a small fixed delay aside
+    without searching for an alignment.
+
+    Args:
+        metric: A primary metric whose higher values are better.
+        reference: The conditioned reference.
+        estimate: The conditioned estimate, the same length as the reference.
+        config: The metric's frozen configuration.
+        max_shift_samples: The window, `metrics.shift_tolerant.max_shift_samples`.
+
+    Returns:
+        The best score over the shifts, with its cap state.
+
+    Raises:
+        MetricInputError: If a shifted pair is not scoreable.
+        ValueError: If the window is not positive or not shorter than the signals.
+    """
+    if max_shift_samples <= 0 or max_shift_samples >= min(len(reference), len(estimate)):
+        raise ValueError(f"max_shift_samples must be in [1, length), got {max_shift_samples}")
+    results = []
+    for shift in range(-max_shift_samples, max_shift_samples + 1):
+        if shift >= 0:
+            ref, est = reference[shift:], estimate[: len(estimate) - shift]
+        else:
+            ref, est = reference[:shift], estimate[-shift:]
+        results.append(metric(ref, est, config))
+    return max(results, key=lambda result: result.value)
+
+
 # Each primary metric by the name the protocol's `metrics.primary` uses, which is also the
 # name of its configuration section, so a caller scores every primary metric in protocol
 # order from one place rather than keeping its own copy of this table.
