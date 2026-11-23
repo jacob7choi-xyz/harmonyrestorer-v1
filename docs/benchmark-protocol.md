@@ -1,14 +1,14 @@
-# Benchmark protocol v12
+# Benchmark protocol v13
 
 Frozen before candidate identities are selected, downloaded for evaluation,
 auditioned, or scored. The source collection has already been inspected in general
 terms; what has not happened is any decision about which recordings enter the
 benchmark.
 
-> **Note:** v12 amends v11, which amended v10, which amended v9, which amended v8, which
-> amended v6, which amended v5, which amended v4, which amended v3, which amended v2, which
-> amended v1, all before any evaluation ran. The
-> operational values live in `benchmark/protocols/v12.json`, which is normative; this
+> **Note:** v13 amends v12, which amended v11, which amended v10, which amended v9, which
+> amended v8, which amended v6, which amended v5, which amended v4, which amended v3, which
+> amended v2, which amended v1, all before any evaluation of the test population ran. The
+> operational values live in `benchmark/protocols/v13.json`, which is normative; this
 > document explains them and
 > its numbers are illustrative. Superseded versions are preserved unmodified, as
 > [benchmark-protocol-v1.md](benchmark-protocol-v1.md),
@@ -20,8 +20,9 @@ benchmark.
 > [benchmark-protocol-v7.md](benchmark-protocol-v7.md),
 > [benchmark-protocol-v8.md](benchmark-protocol-v8.md),
 > [benchmark-protocol-v9.md](benchmark-protocol-v9.md), and
-> [benchmark-protocol-v10.md](benchmark-protocol-v10.md), and
-> [benchmark-protocol-v11.md](benchmark-protocol-v11.md) with their configs, so an
+> [benchmark-protocol-v10.md](benchmark-protocol-v10.md),
+> [benchmark-protocol-v11.md](benchmark-protocol-v11.md), and
+> [benchmark-protocol-v12.md](benchmark-protocol-v12.md) with their configs, so an
 > artifact recording an older `protocol_version` stays interpretable. See
 > [Amendment](#amendment) for what changed and why.
 
@@ -1179,6 +1180,26 @@ escape being scored on a missing tail.
   a future protocol version if a system is shown to introduce fixed latency, but it
   will be declared before that version is run, not fitted afterwards
 
+From v13, reconstruction SNR and SI-SNR are also reported with a shift-tolerant
+diagnostic: the estimate is scored at every integer shift from -1 to +1 sample against
+the conditioned reference, both trimmed to their overlap, and the best of the three is
+kept. The degradation's rolloff is a causal 4th-order Butterworth low-pass with its cutoff
+drawn from 4 to 8 kHz, and it delays the degraded input by about one sample. A system that
+keeps its input's timing therefore loses several decibels on the sample-wise metrics that a
+system trained on this degradation does not, for a delay the benchmark itself introduced.
+An informal pilot on music outside training and both strata measured this before v13 was
+frozen (see [v12 to v13](#v12-to-v13)). The window is one sample and the same for every
+system and for the input baseline below, so it sets that delay aside without becoming an
+alignment search. Log-spectral distance compares magnitude spectra and is not included.
+
+> **Note:** The diagnostic is reported beside the three co-primary metrics and never
+> replaces one. The primary metrics are unchanged and are still scored at the offset each
+> output arrives with.
+
+From v13 the degraded input itself is also scored against the reference, exactly as a
+system output is, with the primary metrics and the diagnostic. It shows what each system
+was given. It is not a system: it has no coverage and enters no paired effect.
+
 ## Metrics
 
 **Benchmark v1 measures reference-signal fidelity, not perceived audio quality.**
@@ -1489,6 +1510,26 @@ defect discovered after results exist invalidates those results rather than
 retroactively changing the rules that produced them. Superseded versions stay in the
 tree rather than being replaced, and each version names its predecessor by digest;
 the loader recomputes those digests, so the chain is checked rather than asserted.
+
+### v12 to v13
+
+An informal pilot on 2026-11-22 used music in neither the training corpus nor either
+stratum: the first four tracks of Kimiko Ishizaka's Open Well-Tempered Clavier, Book 1
+(Internet Archive item `bach-well-tempered-clavier-book-1`), 236 frames above the frame
+floor. It degraded and scored them with the v12 code. Median reconstruction SNR was 13.07 dB
+for the degraded input, 13.60 dB for UVR, and 20.47 dB for OpGAN. Allowing a shift of up to
+one sample, it was 17.37, 19.35, and 20.83 dB. A search of up to three samples chose no shift
+beyond one. The degradation's causal rolloff delays the input by about one sample, so most of
+OpGAN's lead in the sample-wise metrics came from undoing that delay, which only OpGAN was
+trained on. That is a reading of these medians on four tracks by one pianist, not a measured
+result on the test population.
+
+v13 adds the shift-tolerant diagnostic of at most one sample beside the primary metrics,
+scores the degraded input as a diagnostic baseline, and adds the delay to the claim scope.
+The primary metrics, the degradation, and every selection rule are unchanged. No audio from
+either stratum, and no canonical waveform, eligibility outcome, degraded input, system output,
+metric score, aggregate, or comparative conclusion from the test population, had been
+acquired, generated, or inspected.
 
 ### v11 to v12
 

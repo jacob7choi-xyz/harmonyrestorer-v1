@@ -65,9 +65,9 @@ logger = logging.getLogger(__name__)
 # Private so that production code has no supported affordance for reading the file
 # itself. `load_protocol` is the way in.
 _REPO_ROOT = Path(__file__).resolve().parents[1]
-_PROTOCOL_PATH = _REPO_ROOT / "benchmark" / "protocols" / "v12.json"
+_PROTOCOL_PATH = _REPO_ROOT / "benchmark" / "protocols" / "v13.json"
 
-SUPPORTED_PROTOCOL_VERSION = 12
+SUPPORTED_PROTOCOL_VERSION = 13
 
 # Which protocol v2 supersedes, and the artifacts it supersedes, as historical facts
 # rather than as arithmetic. `SUPPORTED_PROTOCOL_VERSION - 1` would encode a universal
@@ -75,9 +75,9 @@ SUPPORTED_PROTOCOL_VERSION = 12
 # governance model promises. The paths are frozen here so the config cannot redirect
 # the amendment chain at another file whose digest it also records, and so a relative
 # path out of the tree is not reachable at all.
-_PREDECESSOR_VERSION = 11
-_PREDECESSOR_PROTOCOL_PATH = "benchmark/protocols/v11.json"
-_PREDECESSOR_DOCUMENT_PATH = "docs/benchmark-protocol-v11.md"
+_PREDECESSOR_VERSION = 12
+_PREDECESSOR_PROTOCOL_PATH = "benchmark/protocols/v12.json"
+_PREDECESSOR_DOCUMENT_PATH = "docs/benchmark-protocol-v12.md"
 
 # Closed vocabularies for the frozen LSD transform. Each admits exactly one value. The
 # fields exist so an independent implementer reads each convention from the
@@ -514,6 +514,13 @@ _DEGENERATE_SCOPE = "candidate_features_only"
 _TIMEOUT_ABORT = "WORKER_TIMEOUT"
 _WORKER_TIMEOUT = "harness_setting_exceeding_it_aborts"
 _CLAIM_SCOPE = "unseen_solo_piano_and_chamber_training_noise_16khz_mono_orchestral_untested"
+# v13's diagnostic for the degradation's filter delay: which metrics, how the shift is chosen,
+# and that it is never a headline. The window's size is a magnitude and lives in the JSON.
+_SHIFT_TOLERANT_METRICS = ("reconstruction_snr", "si_snr")
+_SHIFT_SELECTION = "best_over_integer_shifts_within_max_both_trimmed_to_overlap"
+_SHIFT_ROLE = "diagnostic_beside_primary_never_headline"
+_SHIFT_AGGREGATION = "as_primary"
+_INPUT_BASELINE = "degraded_input_scored_as_a_system_diagnostic_only"
 # Fields read by the selection walk, the duplicate screen, and the eligibility floors whose
 # JSON type the loader must fix, because _build checks only key names. Each tuple names
 # the attributes of one section that must be exactly that type.
@@ -1190,6 +1197,18 @@ class Conditioning:
 
 
 @dataclass(frozen=True)
+class ShiftTolerant:
+    """v13's diagnostic: each sample-wise metric scored at the best shift within a window."""
+
+    metrics: tuple[str, ...]
+    max_shift_samples: int
+    selection: str
+    role: str
+    aggregation: str
+    note: str
+
+
+@dataclass(frozen=True)
 class ReconstructionSnr:
     """Sample-wise fidelity; penalises gain, timing, and distortion alike."""
 
@@ -1300,6 +1319,9 @@ class Metrics:
     reconstruction_snr: ReconstructionSnr
     si_snr: SiSnr
     log_spectral_distance: LogSpectralDistance
+    shift_tolerant: ShiftTolerant
+    input_baseline: str
+    input_baseline_note: str
 
     def metric_config(self, name: str) -> MetricConfig:
         """Return the frozen configuration for a named primary metric.
@@ -1655,6 +1677,12 @@ def _parse_metrics(data: Mapping[str, Any]) -> Metrics:
         ),
         si_snr=_build(SiSnr, data["si_snr"], "metrics.si_snr"),
         log_spectral_distance=_parse_log_spectral_distance(data["log_spectral_distance"]),
+        shift_tolerant=_build(
+            ShiftTolerant,
+            data["shift_tolerant"],
+            "metrics.shift_tolerant",
+            metrics=tuple(data["shift_tolerant"]["metrics"]),
+        ),
     )
 
 
@@ -2931,6 +2959,37 @@ def _validate_metrics(metrics: Metrics) -> None:
                 f"{expected!r} for a positive delta to favour OpGAN, got {config.paired_effect!r}"
             )
     _validate_metric_parameters(metrics)
+    _validate_shift_tolerant(metrics)
+
+
+def _validate_shift_tolerant(metrics: Metrics) -> None:
+    """The delay diagnostic names the sample-wise metrics, a positive window, and its role.
+
+    The window is the only magnitude, and it must be positive: a window of zero would report
+    the primary scores again under a diagnostic's name. Which metrics, how the shift is
+    chosen, its role, and the input baseline are closed, because a diagnostic that could
+    widen its search or become a headline would be the alignment search the protocol forbids.
+    """
+    shift = metrics.shift_tolerant
+    if shift.max_shift_samples <= 0:
+        raise ProtocolValueError(
+            f"metrics.shift_tolerant.max_shift_samples must be positive, got "
+            f"{shift.max_shift_samples}"
+        )
+    if not set(shift.metrics) <= set(metrics.primary):
+        raise ProtocolValueError("metrics.shift_tolerant.metrics must be primary metrics")
+    for name, stated, frozen in (
+        ("shift_tolerant.metrics", shift.metrics, _SHIFT_TOLERANT_METRICS),
+        ("shift_tolerant.selection", shift.selection, _SHIFT_SELECTION),
+        ("shift_tolerant.role", shift.role, _SHIFT_ROLE),
+        ("shift_tolerant.aggregation", shift.aggregation, _SHIFT_AGGREGATION),
+        ("input_baseline", metrics.input_baseline, _INPUT_BASELINE),
+    ):
+        if stated != frozen:
+            raise ProtocolValueError(
+                f"metrics.{name} must be {frozen!r}, got {stated!r}; a diagnostic that could "
+                "search wider or stand as a headline would be the alignment search the protocol forbids"
+            )
 
 
 def _validate_aggregation(agg: Aggregation) -> None:
@@ -3077,6 +3136,11 @@ def _typed_fields(protocol: Protocol) -> list[tuple[str, object, type]]:
         ("eligibility.recording_rms_dbfs_min", protocol.eligibility.recording_rms_dbfs_min, float),
         ("eligibility.frame_rms_dbfs_min", protocol.eligibility.frame_rms_dbfs_min, float),
         ("duplicate_detection.flag_threshold", dd.flag_threshold, float),
+        (
+            "metrics.shift_tolerant.max_shift_samples",
+            protocol.metrics.shift_tolerant.max_shift_samples,
+            int,
+        ),
         (
             "canonicalisation.resample.target_sample_rate",
             protocol.canonicalisation.resample.target_sample_rate,
