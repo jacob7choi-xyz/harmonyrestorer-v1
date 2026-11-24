@@ -546,6 +546,10 @@ describe('useCrossfadePlayback state machine', () => {
     // handoff will accept, which lands it back on the restored side of the
     // boundary. Crossing must produce one transition, not an oscillation.
     h.originalCtl.setTime(91.0);
+    // Let the animation-frame tick read the trailing clock before the divider
+    // is evaluated again. Without this wait the divider calls can run on the
+    // stale transport, and the test passes or fails with frame timing.
+    await waitFor(() => expect(h.result.current.state.currentTime).toBeCloseTo(91.0, 2));
     for (let i = 0; i < 5; i++) {
       await act(async () => {
         h.result.current.setDividerPosition(0.5);

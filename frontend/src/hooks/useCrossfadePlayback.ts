@@ -519,11 +519,17 @@ export function useCrossfadePlayback(
    * here only because the boundary comparison lives in seconds. It applies to
    * this drag alone and never to playback, where a pixel-derived margin would
    * reintroduce duration-scaled lag.
+   *
+   * The band used is never narrower than BOUNDARY_BAND_SECONDS. A committed
+   * source's clock can trail the boundary by up to SWITCH_ACCEPT_TOLERANCE,
+   * and a narrower band here would let the next divider event reverse that
+   * commit, which is the bounce the playback band exists to prevent. A short
+   * track on a wide strip gives a pixel band below that bound.
    */
   const setDividerPosition = useCallback(
     (position: number, pointerBand: number = 0): void => {
       dividerRef.current = Math.max(0, Math.min(1, position));
-      evaluateSource(pointerBand * durationRef.current);
+      evaluateSource(Math.max(pointerBand * durationRef.current, BOUNDARY_BAND_SECONDS));
     },
     [evaluateSource],
   );
