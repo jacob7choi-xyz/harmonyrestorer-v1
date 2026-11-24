@@ -13,7 +13,6 @@ the baseline follow them and are never headlines, and no significance language i
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 from collections.abc import Sequence
 from pathlib import Path
@@ -21,6 +20,7 @@ from typing import Any
 
 from benchmark.aggregation import BaselineSummary, MetricSummary
 from benchmark.atomic_write import write_directory_atomically
+from benchmark.canonical_json import canonical_json
 from benchmark.protocol import ProtocolError, load_protocol
 from benchmark.report import Outcome, ReportError, RunReport, StratumReport, build_report
 from benchmark.scoring import OPGAN, UVR
@@ -129,7 +129,7 @@ def render_json(report: RunReport) -> str:
         },
         "strata": {s.stratum: _stratum_json(s) for s in report.strata},
     }
-    return json.dumps(document, indent=2, sort_keys=True, allow_nan=False) + "\n"
+    return canonical_json(document)
 
 
 def _format_interval(low: float, high: float) -> str:

@@ -57,7 +57,7 @@ from benchmark.frame_scoring import reference_frame
 from benchmark.protocol import Protocol, TrainingNoiseRanges, load_protocol
 from benchmark.run_preconditions import uvr_file_failures, weights_only_override
 from benchmark.run_systems import build_production_systems
-from benchmark.systems_stage import System
+from benchmark.systems_stage import HarnessFailure, System, SystemFailed, read_output
 
 __all__ = ["ClipSpec", "DemoSampleError", "generate", "load_clip_specs", "main"]
 
@@ -429,6 +429,9 @@ def float_input_bytes(pcm: npt.NDArray[np.int16]) -> bytes:
 def read_engine_output(path: Path, label: str) -> npt.NDArray[np.float64]:
     """Read an engine's output as float64 mono at the canonical rate.
 
+    The read and the format check are the systems stage's `read_output`. Its failures map to
+    this script's error: an unreadable file and a wrong format both refuse the clip.
+
     Args:
         path: The engine's output WAV.
         label: The engine and clip, for the error message.
@@ -437,20 +440,17 @@ def read_engine_output(path: Path, label: str) -> npt.NDArray[np.float64]:
         One channel of samples.
 
     Raises:
-        DemoSampleError: If the output is not mono at the canonical rate.
+        DemoSampleError: If the output cannot be read, or is not mono at the canonical rate.
     """
-    data, rate = sf.read(str(path), dtype="float64", always_2d=True)
-    if rate != SAMPLE_RATE or data.shape[1] != 1:
-        logger.error(
-            "Output %s for %s is %d Hz with %d channels; expected %d Hz mono",
-            path.name,
-            label,
-            rate,
-            data.shape[1],
-            SAMPLE_RATE,
-        )
+    try:
+        result = read_output(path, SAMPLE_RATE)
+    except HarnessFailure as error:
+        logger.error("Output %s for %s cannot be read: %s", path.name, label, error)
+        raise DemoSampleError(f"output for {label} cannot be read") from error
+    if isinstance(result, SystemFailed):
+        logger.error("Output %s for %s rejected: %s", path.name, label, result.reason)
         raise DemoSampleError(f"output for {label} is not {SAMPLE_RATE} Hz mono")
-    return np.asarray(data[:, 0], dtype=np.float64)
+    return result.samples
 
 
 def run_denoisers(

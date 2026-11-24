@@ -18,7 +18,6 @@ before anything is written.
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -29,6 +28,7 @@ import numpy as np
 import numpy.typing as npt
 
 from benchmark.atomic_write import write_directory_atomically
+from benchmark.canonical_json import canonical_json
 from benchmark.canonicalisation import CanonicalWaveform
 from benchmark.conditioning import InvalidSystemOutput, condition_pair
 from benchmark.degradation import degrade_frame, frame_seed
@@ -447,7 +447,7 @@ def render_json(report: RunReport, analyses: Mapping[str, StratumAnalysis]) -> s
         "run_digests": _digests_json(report),
         "strata": {s.stratum: _stratum_json(s, analyses.get(s.stratum)) for s in report.strata},
     }
-    return json.dumps(document, indent=2, sort_keys=True, allow_nan=False) + "\n"
+    return canonical_json(document)
 
 
 def _interval_text(low: float, high: float) -> str:
