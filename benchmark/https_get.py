@@ -132,6 +132,7 @@ def get(
     *,
     max_bytes: int,
     timeout_s: float,
+    user_agent: str | None = None,
     opener: Opener = _open,
 ) -> Response:
     """GET *url*, writing at most *max_bytes* bytes of the body to *sink*.
@@ -141,6 +142,7 @@ def get(
         sink: Where the body is written.
         max_bytes: The most bytes written; more offered sets `exceeded`.
         timeout_s: The bound on each socket operation, not on the whole transfer.
+        user_agent: The User-Agent header to send. None sends `USER_AGENT`, the default.
         opener: Opens the request; tests replace it.
 
     Returns:
@@ -155,8 +157,11 @@ def get(
         raise ValueError(f"only HTTPS URLs are fetched, got {url}")
     if max_bytes < 0:
         raise ValueError(f"max_bytes must be non-negative, got {max_bytes}")
+    if user_agent is not None and not user_agent.strip():
+        raise ValueError("user_agent must not be blank when given")
+    agent = USER_AGENT if user_agent is None else user_agent
     digests = _new_digests()
-    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    request = urllib.request.Request(url, headers={"User-Agent": agent})
     try:
         return _transfer(url, request, sink, max_bytes, timeout_s, opener, digests)
     except http.client.HTTPException as error:

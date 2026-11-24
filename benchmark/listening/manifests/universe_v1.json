@@ -1,0 +1,3297 @@
+{
+  "excluded": [
+    {
+      "identifier": "78_a-dream_john-mccormack-chas-b-cory-j-c-bartlett_gbia0045837a",
+      "matched": [
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_a-little-love-a-little-kiss-un-peu-damour_john-mccormack-ross-silesu_gbia0298455a",
+      "matched": [
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_adagio-ur-sonate-pathtique_marjorie-hayward-beethoven_gbia7017667a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_adorables-tourments-adorable-torments_enrico-caruso-caruso-barthelemy_gbia0317533a",
+      "matched": [
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_alpine-violets-alpenveilchen_frank-horning-marshall-lufsky-paul-surth_gbia0307030a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_andante-religioso_cherniavsky-trio-francis-thome_gbia0192107a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_andante-religioso_leo-cherniavsky-jan-cherniavsky-michael-cherniavsky-francis-thome_gbia0192210a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_andante-religioso_leo-cherniavsky-jan-cherniavsky-mischel-cherniavsky-francis-thome_gbia0191882a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_angels-serenade_mr-and-mrs-igor-sokoloff-robert-gayler-g-brega_gbia0191914b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_angels-serenade_orchestra_gbia0298144a",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_anitras-dance_philadelphia-symphony-orchestra-edvard-grieg-leopold-stokowski_gbia7034836a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_answer_evan-williams-robyn_gbia0317769b",
+      "matched": [
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_anvil-chorus_standard-band_gbia0171981a",
+      "matched": [
+        "chorus"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_apple-blossoms_american-symphony-orchestra-kathleen-a-roberts_gbia0299005b",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_ave-maria_gounod_gbia3037872b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_ave-maria_marie-rappold-bach-gounod-albert-spalding_gbia0313813a",
+      "matched": [
+        "in latin",
+        "soprano"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_ave-maria_marie-rappoli-albert-spalding-bach-gounod_gbia0164747a",
+      "matched": [
+        "soprano"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_ave-maria_mischa-elman-schubert-wilhelmj_gbia7002827a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_ave-maria_miss-elsie-southgate-and-her-sister-dorothy-bach-gounod_gbia3038354b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_awakening-of-spring_peerless-orchestra-e-bach_gbia0299018a",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_bal-masque_p-lewis-paladium-octette-percy-fletcher_gbia0124641a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_ballsirenen-walzer-die-lustige-witwe-the-merry-widow_orchestra_gbia0176217a",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_barcarolle-the-tales-of-hoffman_leo-jan-and-mischel-cherniavsky-offenbach_gbia0191882b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_barcarolle-the-tales-of-hoffmann_leo-jan-and-michel-cherniavsky-offenbach_gbia0192210b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_barcarolle_cherniavsky-trio-offenbach_gbia0192107b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_blue-danube-waltz_american-symphony-orchestra-joh-strauss_gbia0319483b",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_blue-danube-waltz_philadelphia-symphony-orchestra-johann-strauss-leopold-stokowski_gbia7039854a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_blue-danube-waltz_philadelphia-symphony-orchestra-leopold-stokowski_gbia0283463a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_blue-danube_mr-rudolf-svinerfeldt_gbia3037864a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_bohme-racconto-di-rodolfo-rudolphs-narrative_orville-harrold-puccini_gbia0516688a",
+      "matched": [
+        "in italian",
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_burma-maid_the-imperial-symphony-orchestra-charles-w-ancliffe_gbia0305029b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_carm_john-mccormack-and-fritz-kreisler-canto-sorrentino-gb-de-curtis_gbia0307150a",
+      "matched": [
+        "in italian",
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_carmen-aragonaise-prelude-to-act-4_bizet-toscanini-and-la-scala-orchestra_gbia0000358a",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_carmen-prelude-to-act-1_philadelphia-symphony-orchestra-bizet-leopold-stokowski_gbia0183009a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_carmen-selection-part-i_de-groot-and-the-piccadilly-orchestra-bizet-tavan_gbia7012253a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_carmen-selection-part-ii_de-groot-and-the-piccadilly-orchestra-bizet-tavan_gbia7012253b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_caro-mio-ben-canst-thou-believe_amelita-galli-curci-giordani_gbia0045469b",
+      "matched": [
+        "in italian",
+        "soprano"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_cavalleria-rusticana_empire-symphony-orchestra-mascagni_gbia3030165b",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_chanson-triste_igor-sokoloff-robert-gayler-p-tschaikowsky_gbia0191914a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_charmant-oiseau-la-perle-du-brsil_david_gbia0299010a",
+      "matched": [
+        "in french",
+        "soprano"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_chorus-of-dervishes_jascha-heifetz-andr-benoist-l-van-beethoven-leopold-auer_gbia0232838a",
+      "matched": [
+        "chorus"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_cradle-song_alma-gluck-mozart_gbia7035573a",
+      "matched": [
+        "in english",
+        "song",
+        "soprano"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_crescendo_armad-vecsey-and-his-hungarian-orchestra-per-lasson_gbia0197269a",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_crossing-the-bar_harold-jarvis_gbia0336890a",
+      "matched": [
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_crucifix_john-mccormack-reinald-werrenrath-f-w-rosier-j-faure_gbia0284294a",
+      "matched": [
+        "baritone",
+        "duet",
+        "in english",
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_dance-of-the-flower-valse-de-fleur_emerson-international-symphony-orchestra-tscha_gbia0168326a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_dance-of-the-flutes-danse-des-mirlitons_philadelphia-symphony-orchestra-tschaikow_gbia0181324b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_dance-of-the-flutes-danse-des-mirlitons_philadelphia-symphony-orchestra-tschaikow_gbia0206874a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_dans-le-bois_mischa-elman-paganini-vogrich_gbia7004596a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_der-rosenkavalier_richard-strauss-tanzwalzer-armand-vecesey-and-his-hungarian-orche_gbia0000083b",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_don-giovanni-vedrai-carino-dearest-shall-i-tell-thee-act-2_lucrezia-bori-moza_gbia0401733a",
+      "matched": [
+        "in italian",
+        "soprano"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_dreams-at-twilight_matilda-dibowski-american-symphony-orchestra_gbia0000083a",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_dreams-of-galilee_c-p-morrison_gbia0192128b",
+      "matched": [
+        "basso",
+        "soprano",
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_duo-du-1er-acte-fantaisie_pf-massenet_gbia0298599a",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_durands-concert-valse_gbia0307187a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_elegie-song-of-mourning_enrico-caruso-mischa-elman-massenet_gbia7003784a",
+      "matched": [
+        "song",
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_espaa-rapsodie-spanish-rhapsody_philadelphia-symphony-orchestra-leopold-stokowsk_gbia0520126a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_evening-song_willem-willeke-josef-adler-bernh-dessau_gbia0300501b",
+      "matched": [
+        "song"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_explanatory-talk_harry-e-humphrey_gbia0313816b",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_fantasia-from-simon-boccanegra_pietro-caso-and-anthony-giammatteo-verdi_gbia0197288b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_farandole_toscanini-and-la-scala-orchestra-bizet_gbia0310877a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_fiddle-and-i_alma-gluck-and-efrem-zimbalist-rosario-bourdon-fred-e-weatherly-arthu_gbia0321184b",
+      "matched": [
+        "soprano"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_florentiner-marsch_l-gyldmarks-orkester-julius-fucik_gbia0124639a",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_forgotten_evan-williams-cowles_gbia0317769a",
+      "matched": [
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_fourth-f-minor-symphony-allegro-con-fuoco-finale-part-1_boston-symphony-orch_gbia0277210a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_fourth-f-minor-symphony-allegro-con-fuoco-finale-part-2_boston-symphony-orch_gbia0277211a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_gamble-norge_carsten-woll-kristian-nilsson_gbia0300717b",
+      "matched": [
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_gasse-noisette-suite-part-i_american-symphony-orchestra-tschaikowsky_gbia0321043b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_gasse-noisette-suite-part-ii_american-symphony-orchestra-tschaikowsky_gbia0321043a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_gioconda---cielo-e-mar-heaven-and-ocean-act-2_beniamino-gigli-ponchielli_gbia0012575a",
+      "matched": [
+        "in italian",
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_gloria-twelfth-mass_gregorian-choir-mozart_gbia0300716b",
+      "matched": [
+        "voices"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_god-be-with-our-boys-to-night_john-mccormack-fred-g-bowles-wilfrid-sanderson_gbia0334671a",
+      "matched": [
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_good-bye-sweet-day_janet-spencer-thaxter-vannah_gbia0284293a",
+      "matched": [
+        "contralto"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_hallelujah-chorus_imperial-military-band_gbia0317494b",
+      "matched": [
+        "chorus"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_hallelujah-chorus_oratorio-chorus-handel_gbia0300716a",
+      "matched": [
+        "chorus",
+        "voices"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_humoresque_mischa-elman-josef-bonime-dvorak_gbia0283464a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_humoresque_venetian-trio-dvok_gbia7000325a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_hungarian-dance-no-1-in-g-minor_philadelphia-symphony-orchestra-brahms-leopold-s_gbia0213335a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_hungarian-dance-no-5_philadelphia-symphony-orchestra-brahms-leopold-stokowski_gbia0183029a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_hungarian-dance-no-5_philadelphia-symphony-orchestra-brahms-leopold-stokowski_gbia0518257a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_hungarian-dance-no-6_philadelphia-symphony-orchestra-brahms-leopold-stokowski_gbia0183029b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_hungarian-dance-no-6_philadelphia-symphony-orchestra-brahms-leopold-stokowski_gbia0197541a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_hungarian-dance-no-6_philadelphia-symphony-orchestra-brahms-leopold-stokowski_gbia0232810a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_hungarian-serenade_alessios-mandolin-quartette-g-sgallari_gbia0175864a",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_i-hear-you-calling-me_charles-marshall_gbia0047086a",
+      "matched": [
+        "chorus",
+        "soprano"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_ii-pagliacci_zon-o-phone-concert-band_gbia0307007a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_il-barbiere-di-siviglia_titta-ruffo-rossini_gbia0299297a",
+      "matched": [
+        "baritone"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_il-trovatore-introduction-and-anvil-chorus_the-band-of-hm-coldstream-guards-ver_gbia7000127b",
+      "matched": [
+        "chorus"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_il-trovatore_guido-deiro_gbia0197145b",
+      "matched": [
+        "accordion"
+      ],
+      "reason": "accordion"
+    },
+    {
+      "identifier": "78_just-that-one-hour_edward-johnson-avery-werner-vernon-eville_gbia0133052b",
+      "matched": [
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_kathleen-mavourneen_venetian-instrumental-quartet-f-n-crouch_gbia0164742b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_kol-nidre-hebrischer-gesang_joseph-schwarz-heinrich-grnfeld-l-lewandowski-and_gbia0317525a",
+      "matched": [
+        "bariton"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_la-capinera-the-wren_amelita-galli-curci-sir-julius-benedict-manuel-berenguer_gbia0045469a",
+      "matched": [
+        "in italian",
+        "soprano"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_la-danseuse-intermezzo_american-symphony-orchestra-franz-von-blon_gbia0313757b",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_la-walkyrie_mr-bedetti-wagner_gbia0318666a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_lafricana-o-paradisio-o-paradise_enrico-caruso-meyerbeer_gbia0299696a",
+      "matched": [
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_land-of-the-long-ago_edward-johnson-charles-knight-lilian-ray_gbia0133052a",
+      "matched": [
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_largo-handel_band_gbia0298988a",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_le-cygne-the-swan_hans-kindler-rosario-bourdon-saint-saens_gbia0177143a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_le-cygne-the-swan_maurice-damois-saint-saens_gbia0072353a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_le-petit-duc-fantaisie_pf-lecocq_gbia0298599b",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_les-matres-chanteurs_mr-bedetti-wagner_gbia0318666b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_light-cavalry-overture_edison-concert-band-franz-v-supp_gbia0313757a",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_longing-for-home_geo-stehl-marshall-lufsky-paul-surth_gbia0307029a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_madrigal-de-mai-madrigal-of-may_renato-zanelli-mlle.-agnetta-floris-maurice-nitke_gbia0012581a",
+      "matched": [
+        "baritone",
+        "in french"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_manon-lescaut---donna-non-vidi-mai-a-maiden-so-fair-act-1_enrico-caruso-mme.-a._gbia0012548a",
+      "matched": [
+        "in italian",
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_mditation_mischa-elman-massenet_gbia7004589b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_meditation-thais_mischa-elman-massenet_gbia7003786a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_mefistofele---dai-campi-dai-prati-from-the-green-fields-act-i_beniamino-gigli_gbia0012576a",
+      "matched": [
+        "in italian",
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_melodie-in-f_rae-eleanor-ball-rubinstein_gbia0287259a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_melody-in-f_hans-kindler-rosario-bourdon-rubinstein_gbia0177143b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_melody-in-f_miss-elsie-southgate-and-her-sister-dorothy-rubenstein_gbia3038320a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_menuet_the-great-lakes-string-quartet-beethoven_gbia0303244a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_menuett_hans-kindler-handel_gbia0297840a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_midsummer-nights-dream-scherzo_philadelphia-symphony-orchestra-leopold-stowkowski_gbia0520128a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_mignon-fantasia-part-1_american-symphony-orchestra-thomas_gbia0299026a",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_mignon-fantasia-part-2_american-symphony-orchestra-a-thomas_gbia0299026b",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_minuet-celebrated-minuet_philadelphia-symphony-orchestra-boccherini-leopold-sto_gbia0181324a",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_minuet-in-g-no-2_mischa-elman-percy-b-kahn-beethoven_gbia7023889a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_molly-an-irish-love-song_reinald-werrenrath-rida-johnson-young-victor-herbert_gbia0201116a",
+      "matched": [
+        "baritone",
+        "song"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_moment-musical_philadelphia-symphony-orchestra-schubert-leopold-stokowski_gbia0211386b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_moonlight_gbia0313786b",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_nocturne-e-flat_hans-kronold-chopin_gbia0197284a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_nocturne-in-d-flat_frank-la-forge-chopin_gbia0516685a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_non-pui-andrai-farfallone-amoros_adamo-didur-mozart_gbia0072343b",
+      "matched": [
+        "basso",
+        "in italian"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_offertoire_weyert-a-moor-j-donjon_gbia0164745b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_oh-sleep-why-dost-thou-leave-me_john-mccormack_gbia0336808a",
+      "matched": [
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_old-hungarian-melody_raez-laezi-armand-vecsey-and-his-hungarian-orchestra_gbia0000092a",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_on-the-high-alps-auf-honer-alp_walter-bierdermann-and-hans-von-wegern_gbia0307012a",
+      "matched": [
+        "duet"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_on-wings-of-music_marie-sundelius-felix-mendelssohn_gbia0549602b",
+      "matched": [
+        "soprano"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_on-wings-of-song_jascha-heifetz-andr-benoist-mendelssohn_gbia7042289a",
+      "matched": [
+        "song"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_on-wings-of-song_jascha-heifetz-andre-benoist-mendelssohn_gbia0309741a",
+      "matched": [
+        "song"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_on-wings-of-song_jascha-heifetz-mendelssohn_gbia7003752a",
+      "matched": [
+        "song"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_orientale_mischa-elman-csar-cui_gbia7034678b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_orpheus-ballet-dance-of-the-spirits_philadelphia-symphony-orchestra-leopold-stoko_gbia0520128b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_otello-potpourri_standard-band_gbia0171981b",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_overture-from-italian-in-algiers_harmony-band_gbia0307192b",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_paradise_fritz-kreisler-krakauer-kreisler_gbia0181989a",
+      "matched": [
+        "song"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_parted_de-groot-and-the-piccadilly-orchestra-tosti_gbia0539758a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_peer-gynt-suite-no-1-anitras-dance_philadelphia-symphony-orchestra-edvard-grieg_gbia0273467a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_peer-gynt-suite-no-1-anitras-dance_philadelphia-symphony-orchestra-grieg-leopol_gbia0211386a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_peer-gynt-suite-no-1-morning_the-band-of-h-m-scots-guards-grieg_gbia0122889a",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_peer-gynt-suite-no-4-in-the-hall-of-the-mountain-king_the-band-of-h-m-scots-guar_gbia0122889b",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_pescatori-di-perle-del-tempio-al-limitar-pearl-fishers-the-limits-of-the-templ_gbia0196307a",
+      "matched": [
+        "duet"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_pirouette-intermezzo_peerless-orchestra-herman-finek_gbia0299018b",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_premiere-caresse-the-first-caress_enrico-caruso-constantino-de-crescenzo_gbia0152176b",
+      "matched": [
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_quartet-in-e-flat_elman-string-quartet-mischa-elman-and-messrs-bak-rissland-and-nag_gbia0401084a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_rigoletto---la-donna-e-mobile-woman-is-fickle-act-3_enrico-caruso-verdi_gbia0012561a",
+      "matched": [
+        "in italian",
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_rigoletto---la-donna-e-mobile-woman-is-fickle_enrico-caruso-verdi-victor-orchestr_gbia0012560a",
+      "matched": [
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_rigoletto---questa-o-quella-mid-the-fair-throng-act-1_enrico-caruso-verdi_gbia0012559a",
+      "matched": [
+        "in italian",
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_rigoletto-la-donna-mobile_enrico-caruso-verdi_gbia7037565a",
+      "matched": [
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_rigoletto-selection-part-1_american-symphony-orchestra-g-verdi_gbia0299008a",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_robin-adair_geraldine-farrar-victor-orchestra-burns_gbia0307098a",
+      "matched": [
+        "soprano"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_samson-and-delilah-bacchanale_philadelphia-symphony-orchestra-leopold-stokowski-sai_gbia0520126b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_schuberts-serenade_neapolitan-trio-franz-schubert_gbia0198972a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_schuberts-serenade_philharmonic-trio_gbia0211140b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_second-hungarian-rhapsody_emerson-international-symphony-orchestra-liszt-i-j-hoch_gbia0168326b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_selection-from-the-dollar-princess_american-symphony-orchestra-leo-fall_gbia0197273a",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_serenade-softly-through-the-night-is-calling_john-mccormack-fritz-kreisler-vincen_gbia0298522a",
+      "matched": [
+        "in english",
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_serenade_the-fleming-trio-fr-schubert-liszt_gbia0192164a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_serenata_john-mccormack-and-fritz-kreisler-moskowski-nathan-h-dole_gbia0181408a",
+      "matched": [
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_serenata_p-lewis-paladium-octette-toselli_gbia0124641b",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_simple-aveu_mischa-elman-p-gordon-thom_gbia7004589a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_sing-me-to-sleep_alma-gluck-and-efrem-zimbalist-clifton-bingham-edwin-greene_gbia0321184a",
+      "matched": [
+        "sing",
+        "soprano"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_sing-me-to-sleep_alma-gluck-and-efrem-zimbalist-clifton-bingham-edwin-greene_gbia0336814a",
+      "matched": [
+        "sing",
+        "soprano"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_soave-faniculla-thou-sweetest-maiden_florence-easton-crimi-giulio-puccini-vocal_gbia0072350a",
+      "matched": [
+        "duet",
+        "in italian",
+        "soprano",
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_soldiers-chorus-from-faust_band_gbia0298989a",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_song-without-words-op-67-no-6-cradle-song_mischa-elman-mendelssohn_gbia7004596b",
+      "matched": [
+        "song"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_souvenir_scipione-guidi-alice-shaw-drdia_gbia0267684b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_spanish-rhapsody_alessios-mandolin-quartette-s-salvetti_gbia0175864b",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_spinning-song-song-without-words-no-34_sergei-rachmaninoff-mendelssohn_gbia0284165b",
+      "matched": [
+        "song"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_spinning-song-songs-without-words-no.-34-_sergei-rachmaninoff-mendelssohn_gbia0001772a",
+      "matched": [],
+      "reason": "main_flac_count_not_one"
+    },
+    {
+      "identifier": "78_spring-song_rae-eleanor-ball-mendelssohn_gbia0287259b",
+      "matched": [
+        "song"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_srnade-espagnole_hugo-kreisler-fritz-kreisler-chaminade-kreisler_gbia0307082a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_stradella-overture_frosini-von-flotow_gbia0164745a",
+      "matched": [
+        "accordion"
+      ],
+      "reason": "accordion"
+    },
+    {
+      "identifier": "78_suite-aus-peer-gynt-ases-tod_parlophon-orchester-london-grieg_gbia7013349b",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_suite-aus-peer-gynt-morgenstimmung_parlophon-orchester-london-grieg_gbia7013349a",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_summer-showers---intermezzo_frederic-knight-logan-peerless-orchestra_gbia0000092b",
+      "matched": [],
+      "reason": "no_instrumentation_line"
+    },
+    {
+      "identifier": "78_the-evening-star_wagner_gbia0192134b",
+      "matched": [
+        "baritone",
+        "in english"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_the-garden-of-roses_harvey-hindermeyer_gbia0307031a",
+      "matched": [
+        "sung",
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_the-garden-of-your-heart_sergeant-leggett-dorel_gbia0318639a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_the-gypsy-baron-wer-uns-getraut_johann-strauss_gbia0046783b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_the-herd-girls-dream-traum-der-sennerin_geo-stehl-marshall-lufsky-paul-surth_gbia0307011a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_the-herd-girls-dream_stehl-lufsky-surth_gbia0307049a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_the-jewels-of-the-madonna-intermezzo-after-act-i_imperial-philharmonic-orchestra-wo_gbia7003790a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_the-jewels-of-the-madonna-intermezzo-after-act-ii_imperial-philharmonic-orchestra-w_gbia7003790b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_the-last-rose-of-summer_amelita-galli-curci-thomas-moore_gbia0524587b",
+      "matched": [
+        "soprano"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_the-sandman_evan-williams-pfirshing-grant-schaefer_gbia0133053b",
+      "matched": [
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_titls-serenade_titl-schubert-wagner_gbia0298899b",
+      "matched": [
+        "duet"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_tosca---e-lucevan-le-stelle-the-stars-were-shining-act-3_enrico-caruso-puccini_gbia0012567a",
+      "matched": [
+        "in italian",
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_tosca---e-lucevan-le-stelle-the-stars-were-shining_enrico-caruso-puccini-victor-o_gbia0012566a",
+      "matched": [
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_tosca---recondita-armonia-strange-harmony-act-1_enrico-caruso-puccini_gbia0012568a",
+      "matched": [
+        "in italian",
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_tosca---recondita-armonia-strange-harmony_enrico-caruso-puccini-victor-orchestra_gbia0012569a",
+      "matched": [
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_traumerei-reverie_scipione-guidi-alice-shaw-schumann_gbia0267684a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_traumerei_maurice-dambois-schumann_gbia0072353b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_traumeri_sasha-culbertson-schumann_gbia0388153a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_traviata---di-provenza-il-mar-thy-home-in-fair-provence_mario-ancona-verdi-victor_gbia0012562a",
+      "matched": [
+        "baritone"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_trovatore---di-quella-pira-tremble-ye-tyrants-act-2_enrico-caruso-verdi_gbia0012563a",
+      "matched": [
+        "in italian",
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_valse-brilliante_ignace-jan-paderewski-chopin_gbia0259018a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_ved-donaus-bredder-1-del_otto-lington-og-hans-lingtonians-lington-kjr-strauss_gbia0124636a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_ved-donaus-bredder-2-del_otto-lington-og-hans-lingtonians-kjr-lington_gbia0124638b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_ved-donaus-bredder-2-del_otto-lington-og-hans-lingtonians-lington-kjr-strauss_gbia0124636b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_vor-gud-han-er-saa-fast-en-borg_carsten-woll-martin-luther-1529_gbia0300717a",
+      "matched": [
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_walkre-wotans-farewell-and-magic-fire-music_philadelphia-symphony-orchestra-leopo_gbia0520123b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_wanderers-nachtlied-wanderers-night-song_geraldine-farrar-ernestine-schumann-he_gbia0284530a",
+      "matched": [
+        "duet",
+        "song"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_when-all-was-young_gbia0307200b",
+      "matched": [
+        "contralto"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_when-night-descends_john-mccormack-and-fritz-kreisler-edwin-schneider-rachmaninoff_gbia0284299a",
+      "matched": [
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_when-you-come-home_sergeant-leggett-squire_gbia0318639b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_whisperings-of-love_fv-blon_gbia0313819b",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_wynken-blynken-and-nod_evan-williams-field-paissiello_gbia0133053a",
+      "matched": [
+        "tenor"
+      ],
+      "reason": "vocal"
+    },
+    {
+      "identifier": "78_zigeunerweisen-sarasate-gipsy-airs_jan-kubelik_gbia0317515a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    },
+    {
+      "identifier": "78_zigeunerweisen-sarasate-gipsy-airs_jan-kubelik_gbia0317545a",
+      "matched": [],
+      "reason": "not_solo_or_string_ensemble"
+    }
+  ],
+  "excluded_by_reason": {
+    "accordion": 2,
+    "main_flac_count_not_one": 1,
+    "no_instrumentation_line": 36,
+    "not_solo_or_string_ensemble": 94,
+    "vocal": 79
+  },
+  "items": [
+    {
+      "flac": {
+        "length_s": 246.29,
+        "md5": "f54668e8da3f505358e161968342cd2c",
+        "name": "(1) Hungarian Dance No. 20, D Minor; (2) - Efrem Zimbalist.flac",
+        "sha1": "f2ccc0f1816a90ebd0657b36a07ff06eef3b9055",
+        "size": 94411312
+      },
+      "identifier": "78_1-hungarian-dance-no-20-d-minor-2-hungarian-dance-no-21-e-minor_efrem-zimb_gbia0520151a",
+      "instrumentation": "Violin Solo; Piano accomp.-.",
+      "performer_source": "description",
+      "performers": [
+        "Sam Chotzinoff",
+        "Efrem Zimbalist"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "(1) Hungarian Dance No. 20, D Minor; (2) Hungarian Dance No. 21, E Minor",
+      "year": 1916
+    },
+    {
+      "flac": {
+        "length_s": 248.13,
+        "md5": "9981cae01d2611e2c4aeba45f876f75f",
+        "name": "(1) Le Cygne (The Swan); (2) Waltz - Efrem Zimbalist.flac",
+        "sha1": "4b541f42ac649b5ce450edd30c46ae7668610b1d",
+        "size": 91898177
+      },
+      "identifier": "78_1-le-cygne-the-swan-2-waltz_efrem-zimbalist-eugene-lutsky-saint-sans-chopin_gbia0520150b",
+      "instrumentation": "Violin Solo; (Chopin, Op. 64, No. 1); Piano accomp.-.",
+      "performer_source": "description",
+      "performers": [
+        "Efrem Zimbalist",
+        "Eugene Lutsky"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "(1) Le Cygne (The Swan); (2) Waltz",
+      "year": 1915
+    },
+    {
+      "flac": {
+        "length_s": 237.64,
+        "md5": "33ddef80838a171b6a9cd5a5c4a7c42d",
+        "name": "(1) Minuet in G; (2) Gavotte in D - Efrem Zimbalist.flac",
+        "sha1": "c365ab87a688ac18171e2d023515591c19e2d5d9",
+        "size": 88945929
+      },
+      "identifier": "78_1-minuet-in-g-2-gavotte-in-d_efrem-zimbalist-sam-chotzinoff-beethoven-gossec_gbia0520150a",
+      "instrumentation": "Violin Solo; Piano accomp.-.",
+      "performer_source": "description",
+      "performers": [
+        "Sam Chotzinoff",
+        "Efrem Zimbalist"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "(1) Minuet in G; (2) Gavotte in D",
+      "year": 1915
+    },
+    {
+      "flac": {
+        "length_s": 208.1,
+        "md5": "8996fc3115229ab546922963409a65d0",
+        "name": "(a) La Fille aux Cheveux de Lin (The Maide - Alfred Cortot.flac",
+        "sha1": "7fe87af729119eb51133ff66badfc8896cf30396",
+        "size": 84897353
+      },
+      "identifier": "78_a-la-fille-aux-cheveux-de-lin-the-maiden-with-flaxen-hair-b-mnestrels-mins_gbia0519434a",
+      "instrumentation": "Piano Solo; (No. 8 and 12 from First Book of Préludes).",
+      "performer_source": "description",
+      "performers": [
+        "Alfred Cortot"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "piano solo"
+        ]
+      },
+      "title": "(a) La Fille aux Cheveux de Lin (The Maiden with Flaxen Hair); (b) Ménestrels (Minstrels)",
+      "year": 1919
+    },
+    {
+      "flac": {
+        "length_s": 209.33,
+        "md5": "e8573c9bdfda57c7e2be7be273abaeca",
+        "name": "ADANTE--CONCERTO, No. 2 IN D MINOR - WILLEM WILLEKE.flac",
+        "sha1": "ef5b0064180885472df1c1fe5d9256a93c00b63f",
+        "size": 54162895
+      },
+      "identifier": "78_adante-concerto-no-2-in-d-minor_willem-willeke-josef-adler-georg-goltwemann_gbia0300501a",
+      "instrumentation": "(Op. 30); Violoncello Solo; Pianoforte by.",
+      "performer_source": "description",
+      "performers": [
+        "WILLEM WILLEKE",
+        "Josef Adler"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violoncello solo"
+        ]
+      },
+      "title": "ADANTE--CONCERTO, No. 2 IN D MINOR",
+      "year": 1918
+    },
+    {
+      "flac": {
+        "length_s": 246.48,
+        "md5": "7f97f9a30b138e1c460e8e220a13e25d",
+        "name": "Alice Where Art Thou - Mischa Elman - J. Ascher.flac",
+        "sha1": "bea9a2d07844ef9260f501b5e3aafb4fbf767ba2",
+        "size": 99163334
+      },
+      "identifier": "78_alice-where-art-thou_mischa-elman-j-ascher_gbia0521042b",
+      "instrumentation": "Violin Solo with orchestra.",
+      "performer_source": "description",
+      "performers": [
+        "Mischa Elman"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Alice Where Art Thou",
+      "year": 1921
+    },
+    {
+      "flac": {
+        "length_s": 253.46,
+        "md5": "ea83dfd756ab6993c382f972e21ac978",
+        "name": "Andante Cantabile - ELMAN STRING QUARTET.flac",
+        "sha1": "03a1c55a66384400a8cce1eaeadb678f33d72956",
+        "size": 105813258
+      },
+      "identifier": "78_andante-cantabile_elman-string-quartet-mischa-elman-bak-rissland-and-nagel-of-the_gbia7003749a",
+      "instrumentation": "from String Quartet, Op. 11; VIOLIN AND STRING QUARTET.",
+      "performer_source": "description",
+      "performers": [
+        "ELMAN STRING QUARTET",
+        "Mischa Elman",
+        "Bak, Rissland and Nagel, of the Boston Symphony Orchestra"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "string quartet"
+        ]
+      },
+      "title": "Andante Cantabile",
+      "year": 1918
+    },
+    {
+      "flac": {
+        "length_s": 164.05,
+        "md5": "003fd54731de35f90acb599470495c2d",
+        "name": "At the Fountain (Am Springbrunnen) - Erika Morini.flac",
+        "sha1": "73cdcbfa097388b89605f74352b2bc1286f933fc",
+        "size": 62728666
+      },
+      "identifier": "78_at-the-fountain-am-springbrunnen_erika-morini-emanuel-balaban-robert-schumann_gbia0182039a",
+      "instrumentation": "Violin Solo; Piano accompaniment.",
+      "performer_source": "description",
+      "performers": [
+        "Erika Morini",
+        "Emanuel Balaban"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "At the Fountain (Am Springbrunnen)",
+      "year": 1922
+    },
+    {
+      "flac": {
+        "length_s": 284.09,
+        "md5": "9c54a417ad787d32e6631dd33bd298f4",
+        "name": "Ave Maria (Hail, Mary!) - Mischa Elman - Percy B. Kahn.flac",
+        "sha1": "32177929691abc38332fbae5fe0355224ddd578f",
+        "size": 111218245
+      },
+      "identifier": "78_ave-maria-hail-mary_mischa-elman-percy-b-kahn-schubert-wilhelmj_gbia0521045a",
+      "instrumentation": "Violin Solo; Piano accompaniment.",
+      "performer_source": "description",
+      "performers": [
+        "Mischa Elman",
+        "Percy B. Kahn"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Ave Maria (Hail, Mary!)",
+      "year": 1919
+    },
+    {
+      "flac": {
+        "length_s": 184.78,
+        "md5": "ea9a3fea6b7d5a706551d03afe5487ca",
+        "name": "Ballet Music from Rosamunde - Fritz Kreisler.flac",
+        "sha1": "22e6f4ac5cee1847052bfac81b19a0dbb0c1c7d6",
+        "size": 71026501
+      },
+      "identifier": "78_ballet-music-from-rosamunde_fritz-kreisler-schubert-kreisler_gbia0284514a",
+      "instrumentation": "Violin Solo with orchestra.",
+      "performer_source": "description",
+      "performers": [
+        "Fritz Kreisler"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Ballet Music from Rosamunde",
+      "year": 1917
+    },
+    {
+      "flac": {
+        "length_s": 239.03,
+        "md5": "622fefa55b35d377e55c75ab863be39f",
+        "name": "Bohemian Fantasie - Fritz Kreisler - George Falkenstein.flac",
+        "sha1": "f42e9e54e7da8a20c9df2e277fc97928090fe2fb",
+        "size": 95074057
+      },
+      "identifier": "78_bohemian-fantasie_fritz-kreisler-george-falkenstein-smetana_gbia0504462a",
+      "instrumentation": "Violin Solo; Piano accomp.-.",
+      "performer_source": "description",
+      "performers": [
+        "Fritz Kreisler",
+        "George Falkenstein"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Bohemian Fantasie",
+      "year": 1916
+    },
+    {
+      "flac": {
+        "length_s": 206.78,
+        "md5": "f45dc90a38e9a1e85db12c997f39c72e",
+        "name": "Canzonetta (from String Quartet in E f - Flonzaley Quartet.flac",
+        "sha1": "3eac1d1d7d3016493fe439c4b576fd1fa1abd25b",
+        "size": 71848596
+      },
+      "identifier": "78_canzonetta-from-string-quartet-in-e-flat_flonzaley-quartet-mendelssohn_gbia0203562a",
+      "instrumentation": "String Quartet; Op 12, No. 2.",
+      "performer_source": "description",
+      "performers": [
+        "Flonzaley Quartet"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "string quartet"
+        ]
+      },
+      "title": "Canzonetta (from String Quartet in E flat)",
+      "year": 1918
+    },
+    {
+      "flac": {
+        "length_s": 156.81,
+        "md5": "81e37afe61614334bcadec49e293ac73",
+        "name": "Canzonetta - Mischa Elman - A. d'Ambrosio.flac",
+        "sha1": "d3136111b03d1160200f625732500639b2986ab1",
+        "size": 59661922
+      },
+      "identifier": "78_canzonetta_mischa-elman-a-dambrosio_gbia0480067a",
+      "instrumentation": "Violin Solo with orchestra; (Op. 6).",
+      "performer_source": "description",
+      "performers": [
+        "Mischa Elman"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Canzonetta",
+      "year": 1921
+    },
+    {
+      "flac": {
+        "length_s": 176.75,
+        "md5": "0ac0cea414cc2e079467ed4d5135498b",
+        "name": "Caprice - Jascha Heifetz - André Benoist.flac",
+        "sha1": "4909c8176ddb44dc656fccad52777a528b5d9335",
+        "size": 72093177
+      },
+      "identifier": "78_caprice_jascha-heifetz-andr-benoist-paganini-fritz-kreisler_gbia0168343a",
+      "instrumentation": "Violin Solo; Pianoforte; No. 20 from \"Twenty-Four Caprices\").",
+      "performer_source": "description",
+      "performers": [
+        "Jascha Heifetz",
+        "André Benoist"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Caprice",
+      "year": 1918
+    },
+    {
+      "flac": {
+        "length_s": 181.01,
+        "md5": "59a2566535c0089b20493ae8bebe9d2a",
+        "name": "Capricieuse - Jascha Heifetz - André Benoist.flac",
+        "sha1": "d3c46c131975247fab16a3e4b585b7438f2f1df6",
+        "size": 67571321
+      },
+      "identifier": "78_capricieuse_jascha-heifetz-andr-benoist-edward-elgar_gbia0307145a",
+      "instrumentation": "Violin Solo; (Morceau de Genre); Op. 17; Piano accomp.",
+      "performer_source": "description",
+      "performers": [
+        "Jascha Heifetz",
+        "André Benoist"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Capricieuse",
+      "year": 1918
+    },
+    {
+      "flac": {
+        "length_s": 204.44,
+        "md5": "23ca5d47ef73117b6cb0f9b3af1c998c",
+        "name": "Chanson Arabe - Fritz Kreisler - Carl Lamson.flac",
+        "sha1": "0449bae49452850c9c7c70fec2878a6fdd5ef6cd",
+        "size": 78590007
+      },
+      "identifier": "78_chanson-arabe_fritz-kreisler-carl-lamson-rimsky-korsakows_gbia0182038a",
+      "instrumentation": "Violin Solo; Arranged by; from Rimsky-Korsakow's \"Scheherazade\"; Piano accompaniment.",
+      "performer_source": "description",
+      "performers": [
+        "Fritz Kreisler",
+        "Carl Lamson"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Chanson Arabe",
+      "year": 1922
+    },
+    {
+      "flac": {
+        "length_s": 299.37,
+        "md5": "e458c005f867fd639c6e460eb8eb3969",
+        "name": "Concerto for Two Viol - Fritz Kreisler and Efrem Zimbalist.flac",
+        "sha1": "1431fc3ada7558d622777c1845829053a9e21d0d",
+        "size": 119450388
+      },
+      "identifier": "78_concerto-for-two-violins-part-2_fritz-kreisler-and-efrem-zimbalist-j-s-bach_gbia7040720a",
+      "instrumentation": "(In D minor); accompanied by string quartet.",
+      "performer_source": "description",
+      "performers": [
+        "Fritz Kreisler and Efrem Zimbalist"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "string quartet"
+        ]
+      },
+      "title": "Concerto for Two Violins (Part 2)",
+      "year": 1915
+    },
+    {
+      "flac": {
+        "length_s": 165.74,
+        "md5": "23d281f47ff7ebf1f78445cd7d8e55ec",
+        "name": "EL MISERERE.flac",
+        "sha1": "23af7e623e743fa158eb2c4e7ea89f5a15ee03c3",
+        "size": 60443466
+      },
+      "identifier": "78_el-miserere_gbia0307187b",
+      "instrumentation": "From \"Il Trovatore\"; VIOLIN SOLO.",
+      "performer_source": "description",
+      "performers": [
+        "None legible"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "EL MISERERE",
+      "year": 1908
+    },
+    {
+      "flac": {
+        "length_s": 251.6,
+        "md5": "3375a2f1ed8214dfab03e7de0a118124",
+        "name": "Eïli, Eïli - Mischa Elman - Emanuel Balaban.flac",
+        "sha1": "ee7dbb2fe0f8680d24c58d7b5df5c365f6e1817b",
+        "size": 96733922
+      },
+      "identifier": "78_eli-eli_mischa-elman-emanuel-balaban-elman_gbia0521043a",
+      "instrumentation": "Violin Solo; (Arranged by ); Piano accompaniment.",
+      "performer_source": "description",
+      "performers": [
+        "Emanuel Balaban",
+        "Mischa Elman"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Eïli, Eïli",
+      "year": 1921
+    },
+    {
+      "flac": {
+        "length_s": 161.39,
+        "md5": "732b00622df5a2d8b5b4d8a257a7efbb",
+        "name": "Etude in F Minor - Sergei Rachmaninoff - E. Donagnyi.flac",
+        "sha1": "44c63ebc4f87c892b181450d9c237bbf231be107",
+        "size": 62501874
+      },
+      "identifier": "78_etude-in-f-minor_sergei-rachmaninoff-e-donagnyi_gbia0187069a",
+      "instrumentation": "Piano Solo.",
+      "performer_source": "description",
+      "performers": [
+        "Sergei Rachmaninoff"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "piano solo"
+        ]
+      },
+      "title": "Etude in F Minor",
+      "year": 1921
+    },
+    {
+      "flac": {
+        "length_s": 158.02,
+        "md5": "6365c41d13312813498573d60ee5ce50",
+        "name": "Faust - Erika Morini - Alice Morini - Gounod.flac",
+        "sha1": "bee8fa1fd6b12d288563498076c96ea818cb9111",
+        "size": 61314611
+      },
+      "identifier": "78_faust_erika-morini-alice-morini-gounod-sarasate_gbia0182020a",
+      "instrumentation": "Waltz; Violin Solo; (from New Fantasie); Piano accompaniment.",
+      "performer_source": "description",
+      "performers": [
+        "Erika Morini",
+        "Alice Morini"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Faust",
+      "year": 1921
+    },
+    {
+      "flac": {
+        "length_s": 261.72,
+        "md5": "c48f12dc14d0a22783d512a9035cb98e",
+        "name": "Fifth Nocture - Maud Powell - Leybach.flac",
+        "sha1": "5681e70e614d01b2ac9b322113344c13ad9ed05c",
+        "size": 103939644
+      },
+      "identifier": "78_fifth-nocture_maud-powell-leybach_gbia0317777a",
+      "instrumentation": "Violin Solo with orchestra.",
+      "performer_source": "description",
+      "performers": [
+        "Maud Powell"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Fifth Nocture",
+      "year": 1917
+    },
+    {
+      "flac": {
+        "length_s": 122.42,
+        "md5": "eb2c964fc391234b183c8dade1221bd0",
+        "name": "Gavotte from Mignon - Charles D'Almaine.flac",
+        "sha1": "8cdf29c1e71d6ff22b431d5e4c302b1a55121f6f",
+        "size": 50355874
+      },
+      "identifier": "78_gavotte-from-mignon_charles-dalmaine_gbia0532699a",
+      "instrumentation": "VIOLIN SOLO.",
+      "performer_source": "description",
+      "performers": [
+        "Charles D'Almaine"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Gavotte from Mignon",
+      "year": 1904
+    },
+    {
+      "flac": {
+        "length_s": 193.4,
+        "md5": "3778321fd5302a350f2261c8c3f83caf",
+        "name": "Gavotte in E Major - Fritz Kreisler - George Falkenstein.flac",
+        "sha1": "7de7a7eadc02887b91efc7965e923ee32565a175",
+        "size": 73960028
+      },
+      "identifier": "78_gavotte-in-e-major_fritz-kreisler-george-falkenstein-bach_gbia0216434b",
+      "instrumentation": "Violin Solo; Piano accomp.",
+      "performer_source": "description",
+      "performers": [
+        "Fritz Kreisler",
+        "George Falkenstein"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Gavotte in E Major",
+      "year": 1916
+    },
+    {
+      "flac": {
+        "length_s": 188.36,
+        "md5": "65ba078d868e0764be2c12a7ad638bd6",
+        "name": "Guitarre - Jascha Heifetz - André Benoist.flac",
+        "sha1": "d249ccfae8cfaa38f6107c7f1f5de48352d347e2",
+        "size": 70416348
+      },
+      "identifier": "78_guitarre_jascha-heifetz-andr-benoist-moszkowski-sarasate_gbia0307145b",
+      "instrumentation": "Violin Solo; Op. 45, No. 2; (Transcribed by; Piano accomp.",
+      "performer_source": "description",
+      "performers": [
+        "Jascha Heifetz",
+        "André Benoist"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Guitarre",
+      "year": 1918
+    },
+    {
+      "flac": {
+        "length_s": 263.54,
+        "md5": "57869a89c2606e68d46ef87d775179bf",
+        "name": "Harlequin's Serenade - Efrem Zimbalist - Drigo.flac",
+        "sha1": "6fd26f0e8a9bfc235552e77de9ac8c40cdc91763",
+        "size": 87738956
+      },
+      "identifier": "78_harlequins-serenade_efrem-zimbalist-drigo_gbia0336810a",
+      "instrumentation": "Violin Solo with orchestra ; (from \"Les Million D'Arlequin\").",
+      "performer_source": "description",
+      "performers": [
+        "Efrem Zimbalist"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Harlequin's Serenade",
+      "year": 1916
+    },
+    {
+      "flac": {
+        "length_s": 193.5,
+        "md5": "38df8a17d3f13e0a6dd7afe1021209e7",
+        "name": "HAVANA MOON - RAE ELEANOR BALL - Jessie L. Deppen.flac",
+        "sha1": "6b290204c5be5453593ab845250a47ced1c79e06",
+        "size": 64135285
+      },
+      "identifier": "78_havana-moon_rae-eleanor-ball-jessie-l-deppen-walter-smith_gbia0313814b",
+      "instrumentation": "Violin Solo ; Pianoforte by.",
+      "performer_source": "description",
+      "performers": [
+        "RAE ELEANOR BALL",
+        "Jessie L. Deppen"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "HAVANA MOON",
+      "year": 1921
+    },
+    {
+      "flac": {
+        "length_s": 212.27,
+        "md5": "7037f7b809cf286517802a9265178cc0",
+        "name": "Humoreske - FRITZ KREISLER - George Falkenstein.flac",
+        "sha1": "caa80e683abc217f89c38c7b10e5088a9e1c24f1",
+        "size": 89933967
+      },
+      "identifier": "78_humoreske_fritz-kreisler-george-falkenstein-dvorak_gbia7003788a",
+      "instrumentation": "VIOLIN SOLO; Piano accompaniment by.",
+      "performer_source": "description",
+      "performers": [
+        "FRITZ KREISLER",
+        "George Falkenstein"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Humoreske",
+      "year": 1911
+    },
+    {
+      "flac": {
+        "length_s": 173.24,
+        "md5": "7242681934afb32012f419c598485320",
+        "name": "Hungarian Dance No. 5 - Brahms - Joachim.flac",
+        "sha1": "96535e89d27d2a32157d8438be8ff673caba6bba",
+        "size": 56607375
+      },
+      "identifier": "78_hungarian-dance-no-5_brahms-joachim_gbia0192152b",
+      "instrumentation": "Violin solo; Piano Accompaniment.",
+      "performer_source": "creator_fallback",
+      "performers": [
+        "Brahms | Joachim"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Hungarian Dance No. 5",
+      "year": 1913
+    },
+    {
+      "flac": {
+        "length_s": 284.94,
+        "md5": "3a54db65d27e884b216004b042f12841",
+        "name": "Hungarian Rhapsody, No. 10 - Ignace Jan Paderewski.flac",
+        "sha1": "962acc0dc015ecce6c87a9ca98d251281b9391aa",
+        "size": 115494440
+      },
+      "identifier": "78_hungarian-rhapsody-no-10_ignace-jan-paderewski-liszt_gbia0516674a",
+      "instrumentation": "Piano Solo.",
+      "performer_source": "description",
+      "performers": [
+        "Ignace Jan Paderewski"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "piano solo"
+        ]
+      },
+      "title": "Hungarian Rhapsody, No. 10",
+      "year": 1922
+    },
+    {
+      "flac": {
+        "length_s": 226.48,
+        "md5": "466073c9f24b286b6f3361e3f46fc3bb",
+        "name": "Introduction and Rondo Capriccioso - MISCHA ELMAN.flac",
+        "sha1": "ec11e2e5c3678040f7c52b41e35717b4f807d24c",
+        "size": 96400986
+      },
+      "identifier": "78_introduction-and-rondo-capriccioso_mischa-elman-mr-percy-b-kahn-saint-saens_gbia7003787a",
+      "instrumentation": "VIOLIN SOLO; accompanied by.",
+      "performer_source": "description",
+      "performers": [
+        "MISCHA ELMAN",
+        "Mr. Percy B. Kahn"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Introduction and Rondo Capriccioso",
+      "year": 1916
+    },
+    {
+      "flac": {
+        "length_s": 267.93,
+        "md5": "33ea960322464982e2e28834d001e611",
+        "name": "Kol Nidrei - Mischa Elman - Josef Bonime.flac",
+        "sha1": "028e7e2dad467ef80042025f1584af056aabc5ed",
+        "size": 103849641
+      },
+      "identifier": "78_kol-nidrei_mischa-elman-josef-bonime-max-bruch_gbia0521043b",
+      "instrumentation": "Violin Solo; (Op. 47); Piano accompaniment.",
+      "performer_source": "description",
+      "performers": [
+        "Mischa Elman",
+        "Josef Bonime"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Kol Nidrei",
+      "year": 1921
+    },
+    {
+      "flac": {
+        "length_s": 251.98,
+        "md5": "0255e174df01439734cad6b73659f50d",
+        "name": "Largo - FRITZ KREISLER - Handel - KREISLER.flac",
+        "sha1": "cbcbd7da629c6bc6b14fb877546125d0b0ca0efb",
+        "size": 102702405
+      },
+      "identifier": "78_largo_fritz-kreisler-handel-kreisler_gbia7041715a",
+      "instrumentation": "(Arr.; played by; VIOLIN SOLO with Piano.",
+      "performer_source": "description",
+      "performers": [
+        "FRITZ KREISLER"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Largo",
+      "year": 1914
+    },
+    {
+      "flac": {
+        "length_s": 217.77,
+        "md5": "7976a3afe50f3b4befdb947e969d4eb9",
+        "name": "Largo - Maximillian Rose - Handel.flac",
+        "sha1": "2cec540d0ca4dc17ba556801a394ab67f23fc0c6",
+        "size": 86505938
+      },
+      "identifier": "78_largo_maximillian-rose-handel_gbia0005909a",
+      "instrumentation": "Violin Solo; Saxophone Obligato, Piano Accompaniment.",
+      "performer_source": "description",
+      "performers": [
+        "Maximillian Rose"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Largo",
+      "year": 1920
+    },
+    {
+      "flac": {
+        "length_s": 224.47,
+        "md5": "b7ffe8c0e50a17b0b24919250890f2a4",
+        "name": "Le Ménétrier - H. Wieniawski.flac",
+        "sha1": "a1da2dff640345c58ea63bd0987a1b19614402b2",
+        "size": 75033602
+      },
+      "identifier": "78_le-mntrier_h-wieniawski_gbia0192132a",
+      "instrumentation": "Mazurka; Violin Solo; Piano Accompaniment.",
+      "performer_source": "creator_fallback",
+      "performers": [
+        "H. Wieniawski"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Le Ménétrier",
+      "year": 1914
+    },
+    {
+      "flac": {
+        "length_s": 255.94,
+        "md5": "ea63dd882b27333681d7b9aa671c9989",
+        "name": "MAZURKA DE CONCERT - J. PIASTRO BORISSOFF.flac",
+        "sha1": "d4d908cf7b4290dd998419ce5560d74c34af3d45",
+        "size": 80679425
+      },
+      "identifier": "78_mazurka-de-concert_j-piastro-borissoff-maurice-nadelle-ovide-musin_gbia0197291a",
+      "instrumentation": "Violin Solo; Pianoforte.",
+      "performer_source": "description",
+      "performers": [
+        "J. PIASTRO BORISSOFF",
+        "Maurice Nadelle"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "MAZURKA DE CONCERT",
+      "year": 1921
+    },
+    {
+      "flac": {
+        "length_s": 245.67,
+        "md5": "90ec00c80d983305c298e86a5f982727",
+        "name": "Méditation Thais - ALBERT SPALDING - André Benoist.flac",
+        "sha1": "101e46a3461d983cec98901337737cfc2c05ef17",
+        "size": 68996949
+      },
+      "identifier": "78_mditation-thais_albert-spalding-andr-benoist-jules-massenet_gbia0299012a",
+      "instrumentation": "Violin Solo; Pianoforte by.",
+      "performer_source": "description",
+      "performers": [
+        "ALBERT SPALDING",
+        "André Benoist"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Méditation Thais",
+      "year": 1916
+    },
+    {
+      "flac": {
+        "length_s": 169.27,
+        "md5": "6e596004f12da435c6010afec13383ad",
+        "name": "Minuet in G, No. 2 - Maud Powell - Arthur Loesser.flac",
+        "sha1": "352f93320068f0d2e186ddc225b144fbb651af82",
+        "size": 60366155
+      },
+      "identifier": "78_minuet-in-g-no-2_maud-powell-arthur-loesser-beethoven-powell_gbia0015777a",
+      "instrumentation": "Violin Solo; Piano accomp.",
+      "performer_source": "description",
+      "performers": [
+        "Maud Powell",
+        "Arthur Loesser"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Minuet in G, No. 2",
+      "year": 1916
+    },
+    {
+      "flac": {
+        "length_s": 150.21,
+        "md5": "9614a041b1b803978495146d4d58df8f",
+        "name": "Minuet in G, No. 2 - Mischa Elman - Percy B. Kahn.flac",
+        "sha1": "016fbfb940cef8662fc66cd95e0c8c478cc1f802",
+        "size": 59331678
+      },
+      "identifier": "78_minuet-in-g-no-2_mischa-elman-percy-b-kahn-beethoven_gbia7034813a",
+      "instrumentation": "Violin Solo; pianoforte by.",
+      "performer_source": "description",
+      "performers": [
+        "Mischa Elman",
+        "Percy B. Kahn"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Minuet in G, No. 2",
+      "year": 1910
+    },
+    {
+      "flac": {
+        "length_s": 207.53,
+        "md5": "cacc1901d5b7f046b21aa8bebde0fb5c",
+        "name": "Minuet in G - Maximillian Rose - Beethoven.flac",
+        "sha1": "4e7ccbdf4395609f71955f17826a2768f31a0a1f",
+        "size": 81823742
+      },
+      "identifier": "78_minuet-in-g_maximillian-rose-beethoven_gbia0005909b",
+      "instrumentation": "Violin Solo; Piano Accompaniment.",
+      "performer_source": "description",
+      "performers": [
+        "Maximillian Rose"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Minuet in G",
+      "year": 1920
+    },
+    {
+      "flac": {
+        "length_s": 164.2,
+        "md5": "d44f60ce017a3c5cd3f35f1fdf1104fd",
+        "name": "Minuet - Sergei Rachmaninoff - Bizet - Rachmaninoff.flac",
+        "sha1": "5889b81d8b3e8c8937bdbc61825b2b8ee4c26b40",
+        "size": 64042128
+      },
+      "identifier": "78_minuet_sergei-rachmaninoff-bizet-rachmaninoff_gbia0284760a",
+      "instrumentation": "(from \"L'Arlesienne\" No. 1); Piano Solo.",
+      "performer_source": "description",
+      "performers": [
+        "Sergei Rachmaninoff"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "piano solo"
+        ]
+      },
+      "title": "Minuet",
+      "year": 1922
+    },
+    {
+      "flac": {
+        "length_s": 250.5,
+        "md5": "4195e0d292c46f474b7d323c04a01ea5",
+        "name": "NOCTURNE-E FLAT - HANS KRONOLD - Frédéric Chopin.flac",
+        "sha1": "ca4902e172acc0007a78c1926eb18bbbe946b7bb",
+        "size": 65704503
+      },
+      "identifier": "78_nocturne-e-flat_hans-kronold-frdric-chopin_gbia0313756a",
+      "instrumentation": "Violoncello Solo; Harp Accompaniment.",
+      "performer_source": "description",
+      "performers": [
+        "HANS KRONOLD"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violoncello solo"
+        ]
+      },
+      "title": "NOCTURNE-E FLAT",
+      "year": 1913
+    },
+    {
+      "flac": {
+        "length_s": 274.04,
+        "md5": "02678964631e183e4080c59e90155e35",
+        "name": "Nocturne in B Flat - Ignace Jan Paderewski.flac",
+        "sha1": "e516545d6820fcd028c890403547f1873790e8a8",
+        "size": 105513325
+      },
+      "identifier": "78_nocturne-in-b-flat_ignace-jan-paderewski-paderewski_gbia0516683a",
+      "instrumentation": "Piano Solo; Op. 16, No. 4.",
+      "performer_source": "description",
+      "performers": [
+        "Ignace Jan Paderewski"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "piano solo"
+        ]
+      },
+      "title": "Nocturne in B Flat",
+      "year": 1922
+    },
+    {
+      "flac": {
+        "length_s": 278.34,
+        "md5": "4387f5ed817add54da2359897736fc5a",
+        "name": "Nocturne in E Flat - Chopin - Sarasate.flac",
+        "sha1": "cc6a53dc2426f31d2317da5a2a35d4c65b3f2085",
+        "size": 97165165
+      },
+      "identifier": "78_nocturne-in-e-flat_chopin-sarasate_gbia0191893b",
+      "instrumentation": "Violin solo; Piano Accompaniment.",
+      "performer_source": "creator_fallback",
+      "performers": [
+        "Chopin | Sarasate"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Nocturne in E Flat",
+      "year": 1915
+    },
+    {
+      "flac": {
+        "length_s": 252.52,
+        "md5": "d30ad9c22550f0bb0d54362714d52ecf",
+        "name": "Nocturne in E flat - Mischa Elman - Percy B. Kahn.flac",
+        "sha1": "a68210d42f88335d77fe2b4c044475d1fca9a69a",
+        "size": 96909204
+      },
+      "identifier": "78_nocturne-in-e-flat_mischa-elman-percy-b-kahn-chopin_gbia0334970a",
+      "instrumentation": "Violin Solo; (Op. 9, No. 2); pianoforte by.",
+      "performer_source": "description",
+      "performers": [
+        "Mischa Elman",
+        "Percy B. Kahn"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Nocturne in E flat",
+      "year": 1915
+    },
+    {
+      "flac": {
+        "length_s": 273.19,
+        "md5": "1ff7e8fce4a84b4588679fbba3a99c89",
+        "name": "Nocturne - Flonzaley Quartet - Adolfo Betti.flac",
+        "sha1": "55273ac8b3c0b60c561c6a7b6d87c0e8d4ce0410",
+        "size": 104355489
+      },
+      "identifier": "78_nocturne_flonzaley-quartet-adolfo-betti-alfred-pochon-louis-bailly-iwan-darchambea_gbia0520144a",
+      "instrumentation": "String Quartet; First Violin; Second Violin; Viola; 'Cello.",
+      "performer_source": "description",
+      "performers": [
+        "Adolfo Betti",
+        "Alfred Pochon",
+        "Flonzaley Quartet",
+        "Louis Bailly",
+        "Iwan d'Archambeau"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "string quartet"
+        ]
+      },
+      "title": "Nocturne",
+      "year": 1921
+    },
+    {
+      "flac": {
+        "length_s": 181.34,
+        "md5": "a27443f3fbc3d9ad1a5a0291d64c1884",
+        "name": "PRELUDE-C SHARP MINOR - Herman Ostheimer.flac",
+        "sha1": "e14b82c72aa58f30d700a34680a2aa488b117a00",
+        "size": 76687203
+      },
+      "identifier": "78_prelude-c-sharp-minor_herman-ostheimer-rachmaninoff_gbia0202569a",
+      "instrumentation": "Piano Solo.",
+      "performer_source": "description",
+      "performers": [
+        "Herman Ostheimer"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "piano solo"
+        ]
+      },
+      "title": "PRELUDE-C SHARP MINOR",
+      "year": 1918
+    },
+    {
+      "flac": {
+        "length_s": 209.59,
+        "md5": "0a7ce72ec5c40db014f661bf3d5a8d7a",
+        "name": "Prelude in C Sharp Minor - Sergei Rachmaninoff.flac",
+        "sha1": "639e08c8adfdb743f63ed254ff29cfc041e3a9a2",
+        "size": 83979166
+      },
+      "identifier": "78_prelude-in-c-sharp-minor_sergei-rachmaninoff_gbia0284165a",
+      "instrumentation": "Op. 3, No. 2; Piano Solo.",
+      "performer_source": "description",
+      "performers": [
+        "Sergei Rachmaninoff"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "piano solo"
+        ]
+      },
+      "title": "Prelude in C Sharp Minor",
+      "year": 1921
+    },
+    {
+      "flac": {
+        "length_s": 221.03,
+        "md5": "c64b0f5b6e9cf7243f30ecb1bda23e7d",
+        "name": "Prelude in G Minor - Sergei Rachmaninoff.flac",
+        "sha1": "ecee2479399219f5a170409d85a264f3bc746286",
+        "size": 88871760
+      },
+      "identifier": "78_prelude-in-g-minor_sergei-rachmaninoff-rachmaninoff_gbia0545833a",
+      "instrumentation": "Piano Solo; (Op. 23, No. 5).",
+      "performer_source": "description",
+      "performers": [
+        "Sergei Rachmaninoff"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "piano solo"
+        ]
+      },
+      "title": "Prelude in G Minor",
+      "year": 1920
+    },
+    {
+      "flac": {
+        "length_s": 253.01,
+        "md5": "953d6ab8cd2023f88c433ad747938790",
+        "name": "Quartet in A Minor-Adagio - Flonzaley Quartet.flac",
+        "sha1": "0c96332c2c0531fc5526d901fcfb0d838539e707",
+        "size": 97198898
+      },
+      "identifier": "78_quartet-in-a-minor-adagio_flonzaley-quartet-adolfo-betti-alfred-pochon-louis-bailly_gbia0520161b",
+      "instrumentation": "String Quartet; (3rd Movement); Op. 41, No. 1; First Violin-; Second Violin-; Viola-; Cello.",
+      "performer_source": "description",
+      "performers": [
+        "Flonzaley Quartet",
+        "Louis Bailly",
+        "Adolfo Betti",
+        "Iwan d-Archambeau",
+        "Alfred Pochon"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "string quartet"
+        ]
+      },
+      "title": "Quartet in A Minor-Adagio",
+      "year": 1922
+    },
+    {
+      "flac": {
+        "length_s": 249.61,
+        "md5": "dd0f65aa6003122df45ec9923918bdab",
+        "name": "Quartet in D Major-Adagio - Flonzaley Quartet.flac",
+        "sha1": "bdbce28e3307d68887268457d10ea4dc949f2751",
+        "size": 94598471
+      },
+      "identifier": "78_quartet-in-d-major-adagio_flonzaley-quartet-adolfo-betti-alfred-pochon-louis-bailly_gbia0520161a",
+      "instrumentation": "String Quartet; (3rd Movement); First Violin-; Second Violin-; Viola-; 'Cello.",
+      "performer_source": "description",
+      "performers": [
+        "Flonzaley Quartet",
+        "Adolfo Betti",
+        "Louis Bailly",
+        "Iwan d'Archambeau",
+        "Alfred Pochon"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "string quartet"
+        ]
+      },
+      "title": "Quartet in D Major-Adagio",
+      "year": 1922
+    },
+    {
+      "flac": {
+        "length_s": 283.14,
+        "md5": "b09337d5f0244d35874cc64c6a8bb806",
+        "name": "Rodino - H. Vieuxtemps.flac",
+        "sha1": "45e991432d9816b3186a246bc9fb6e541c11675f",
+        "size": 94656069
+      },
+      "identifier": "78_rodino_h-vieuxtemps_gbia0192132b",
+      "instrumentation": "Violin Solo; Piano Accompaniment.",
+      "performer_source": "creator_fallback",
+      "performers": [
+        "H. Vieuxtemps"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Rodino",
+      "year": 1914
+    },
+    {
+      "flac": {
+        "length_s": 279.47,
+        "md5": "a558663f7c8bb7b7d25ec7b42a9e58ec",
+        "name": "Rondo Capriccioso - ALBERT SPALDING - André Benoist.flac",
+        "sha1": "a4756dbcbf25dce684d54c71a909a62c481b906f",
+        "size": 78613937
+      },
+      "identifier": "78_rondo-capriccioso_albert-spalding-andr-benoist-saint-saens_gbia0299012b",
+      "instrumentation": "Violin Solo; Pianoforte by.",
+      "performer_source": "description",
+      "performers": [
+        "ALBERT SPALDING",
+        "André Benoist"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Rondo Capriccioso",
+      "year": 1916
+    },
+    {
+      "flac": {
+        "length_s": 115.1,
+        "md5": "2d96eb68d8917ca637c24d3c9f8d48d5",
+        "name": "Scotch Pastorale - Mischa Elman - Josef Bonime.flac",
+        "sha1": "e7b31e41a9a7795c23ca348221826142ddb17751",
+        "size": 44278442
+      },
+      "identifier": "78_scotch-pastorale_mischa-elman-josef-bonime-gustave-saenger_gbia0199528a",
+      "instrumentation": "Violin Solo; Op. 130, No.2; Piano accompaniment.",
+      "performer_source": "description",
+      "performers": [
+        "Mischa Elman",
+        "Josef Bonime"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Scotch Pastorale",
+      "year": 1919
+    },
+    {
+      "flac": {
+        "length_s": 239.7,
+        "md5": "aad0fb796eace7e663b13f5a9efa14b5",
+        "name": "SERENADE - MISCHA ELMAN - Percy B. Kahn - Schubert.flac",
+        "sha1": "ef8b02f66b345b476a0ab3ed7915fdeea2c9dc35",
+        "size": 102978883
+      },
+      "identifier": "78_serenade_mischa-elman-percy-b-kahn-schubert_gbia7003789a",
+      "instrumentation": "VIOLIN SOLO; Piano accompaniment.",
+      "performer_source": "description",
+      "performers": [
+        "MISCHA ELMAN",
+        "Percy B. Kahn"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "SERENADE",
+      "year": 1910
+    },
+    {
+      "flac": {
+        "length_s": 235.97,
+        "md5": "635affd0ac02a3f17d6222036a9aa9b6",
+        "name": "Serenade - MISCHA ELMAN - Percy P. Kahn - Schubert.flac",
+        "sha1": "36ccce78b97d22fc4c11e34a468dea99d74915f8",
+        "size": 96926057
+      },
+      "identifier": "78_serenade_mischa-elman-percy-p-kahn-schubert_gbia0299326a",
+      "instrumentation": "Violin Solo; Pianoaccomp. by.",
+      "performer_source": "description",
+      "performers": [
+        "MISCHA ELMAN",
+        "Percy P. Kahn"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Serenade",
+      "year": 1910
+    },
+    {
+      "flac": {
+        "length_s": 243.24,
+        "md5": "e4ec4fb51f87ebce7e29724662437415",
+        "name": "Simple Confession (Simple Aveu) - Mischa Elman.flac",
+        "sha1": "76a5d68f6ace19c815cad2a01290f3ccddf27d76",
+        "size": 98210601
+      },
+      "identifier": "78_simple-confession-simple-aveu_mischa-elman-phillip-gordon-francis-thom_gbia0521042a",
+      "instrumentation": "Violin Solo; Piano accomp.",
+      "performer_source": "description",
+      "performers": [
+        "Phillip Gordon",
+        "Mischa Elman"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Simple Confession (Simple Aveu)",
+      "year": 1921
+    },
+    {
+      "flac": {
+        "length_s": 168.86,
+        "md5": "f608bcb504503734649ad55bc7239100",
+        "name": "Slavonic Dance, No. 1 - Fritz Kreisler - Carl Lamson.flac",
+        "sha1": "f606b66292cb2d2dac2412a62cbc18d8991384ab",
+        "size": 65128776
+      },
+      "identifier": "78_slavonic-dance-no-1_fritz-kreisler-carl-lamson-dvok-kreisler_gbia0284514b",
+      "instrumentation": "(In G Minor); Violin Solo; Piano accomp.",
+      "performer_source": "description",
+      "performers": [
+        "Fritz Kreisler",
+        "Carl Lamson"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Slavonic Dance, No. 1",
+      "year": 1917
+    },
+    {
+      "flac": {
+        "length_s": 247.31,
+        "md5": "c8327da787533d99380e8ddf0ba53a41",
+        "name": "Slavonic Dance No. 2 - Jascha Heifetz - Sam Chotzinoff.flac",
+        "sha1": "2f6989cdcde23848edc222bdc93568b17221eb52",
+        "size": 96720706
+      },
+      "identifier": "78_slavonic-dance-no-2_jascha-heifetz-sam-chotzinoff-dvok-kreisler_gbia0520162a",
+      "instrumentation": "Violin Solo; (E Minor); Piano accomp.-.",
+      "performer_source": "description",
+      "performers": [
+        "Sam Chotzinoff",
+        "Jascha Heifetz"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Slavonic Dance No. 2",
+      "year": 1922
+    },
+    {
+      "flac": {
+        "length_s": 240.76,
+        "md5": "e9dc9a9822f23c31a130cb0f755427b7",
+        "name": "Slavonic Dance No. 3 - Jascha Heifetz - Sam Chotzinoff.flac",
+        "sha1": "98a39e00adc95114fe3cdb4e067892fefdeb615d",
+        "size": 92844084
+      },
+      "identifier": "78_slavonic-dance-no-3_jascha-heifetz-sam-chotzinoff-dvok-kreisler_gbia0520162b",
+      "instrumentation": "Violin Solo; (G. Major); Piano accomp.-.",
+      "performer_source": "description",
+      "performers": [
+        "Jascha Heifetz",
+        "Sam Chotzinoff"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Slavonic Dance No. 3",
+      "year": 1922
+    },
+    {
+      "flac": {
+        "length_s": 215.73,
+        "md5": "415e0a26bff5eb3fac11d1b80e774510",
+        "name": "Souvenir - Mischa Elman - Phillip Gordon.flac",
+        "sha1": "9d4313b8e9b72e951b446eea61478956dd843d62",
+        "size": 91826627
+      },
+      "identifier": "78_souvenir_mischa-elman-phillip-gordon-franz-drdla_gbia0206873a",
+      "instrumentation": "Violin Solo; Pianoforte by.",
+      "performer_source": "description",
+      "performers": [
+        "Mischa Elman",
+        "Phillip Gordon"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Souvenir",
+      "year": 1917
+    },
+    {
+      "flac": {
+        "length_s": 225.92,
+        "md5": "cafce72613fd61dc7b9b514652dabb7a",
+        "name": "Souvenir - Mischa Elman - Phillip Gordon.flac",
+        "sha1": "c3e0b0d54c8a9555a976a86b02f1fab127fbe80c",
+        "size": 87696668
+      },
+      "identifier": "78_souvenir_mischa-elman-phillip-gordon-franz-drdla_gbia7034678a",
+      "instrumentation": "Violin Solo; Piano accomp.",
+      "performer_source": "description",
+      "performers": [
+        "Phillip Gordon",
+        "Mischa Elman"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Souvenir",
+      "year": 1917
+    },
+    {
+      "flac": {
+        "length_s": 201.74,
+        "md5": "31dc74dfe9a8c82910902202f172e0c2",
+        "name": "Spanish Dance - Jascha Heifetz - Sam Chotzinoff.flac",
+        "sha1": "9ad445d2f955cd5b84f94361fa329236db503475",
+        "size": 74506883
+      },
+      "identifier": "78_spanish-dance_jascha-heifetz-sam-chotzinoff-granados-kreisler_gbia0182034a",
+      "instrumentation": "Violin Solo; Piano accompaniment.",
+      "performer_source": "description",
+      "performers": [
+        "Jascha Heifetz",
+        "Sam Chotzinoff"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Spanish Dance",
+      "year": 1922
+    },
+    {
+      "flac": {
+        "length_s": 244.0,
+        "md5": "5798dc3de2ba2ac7fbc90fb33b797b08",
+        "name": "Spanish Dance - Maud Powell - Waldemar Liachowsky.flac",
+        "sha1": "1d64863b1e46bfc7e10864b59726cf85fd472db3",
+        "size": 87807601
+      },
+      "identifier": "78_spanish-dance_maud-powell-waldemar-liachowsky-sarasate_gbia0520118a",
+      "instrumentation": "(Op. 26, No. 8); Violin Solo; Piano accomp.-.",
+      "performer_source": "description",
+      "performers": [
+        "Maud Powell",
+        "Waldemar Liachowsky"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Spanish Dance",
+      "year": 1911
+    },
+    {
+      "flac": {
+        "length_s": 170.19,
+        "md5": "dce02e98ec34dccadd60d6843259127c",
+        "name": "Sparks (Étincelles) - Olga Samaroff - Moszkowski.flac",
+        "sha1": "df86947366adef4c7974428591b42f025fd8b7f8",
+        "size": 68247661
+      },
+      "identifier": "78_sparks-tincelles_olga-samaroff-moszkowski_gbia0480071a",
+      "instrumentation": "Piano Solo; (Op. 36, No. 6).",
+      "performer_source": "description",
+      "performers": [
+        "Olga Samaroff"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "piano solo"
+        ]
+      },
+      "title": "Sparks (Étincelles)",
+      "year": 1921
+    },
+    {
+      "flac": {
+        "length_s": 168.35,
+        "md5": "ed28de00b9ae554a111eeca6d94213eb",
+        "name": "Sparks - Olga Samaroff - Moszkowski.flac",
+        "sha1": "03db8e017ccd204bf6577e6e121f032617f0a1bb",
+        "size": 67423274
+      },
+      "identifier": "78_sparks_olga-samaroff-moszkowski_gbia0307084a",
+      "instrumentation": "Piano Solo; (Etincelles); (Moszkowski, Op. 36, No. 6).",
+      "performer_source": "description",
+      "performers": [
+        "Olga Samaroff"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "piano solo"
+        ]
+      },
+      "title": "Sparks",
+      "year": 1921
+    },
+    {
+      "flac": {
+        "length_s": 162.71,
+        "md5": "73077c4d7b9899dd492797966c82bc95",
+        "name": "Sérénade Espagnole (Spanish Serenade) - Hugo Kreisler.flac",
+        "sha1": "3125d94065487a5539ef46b2ed68c69a568a042f",
+        "size": 62601484
+      },
+      "identifier": "78_srnade-espagnole-spanish-serenade_hugo-kreisler-fritz-kreisler-chaminade-kreisl_gbia0299567a",
+      "instrumentation": "Violoncello Solo; Piano accompaniment by.",
+      "performer_source": "description",
+      "performers": [
+        "Hugo Kreisler",
+        "Fritz Kreisler"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violoncello solo"
+        ]
+      },
+      "title": "Sérénade Espagnole (Spanish Serenade)",
+      "year": 1922
+    },
+    {
+      "flac": {
+        "length_s": 196.19,
+        "md5": "4a632cace3ee8c6d59910395b98f872a",
+        "name": "St. Patrick's Day - Maud Powell - Vieuxtemps.flac",
+        "sha1": "41067ae831f961decc7250c63def7e66c6bdeb01",
+        "size": 76735667
+      },
+      "identifier": "78_st-patricks-day_maud-powell-vieuxtemps_gbia0520118b",
+      "instrumentation": "Violin Solo; (Boquet Americain, Op. 33).",
+      "performer_source": "description",
+      "performers": [
+        "Maud Powell"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "St. Patrick's Day",
+      "year": 1911
+    },
+    {
+      "flac": {
+        "length_s": 237.38,
+        "md5": "8518ea5c635301e0066110d3e7c5b96c",
+        "name": "Symphonie Espagnole - Andante (4th Movement.flac",
+        "sha1": "d3241dd6ec204f9dbbbabfc22eebc27499f333c2",
+        "size": 92561895
+      },
+      "identifier": "78_symphonie-espagnole-andante-4th-movement_mischa-elman-arthur-loesser-eduard-lalo_gbia0521038b",
+      "instrumentation": "Violin Solo; (op. 21); Piano accomp.",
+      "performer_source": "description",
+      "performers": [
+        "Mischa Elman",
+        "Arthur Loesser"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Symphonie Espagnole - Andante (4th Movement)",
+      "year": 1921
+    },
+    {
+      "flac": {
+        "length_s": 267.84,
+        "md5": "ac223e20ac236798c3292ed0c5db56ec",
+        "name": "Thaïs-Intermezzo (Meditation Peligieuse) - Fritz Kreisler.flac",
+        "sha1": "c46767de3cc79585d2be6411f9b41cbb6b819f5f",
+        "size": 110151929
+      },
+      "identifier": "78_thas-intermezzo-meditation-peligieuse_fritz-kreisler-george-falkenstein-massenet_gbia0504463a",
+      "instrumentation": "Violin Solo; pianoforte by.",
+      "performer_source": "description",
+      "performers": [
+        "Fritz Kreisler",
+        "George Falkenstein"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Thaïs-Intermezzo (Meditation Peligieuse)",
+      "year": 1916
+    },
+    {
+      "flac": {
+        "length_s": 264.1,
+        "md5": "62ab2f4b8a4eb0a97834b06f6f584ec9",
+        "name": "Thaïs - Meditation - Mischa Elman - Josef Bonime.flac",
+        "sha1": "1f69cdde58a77755a7a4bda27bc33be38e7a5e77",
+        "size": 96817037
+      },
+      "identifier": "78_thas-meditation_mischa-elman-josef-bonime-massenet_gbia0521044a",
+      "instrumentation": "Violin Solo; Piano accompaniment.",
+      "performer_source": "description",
+      "performers": [
+        "Mischa Elman",
+        "Josef Bonime"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Thaïs - Meditation",
+      "year": 1919
+    },
+    {
+      "flac": {
+        "length_s": 188.98,
+        "md5": "35cca2aa5b9c2299aa0c7213dadddaac",
+        "name": "The Rosary - Victor Sorlin.flac",
+        "sha1": "bae0ac7b05b31442372b4717eabfbd3c72279ac8",
+        "size": 81549491
+      },
+      "identifier": "78_the-rosary_victor-sorlin_gbia0061084a",
+      "instrumentation": "Violoncello Solo.",
+      "performer_source": "description",
+      "performers": [
+        "Victor Sorlin"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violoncello solo"
+        ]
+      },
+      "title": "The Rosary",
+      "year": 1910
+    },
+    {
+      "flac": {
+        "length_s": 258.27,
+        "md5": "829516ccfce7a4c91fd87846d8eb511d",
+        "name": "Theme and Variations-Sonata IX - SERGEI RACHMANINOFF.flac",
+        "sha1": "c5a39f276b117c2a8e7250763bd4380e88887e63",
+        "size": 69744120
+      },
+      "identifier": "78_theme-and-variations-sonata-ix_sergei-rachmaninoff-mozart_gbia0307222b",
+      "instrumentation": "Piano Solo.",
+      "performer_source": "description",
+      "performers": [
+        "SERGEI RACHMANINOFF"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "piano solo"
+        ]
+      },
+      "title": "Theme and Variations-Sonata IX",
+      "year": 1919
+    },
+    {
+      "flac": {
+        "length_s": 182.99,
+        "md5": "c8c7834d8f4298dc587169bdfba4fc45",
+        "name": "To Spring - Fritz Kreisler - Carl Lamson.flac",
+        "sha1": "488b467d756d64be7bf5f03f34c976de69c476e4",
+        "size": 67258619
+      },
+      "identifier": "78_to-spring_fritz-kreisler-carl-lamson-grieg_gbia0199529a",
+      "instrumentation": "Violin Solo; Piano Accompaniment; (Op. 43, No. 6).",
+      "performer_source": "description",
+      "performers": [
+        "Fritz Kreisler",
+        "Carl Lamson"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "To Spring",
+      "year": 1921
+    },
+    {
+      "flac": {
+        "length_s": 193.71,
+        "md5": "a1f712143d1c57d44c6cf4fc89e57769",
+        "name": "To Spring - Fritz Kreisler - Carl Lamson.flac",
+        "sha1": "ac65271bd26755bf3826899dda3eebdca9da38fe",
+        "size": 73311254
+      },
+      "identifier": "78_to-spring_fritz-kreisler-carl-lamson-grieg_gbia0480074a",
+      "instrumentation": "Violin Solo; (Op. 43, No. 6); Piano Accompaniment-.",
+      "performer_source": "description",
+      "performers": [
+        "Fritz Kreisler",
+        "Carl Lamson"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "To Spring",
+      "year": 1921
+    },
+    {
+      "flac": {
+        "length_s": 163.07,
+        "md5": "3db34a22f00bca70c161385956119c31",
+        "name": "TO SPRING - Herman Ostheimer - Moskowski.flac",
+        "sha1": "53b5c942d256854f094a0fe17fba4e2d2f4cb718",
+        "size": 69017697
+      },
+      "identifier": "78_to-spring_herman-ostheimer-moskowski_gbia0202569b",
+      "instrumentation": "Piano Solo.",
+      "performer_source": "description",
+      "performers": [
+        "Herman Ostheimer"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "piano solo"
+        ]
+      },
+      "title": "TO SPRING",
+      "year": 1918
+    },
+    {
+      "flac": {
+        "length_s": 184.67,
+        "md5": "261375b9348af67eb528d733bc06fc53",
+        "name": "Traumerei (Reverie) - Mischa Elman - Josef Bonime.flac",
+        "sha1": "598b3fb37993e58eac24f2825145219ea31a5ba0",
+        "size": 75765569
+      },
+      "identifier": "78_traumerei-reverie_mischa-elman-josef-bonime-schumann_gbia0188191a",
+      "instrumentation": "Violin Solo; Pianoforte by.",
+      "performer_source": "description",
+      "performers": [
+        "Mischa Elman",
+        "Josef Bonime"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Traumerei (Reverie)",
+      "year": 1919
+    },
+    {
+      "flac": {
+        "length_s": 212.62,
+        "md5": "5e34f22f00fe395f17b1b64b96e87ef5",
+        "name": "Traumerei (Reverie) - Mischa Elman - Josef Bonime.flac",
+        "sha1": "79709ef08c23341948e715d7147b8c280f5dcb03",
+        "size": 79574169
+      },
+      "identifier": "78_traumerei-reverie_mischa-elman-josef-bonime-schumann_gbia0188975a",
+      "instrumentation": "Violin Solo; Piano accomp.",
+      "performer_source": "description",
+      "performers": [
+        "Mischa Elman",
+        "Josef Bonime"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Traumerei (Reverie)",
+      "year": 1919
+    },
+    {
+      "flac": {
+        "length_s": 191.84,
+        "md5": "3209cd63246c65b6c4bc86e8623fa985",
+        "name": "Underneath the Stars - Fritz Kreisler - Herbert Spencer.flac",
+        "sha1": "7161f6e934e06f51a7f6cb02952ad46d1df8331b",
+        "size": 79615232
+      },
+      "identifier": "78_underneath-the-stars_fritz-kreisler-herbert-spencer-josef-pasternack_gbia0206900a",
+      "instrumentation": "Violin Solo with orchestra; Arranged by.",
+      "performer_source": "description",
+      "performers": [
+        "Fritz Kreisler"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Underneath the Stars",
+      "year": 1917
+    },
+    {
+      "flac": {
+        "length_s": 178.31,
+        "md5": "19d85c45c969520333ae67202dfe85c4",
+        "name": "VALSE BLUETTE (Air de Ballet) - Milan Lusk.flac",
+        "sha1": "592f214a75df47923435a05667abc34314e44d16",
+        "size": 73657323
+      },
+      "identifier": "78_valse-bluette-air-de-ballet_milan-lusk-mme-l-vojuckova-wetche-drigo_gbia0182099b",
+      "instrumentation": "Violin Virtuoso; Piano Acc.; Violin Solo; 10 Inch; Piano Acc.,.",
+      "performer_source": "description",
+      "performers": [
+        "Milan Lusk",
+        "Mme. L. Vojuckova-Wetche"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "VALSE BLUETTE (Air de Ballet)",
+      "year": 1919
+    },
+    {
+      "flac": {
+        "length_s": 237.0,
+        "md5": "d4c80702c395044e10bc90ce6c1a98a5",
+        "name": "Valse in A Flat Op. 42 - SERGEI RACHMANINOFF.flac",
+        "sha1": "9f541bc86175292f04bdb4d456eea31a298a6e60",
+        "size": 67447129
+      },
+      "identifier": "78_valse-in-a-flat-op-42_sergei-rachmaninoff-chopin_gbia0307222a",
+      "instrumentation": "Piano Solo.",
+      "performer_source": "description",
+      "performers": [
+        "SERGEI RACHMANINOFF"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "piano solo"
+        ]
+      },
+      "title": "Valse in A Flat Op. 42",
+      "year": 1919
+    },
+    {
+      "flac": {
+        "length_s": 111.84,
+        "md5": "87321138cfe36ec833228e311e2d009c",
+        "name": "Valse in D Flat Major - Sergei Rachmaninoff-restored.flac",
+        "sha1": "4281b72d0010aad810c740d7d0df7d7ccfe2b98e",
+        "size": 23671085
+      },
+      "identifier": "78_valse-in-d-flat-major_sergei-rachmaninoff-chopin_gbia0012582a",
+      "instrumentation": "Piano Solo; Op. 64, No. 1.",
+      "performer_source": "description",
+      "performers": [
+        "Sergei Rachmaninoff"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "piano solo"
+        ]
+      },
+      "title": "Valse in D Flat Major",
+      "year": 1921
+    },
+    {
+      "flac": {
+        "length_s": 177.97,
+        "md5": "b6b304b4703b8dd32523ec70eaa3a644",
+        "name": "Variations - Fritz Kreisler - George Falkenstein.flac",
+        "sha1": "a055cd2525ff5841e4ca14fa37e7f0078d6eb53c",
+        "size": 71215911
+      },
+      "identifier": "78_variations_fritz-kreisler-george-falkenstein-giuseppe-tartini-kreisler_gbia7034826a",
+      "instrumentation": "Violin Solo; (arrangement); pianoforte by.",
+      "performer_source": "description",
+      "performers": [
+        "Fritz Kreisler",
+        "George Falkenstein"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Variations",
+      "year": 1910
+    },
+    {
+      "flac": {
+        "length_s": 175.22,
+        "md5": "81815605c718404b5b50d6e5fa40fc7e",
+        "name": "Variations - Fritz Kreisler - George Falkenstein.flac",
+        "sha1": "5d74b29c65fc8173ed2946625e32ea11cb7c1566",
+        "size": 73391222
+      },
+      "identifier": "78_variations_fritz-kreisler-george-falkenstein-guiseppe-tratini-kreisler_gbia0314093a",
+      "instrumentation": "Violin Solo; (Kreisler arrangement); pianoforte by.",
+      "performer_source": "description",
+      "performers": [
+        "Fritz Kreisler",
+        "George Falkenstein"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "Variations",
+      "year": 1910
+    },
+    {
+      "flac": {
+        "length_s": 210.51,
+        "md5": "4bcad60573adb4e853f156ac50c94af3",
+        "name": "WONDERLAND OF DREAMS - RAE ELEANOR BALL - Jessie L. Deppen.flac",
+        "sha1": "1087d0d555669fa6d423917fff81b0a06bec185d",
+        "size": 70277163
+      },
+      "identifier": "78_wonderland-of-dreams_rae-eleanor-ball-jessie-l-deppen-lw-abbott_gbia0313814a",
+      "instrumentation": "Violin Solo ; Pianoforte by.",
+      "performer_source": "description",
+      "performers": [
+        "RAE ELEANOR BALL",
+        "Jessie L. Deppen"
+      ],
+      "rule": {
+        "decision": "kept",
+        "matched": [
+          "violin solo"
+        ]
+      },
+      "title": "WONDERLAND OF DREAMS",
+      "year": 1921
+    }
+  ],
+  "kept": 85,
+  "listed": 297,
+  "listed_at_utc": "2026-11-24T06:55:53.560250+00:00",
+  "listing_date": "2026-11-24",
+  "num_found": 297,
+  "protocol_version": 1,
+  "query": "collection:georgeblood AND date:[1900-01-01 TO 1922-12-31] AND subject:(classical)",
+  "sort": "identifier asc",
+  "study": "historical_listening"
+}

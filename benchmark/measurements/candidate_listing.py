@@ -51,8 +51,10 @@ class ListingError(RuntimeError):
 def _fetch(url: str, opener: Opener | None) -> bytes:
     """One whole 200 response from *url*, or a ListingError."""
     body = io.BytesIO()
-    kwargs = {} if opener is None else {"opener": opener}
-    response = get(url, body, max_bytes=MAX_LISTING_BYTES, timeout_s=TIMEOUT_S, **kwargs)
+    if opener is None:
+        response = get(url, body, max_bytes=MAX_LISTING_BYTES, timeout_s=TIMEOUT_S)
+    else:
+        response = get(url, body, max_bytes=MAX_LISTING_BYTES, timeout_s=TIMEOUT_S, opener=opener)
     short = response.content_length is not None and response.size != response.content_length
     if response.status != _OK or response.exceeded or short:
         raise ListingError(

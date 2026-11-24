@@ -28,6 +28,13 @@ DIGEST_FIELDS='(sha256|canonical_sha256|checkpoint_sha256|corpus_sha256|decoded_
 MD5_FIELDS='(archive_md5|metadata_md5|md5)'
 SHA1_FIELDS='(sha1)'
 DIGEST_EXEMPTION="(\"${DIGEST_FIELDS}\": \"[0-9a-f]{64}\"|\"${MD5_FIELDS}\": \"[0-9a-f]{32}\"|\"${SHA1_FIELDS}\": \"[0-9a-f]{40}\")"
+# Internet Archive Great 78 item identifiers in the listening study's frozen universe
+# (benchmark/listening/manifests/universe_v1.json) end in a catalogue code such as
+# gbia0168343a, which the scanner reads as a high-entropy string. This exempts a whole
+# line only when its key is "identifier" and its value has that exact item shape. Any
+# other value under "identifier", and any value under another key, is still scanned.
+IDENTIFIER_EXEMPTION='^ *"identifier": "78_[a-z0-9_.-]+_gbia[0-9]{7}[a-z]",?$'
+SECRETS_EXEMPTION="${DIGEST_EXEMPTION}|${IDENTIFIER_EXEMPTION}"
 
 failed=()
 
@@ -157,7 +164,7 @@ scan_secrets() {
   # Null-delimited so a tracked filename containing whitespace is scanned rather than
   # split into fragments that silently match nothing. xargs exits non-zero if any
   # invocation reports a finding.
-  git ls-files -z | xargs -0 "${UV_RUN[@]}" detect-secrets-hook --exclude-lines "$DIGEST_EXEMPTION"
+  git ls-files -z | xargs -0 "${UV_RUN[@]}" detect-secrets-hook --exclude-lines "$SECRETS_EXEMPTION"
 }
 
 run "secrets scan (detect-secrets)" scan_secrets
