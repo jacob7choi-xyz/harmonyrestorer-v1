@@ -101,6 +101,44 @@ class TestRequest:
         get(URL, io.BytesIO(), max_bytes=10, timeout_s=5.0, opener=serving(FakeResponse(b""), seen))
         assert seen[0].get_header("User-agent") == https_get.USER_AGENT
 
+    def test_a_given_user_agent_is_the_one_sent(self) -> None:
+        seen: list[urllib.request.Request] = []
+        get(
+            URL,
+            io.BytesIO(),
+            max_bytes=10,
+            timeout_s=5.0,
+            user_agent="research-client",
+            opener=serving(FakeResponse(b""), seen),
+        )
+        assert seen[0].get_header("User-agent") == "research-client"
+
+    def test_the_default_user_agent_is_the_shared_one(self) -> None:
+        seen: list[urllib.request.Request] = []
+        get(
+            URL,
+            io.BytesIO(),
+            max_bytes=10,
+            timeout_s=5.0,
+            user_agent=None,
+            opener=serving(FakeResponse(b""), seen),
+        )
+        assert seen[0].get_header("User-agent") == https_get.USER_AGENT
+
+    @pytest.mark.parametrize("agent", ["", "   "])
+    def test_a_blank_user_agent_is_refused_before_anything_is_sent(self, agent: str) -> None:
+        seen: list[urllib.request.Request] = []
+        with pytest.raises(ValueError, match="must not be blank"):
+            get(
+                URL,
+                io.BytesIO(),
+                max_bytes=10,
+                timeout_s=5.0,
+                user_agent=agent,
+                opener=serving(FakeResponse(b""), seen),
+            )
+        assert seen == []
+
     @pytest.mark.parametrize(
         "url", ["http://archive.org/x", "ftp://archive.org/x", "file:///etc/passwd"]
     )
