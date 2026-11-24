@@ -6,12 +6,16 @@ product's OpGAN and UVR engines, trimmed to the shortest of the four streams, an
 16-bit mono WAV files. samples/MANIFEST.json records each clip's source, seed, gain, trimming,
 and the SHA-256 of every file written.
 
-Every clip is generated and checked before any file is written, and the manifest is written
-last. A refused clip therefore leaves no sample and no manifest behind. Each file is written
-atomically through benchmark.atomic_write. Every stream is quantised to 16 bits, including the
-restored streams. The engines already wrote those at 16 bits, and requantising them changes
-32,767 of the 65,536 possible 16-bit values, each by one least significant bit (measured on
-every value).
+Every clip is generated and checked before any file is written. The clip files and the manifest
+are then published as one set: they are staged beside the output directory and moved into place,
+and a failure restores the files that were there before. The run owns only the names it writes,
+so an untracked sibling such as samples/opgan_primrose is left alone, and a run directory that
+holds another file is refused. Each file is written atomically through benchmark.atomic_write.
+Every stream is quantised to 16 bits, including the restored streams. The engines already wrote
+those at 16 bits. The reader scales a 16-bit value k to k / 2**15, and requantising at that scale
+returns all 65,536 possible values unchanged; the former scale of 32,767 changed 32,767 of them by
+one least significant bit each. Both counts are checked over every value by
+test_every_16_bit_value_survives_the_read_and_the_requantisation.
 
 Every clip is degraded with the same declared noise profile, DEMO_PROFILE, which is checked
 against the protocol's training ranges before any clip is generated. The profile is fixed rather
@@ -34,9 +38,10 @@ import json
 import logging
 import math
 import re
+import shutil
 import sys
 import tempfile
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -50,7 +55,7 @@ from benchmark.canonical_worker import SAMPLE_FORMAT
 from benchmark.degradation import DegradationParams, DegradedFrame, apply_degradation
 from benchmark.frame_scoring import reference_frame
 from benchmark.protocol import Protocol, TrainingNoiseRanges, load_protocol
-from benchmark.run_preconditions import uvr_file_failures
+from benchmark.run_preconditions import uvr_file_failures, weights_only_override
 from benchmark.run_systems import build_production_systems
 from benchmark.systems_stage import System
 
@@ -62,7 +67,10 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUT_DIR = REPO_ROOT / "samples"
 SAMPLE_RATE = 16_000
 PEAK_LIMIT = 1.0
-PCM16_SCALE = 32767
+# The reader scales a 16-bit value k to k / 2**15 (libsndfile, as backend/app/services/wav_io.py
+# reads it), so the writer uses the same scale. +1.0 is the one value clipped to PCM16_MAX.
+PCM16_SCALE = 2**15
+PCM16_MAX = PCM16_SCALE - 1
 # The benchmark writes its engine inputs as 32-bit float. A 16-bit value k is written as k / 2**15,
 # which is exact in float32, so the engine reads the same samples that are shipped.
 _FLOAT_INPUT_SCALE = 2**15
@@ -400,7 +408,7 @@ def to_pcm16(samples: npt.NDArray[np.float64], label: str) -> npt.NDArray[np.int
             PEAK_LIMIT,
         )
         raise DemoSampleError(f"stream {label} peaks above {PEAK_LIMIT}")
-    return np.round(samples * PCM16_SCALE).astype(np.int16)
+    return np.clip(np.round(samples * PCM16_SCALE), -PCM16_SCALE, PCM16_MAX).astype(np.int16)
 
 
 def wav_bytes(pcm: npt.NDArray[np.int16]) -> bytes:
@@ -555,19 +563,93 @@ def generate_clip(
     )
 
 
-def write_outputs(clips: Sequence[ClipOutput], out_dir: Path) -> None:
-    """Write every clip's files, each atomically, under the output directory.
+def _refuse_foreign_entries(files: Mapping[str, bytes], out_dir: Path) -> None:
+    """Refuse when a directory the run writes to holds a file the run would not write.
+
+    Raises:
+        DemoSampleError: If an existing directory the run writes to holds another file.
+    """
+    wanted = set(files)
+    for directory in sorted({Path(name).parent.as_posix() for name in wanted} - {"."}):
+        present = out_dir / directory
+        if not present.is_dir():
+            continue
+        extra = sorted(
+            entry.name for entry in present.iterdir() if f"{directory}/{entry.name}" not in wanted
+        )
+        if extra:
+            logger.error("%s holds files the run does not write: %s", present, ", ".join(extra))
+            raise DemoSampleError(
+                f"{present} holds files the run does not write: {', '.join(extra)}"
+            )
+
+
+def _place(source: Path, target: Path) -> None:
+    """Move a staged file over its target. A separate function, so a test can inject a failure."""
+    source.replace(target)
+
+
+def _restore(replaced: Sequence[tuple[Path, Path | None]]) -> None:
+    """Undo a partial publish: remove each new file and put back each previous file."""
+    for target, backup in reversed(replaced):
+        if backup is None:
+            target.unlink(missing_ok=True)
+        elif backup.exists():
+            backup.replace(target)
+
+
+def _swap_in(files: Mapping[str, bytes], out_dir: Path, staging: Path) -> None:
+    """Move every staged file into out_dir, restoring the previous files if a move fails.
+
+    Raises:
+        OSError: If a move fails. Every target is restored before the error is raised.
+    """
+    replaced: list[tuple[Path, Path | None]] = []
+    try:
+        for name in files:
+            target = out_dir / name
+            target.parent.mkdir(parents=True, exist_ok=True)
+            backup: Path | None = None
+            if target.exists():
+                backup = staging / "previous" / name
+                backup.parent.mkdir(parents=True, exist_ok=True)
+                target.replace(backup)
+            replaced.append((target, backup))
+            _place(staging / "new" / name, target)
+    except OSError:
+        logger.error("Publishing the demo files failed; restoring the previous files")
+        _restore(replaced)
+        raise
+
+
+def write_outputs(files: Mapping[str, bytes], out_dir: Path) -> None:
+    """Publish the run's files under out_dir, all of them or none.
+
+    The run owns exactly the names in `files`. Other entries, including untracked siblings such as
+    samples/opgan_primrose, are not touched. Each file is written atomically into a staging
+    directory beside out_dir and then moved into place. A failure restores the previous files.
 
     Args:
-        clips: The generated clips.
-        out_dir: The output directory.
+        files: Each path relative to out_dir, mapped to its complete contents.
+        out_dir: The output directory, created if needed.
+
+    Raises:
+        DemoSampleError: If a directory the run writes to holds a file the run would not write.
+        OSError: If a file cannot be written or moved. The previous files are restored first.
     """
-    for clip in clips:
-        for relative, data in clip.files.items():
-            target = out_dir / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
-            write_atomically(target, data)
-            logger.info("Wrote %s", target)
+    _refuse_foreign_entries(files, out_dir)
+    out_dir.parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix=f".{out_dir.name}.", dir=out_dir.parent))
+    try:
+        for name, data in files.items():
+            (staging / "new" / name).parent.mkdir(parents=True, exist_ok=True)
+            write_atomically(staging / "new" / name, data)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        _swap_in(files, out_dir, staging)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
+    for name in files:
+        logger.info("Wrote %s", out_dir / name)
 
 
 def _clip_record(clip: ClipOutput) -> dict[str, object]:
@@ -652,10 +734,13 @@ def generate(
         generate_clip(spec, recordings[spec.canonical_path], ranges, (opgan, uvr), workdir, profile)
         for spec in specs
     ]
-    write_outputs(clips, out_dir)
+    files: dict[str, bytes] = {}
+    for clip in clips:
+        files.update(clip.files)
+    files[MANIFEST_NAME] = manifest_bytes(clips, protocol_version, profile)
+    write_outputs(files, out_dir)
     manifest = out_dir / MANIFEST_NAME
-    write_atomically(manifest, manifest_bytes(clips, protocol_version, profile))
-    logger.info("Wrote %d clips and %s", len(clips), manifest)
+    logger.info("Published %d clips and %s", len(clips), manifest)
     return manifest
 
 
@@ -688,6 +773,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     """
     logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     args = parse_args(argv)
+    override = weights_only_override()
+    if override is not None:
+        print(f"make_demo_samples: {override.detail}", file=sys.stderr)
+        return 1
     try:
         specs = load_clip_specs(args.clips)
         protocol = load_protocol()
@@ -707,6 +796,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.out_dir,
             )
     except DemoSampleError as error:
+        print(f"make_demo_samples: {error}", file=sys.stderr)
+        return 1
+    except OSError as error:
+        logger.error("Demo sample run failed on the file system: %s", error)
         print(f"make_demo_samples: {error}", file=sys.stderr)
         return 1
     return 0

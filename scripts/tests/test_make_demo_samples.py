@@ -9,6 +9,7 @@ whole-recording gain.
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 from collections.abc import Callable
 from dataclasses import asdict, replace
@@ -359,7 +360,7 @@ def test_failed_write_leaves_the_old_file_and_no_partial_file(
 
     monkeypatch.setattr(atomic_write.os, "fsync", failing_fsync)
     with pytest.raises(OSError, match="disk full"):
-        mds.write_outputs([clip], tmp_path / "samples")
+        mds.write_outputs(clip.files, tmp_path / "samples")
 
     assert target.read_bytes() == b"old"
     assert sorted(p.name for p in target_dir.iterdir()) == ["bach_clean.wav"]
@@ -608,3 +609,99 @@ def test_manifest_records_the_profile_and_noise_policy(tmp_path: Path) -> None:
     assert body["noise_policy"] == (
         "fixed demo profile within the training ranges; per-clip seed for noise samples only"
     )
+
+
+def test_every_16_bit_value_survives_the_read_and_the_requantisation() -> None:
+    """Over all 65,536 values, libsndfile's read and the writer's scale return every value, while
+    the former scale of 32,767 changed 32,767 of them by one least significant bit each."""
+    values = np.arange(-32768, 32768, dtype=np.int16)
+    buffer = io.BytesIO()
+    sf.write(buffer, values, SR, format="WAV", subtype="PCM_16")
+    buffer.seek(0)
+    read, _ = sf.read(buffer, dtype="float32")
+    assert np.array_equal(read, (values / 2**15).astype(np.float32))
+    requantised = mds.to_pcm16(read.astype(np.float64), "every value")
+    assert int(np.count_nonzero(requantised != values)) == 0
+    former = np.round(read.astype(np.float64) * 32767).astype(np.int16)
+    assert int(np.count_nonzero(former != values)) == 32767
+
+
+def test_publish_replaces_the_run_files_and_leaves_siblings_alone(tmp_path: Path) -> None:
+    """The run's files are replaced, an untracked sibling is untouched, and no staging remains."""
+    out = tmp_path / "samples"
+    (out / "opgan").mkdir(parents=True)
+    (out / "opgan" / "bach_clean.wav").write_bytes(b"old")
+    (out / "opgan_primrose").mkdir()
+    (out / "opgan_primrose" / "keep.wav").write_bytes(b"kept")
+    mds.write_outputs({"opgan/bach_clean.wav": b"new", "MANIFEST.json": b"manifest"}, out)
+    assert (out / "opgan" / "bach_clean.wav").read_bytes() == b"new"
+    assert (out / "MANIFEST.json").read_bytes() == b"manifest"
+    assert (out / "opgan_primrose" / "keep.wav").read_bytes() == b"kept"
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["samples"]
+
+
+def test_a_run_directory_holding_another_file_is_refused_and_nothing_changes(
+    tmp_path: Path,
+) -> None:
+    """A file the run would not write, inside a directory it writes to, refuses the whole run."""
+    out = tmp_path / "samples"
+    (out / "opgan").mkdir(parents=True)
+    (out / "opgan" / "bach_clean.wav").write_bytes(b"old")
+    (out / "opgan" / "extra.wav").write_bytes(b"extra")
+    with pytest.raises(DemoSampleError, match="holds files the run does not write"):
+        mds.write_outputs({"opgan/bach_clean.wav": b"new"}, out)
+    assert (out / "opgan" / "bach_clean.wav").read_bytes() == b"old"
+    assert sorted(p.name for p in (out / "opgan").iterdir()) == ["bach_clean.wav", "extra.wav"]
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["samples"]
+
+
+def test_a_failed_move_restores_every_previous_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A move that fails after one file was replaced puts back every previous file."""
+    out = tmp_path / "samples"
+    (out / "opgan").mkdir(parents=True)
+    (out / "opgan" / "a.wav").write_bytes(b"old-a")
+    (out / "opgan" / "b.wav").write_bytes(b"old-b")
+    real_place = mds._place
+    moves: list[Path] = []
+
+    def fail_on_second_move(source: Path, target: Path) -> None:
+        moves.append(target)
+        if len(moves) == 2:
+            raise OSError("simulated move failure")
+        real_place(source, target)
+
+    monkeypatch.setattr(mds, "_place", fail_on_second_move)
+    with pytest.raises(OSError, match="simulated move failure"):
+        mds.write_outputs({"opgan/a.wav": b"new-a", "opgan/b.wav": b"new-b"}, out)
+    assert (out / "opgan" / "a.wav").read_bytes() == b"old-a"
+    assert (out / "opgan" / "b.wav").read_bytes() == b"old-b"
+    assert sorted(p.name for p in (out / "opgan").iterdir()) == ["a.wav", "b.wav"]
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["samples"]
+
+
+def test_the_weights_only_override_refuses_the_run_before_anything_is_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """With TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD set, the refusal is printed, the command returns 1,
+    and no directory is created. The clips file is absent, so a run that skipped the check would
+    fail on it with a different message."""
+    monkeypatch.setenv("TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD", "1")
+    out = tmp_path / "samples"
+    assert mds.main(_main_args(tmp_path, tmp_path / "clips.json", out)) == 1
+    assert "TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD is set" in capsys.readouterr().err
+    assert not out.exists()
+
+
+def test_main_reports_a_file_system_error_and_returns_one(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """An OSError during the run is reported on stderr and gives exit status 1, not a traceback."""
+
+    def fail(_path: Path) -> list[ClipSpec]:
+        raise OSError("disk full")
+
+    monkeypatch.setattr(mds, "load_clip_specs", fail)
+    assert mds.main(_main_args(tmp_path, tmp_path / "clips.json", tmp_path / "samples")) == 1
+    assert "disk full" in capsys.readouterr().err

@@ -398,8 +398,26 @@ def admission_entry(position: int, digest: str | None = None) -> dict[str, Any]:
     }
 
 
+PLACEHOLDER_CANONICAL_PREFIX = "/abs/"
+
+
+def _admissions_of(data: object) -> list[dict[str, Any]]:
+    """The admission objects of a manifest mapping, or none if its shape is not a mapping."""
+    if not isinstance(data, dict) or not isinstance(data.get("admissions"), list):
+        return []
+    return [entry for entry in data["admissions"] if isinstance(entry, dict)]
+
+
 def write_manifest(directory: Path, data: object) -> Path:
-    """Write the manifest JSON into the directory and return the manifest's path."""
+    """Write the manifest JSON into the directory and return the manifest's path.
+
+    The placeholder canonical paths in `admission_entry` are moved into the directory, where the
+    walk writes its canonical files. A test that sets its own canonical path keeps that path.
+    """
+    for entry in _admissions_of(data):
+        if str(entry.get("canonical_path", "")).startswith(PLACEHOLDER_CANONICAL_PREFIX):
+            name = Path(entry["canonical_path"]).name
+            entry["canonical_path"] = str(directory / "candidates" / name)
     path = directory / MANIFEST_NAME
     path.write_text(json.dumps(data), encoding="utf-8")
     write_audit_trail(directory)
@@ -605,3 +623,31 @@ class TestWarmUp:
             warm_up_system(system, warm_up, tmp_path / "missing" / "progress.json", RATE)
 
         assert system.received == []
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        pytest.param(float("nan"), id="NaN"),
+        pytest.param(float("inf"), id="Infinity"),
+        pytest.param(float("-inf"), id="-Infinity"),
+    ],
+)
+def test_a_non_finite_json_constant_in_the_walk_manifest_is_refused(
+    tmp_path: Path, value: float
+) -> None:
+    """A walk manifest holding NaN, Infinity or -Infinity is refused before any field is read."""
+    entry = admission_entry(1)
+    entry["samples"] = value
+    path = write_manifest(tmp_path, valid_manifest([entry]))
+    with pytest.raises(HarnessFailure, match="non-finite JSON value"):
+        load_walk_manifest(path, PROTOCOL_DIGEST)
+
+
+def test_a_canonical_path_outside_the_walk_directory_is_refused(tmp_path: Path) -> None:
+    """An admission whose canonical file resolves outside the walk directory is refused."""
+    entry = admission_entry(1)
+    entry["canonical_path"] = str(tmp_path.parent / "outside.f64")
+    path = write_manifest(tmp_path, valid_manifest([entry]))
+    with pytest.raises(HarnessFailure, match="resolves outside the walk directory"):
+        load_walk_manifest(path, PROTOCOL_DIGEST)

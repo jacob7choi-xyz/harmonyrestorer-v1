@@ -61,6 +61,9 @@ def make_samples() -> npt.NDArray[np.float64]:
     return samples
 
 
+MISSING_CANONICAL_PREFIX = "/nonexistent/"
+
+
 def write_canonical(directory: Path, name: str, samples: npt.NDArray[np.float64]) -> dict[str, Any]:
     """Write a canonical file and return its manifest entry, with the file's real digest."""
     data = samples.astype("<f8").tobytes()
@@ -93,7 +96,11 @@ def missing_file(name: str) -> dict[str, Any]:
     The digest is derived from the name, so no two missing admissions share one.
     """
     digest = hashlib.sha256(name.encode("utf-8")).hexdigest()
-    return {"canonical_path": f"/nonexistent/{name}.f64", "canonical_sha256": digest, "samples": 1}
+    return {
+        "canonical_path": f"{MISSING_CANONICAL_PREFIX}{name}.f64",
+        "canonical_sha256": digest,
+        "samples": 1,
+    }
 
 
 def manifest(protocol: Protocol, strata: dict[str, Any], admissions: list[dict[str, Any]]) -> dict:
@@ -116,6 +123,10 @@ def manifest(protocol: Protocol, strata: dict[str, Any], admissions: list[dict[s
 def write_walk(directory: Path, data: dict[str, Any]) -> Path:
     """Write the walk directory's manifest and return the directory."""
     directory.mkdir(exist_ok=True)
+    for entry in data.get("admissions", []):
+        if str(entry.get("canonical_path", "")).startswith(MISSING_CANONICAL_PREFIX):
+            name = Path(entry["canonical_path"]).name
+            entry["canonical_path"] = str(directory / "candidates" / name)
     (directory / MANIFEST_NAME).write_text(json.dumps(data), encoding="utf-8")
     write_audit_trail(directory)
     return directory
@@ -124,7 +135,9 @@ def write_walk(directory: Path, data: dict[str, Any]) -> Path:
 def standard_walk(tmp_path: Path, protocol: Protocol) -> Path:
     """A walk with a complete piano stratum (one test recording, one demo recording whose file
     does not exist) and a short chamber stratum (one test recording whose file does not exist)."""
-    located = write_canonical(tmp_path, "test-piano", make_samples())
+    walk_dir = tmp_path / "walk"
+    walk_dir.mkdir(exist_ok=True)
+    located = write_canonical(walk_dir, "test-piano", make_samples())
     data = manifest(
         protocol,
         {

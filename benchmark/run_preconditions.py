@@ -151,7 +151,7 @@ def model_file_failures(
     return _digest_failures(opgan) + uvr_file_failures(protocol, uvr_model_dir)
 
 
-def _weights_only_override() -> RunAbortOutcome | None:
+def weights_only_override() -> RunAbortOutcome | None:
     """An abort when `TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD` is set, or None when it is not.
 
     audio-separator loads the UVR model with `torch.load` and no `weights_only` argument, so this
@@ -183,7 +183,7 @@ def verify_run_preconditions(
     Returns:
         None when every precondition holds, otherwise the first abort, which names no source.
     """
-    override = _weights_only_override()
+    override = weights_only_override()
     if override is not None:
         return override
     golden = verify_golden_fixtures(protocol, runtime_platform=runtime_platform)

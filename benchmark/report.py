@@ -48,13 +48,14 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import math
 import re
 from collections import Counter
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, NoReturn
 
 from benchmark.aggregation import (
     AggregationError,
@@ -92,6 +93,7 @@ from benchmark.systems_pipeline import (
     Partition,
     StratumEntry,
     StratumStatus,
+    is_within_walk,
     population_to_json,
 )
 from benchmark.walk import partition_plan
@@ -294,10 +296,16 @@ def _digest_of(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def _refuse_constant(token: str) -> NoReturn:
+    """Refuse NaN, Infinity and -Infinity, which a run file must not contain."""
+    logger.error("Run file refused: non-finite JSON value %s", token)
+    raise ReportError(f"non-finite JSON value {token} is not allowed")
+
+
 def _json_object(data: bytes, where: str) -> dict[str, Any]:
     """The JSON object in `data`, or a report error."""
     try:
-        value = json.loads(data.decode("utf-8"))
+        value = json.loads(data.decode("utf-8"), parse_constant=_refuse_constant)
     except ValueError as error:
         logger.error("%s is not UTF-8 JSON: %s", where, error)
         raise ReportError(f"{where} is not UTF-8 JSON") from error
@@ -351,7 +359,9 @@ def _stratum_entry(data: object, where: str) -> StratumEntry:
     return StratumEntry(status, _integer(fields["admitted"], f"{where}.admitted"))
 
 
-def _admission(data: object, where: str, strata: Mapping[str, StratumEntry]) -> Admission:
+def _admission(
+    data: object, where: str, strata: Mapping[str, StratumEntry], walk_dir: Path
+) -> Admission:
     """One admission, checked against the strata it must belong to."""
     fields = _exact(data, _ADMISSION_KEYS, where)
     stratum = _text(fields["stratum"], f"{where}.stratum")
@@ -365,6 +375,9 @@ def _admission(data: object, where: str, strata: Mapping[str, StratumEntry]) -> 
     canonical_path = _text(fields["canonical_path"], f"{where}.canonical_path")
     if not Path(canonical_path).is_absolute():
         raise ReportError(f"{where}.canonical_path must be absolute")
+    if not is_within_walk(Path(canonical_path), walk_dir):
+        logger.error("%s.canonical_path %s resolves outside %s", where, canonical_path, walk_dir)
+        raise ReportError(f"{where}.canonical_path resolves outside the walk directory")
     return Admission(
         stratum=stratum,
         partition=parsed,
@@ -408,8 +421,10 @@ def _read_manifest(path: Path) -> Manifest:
     admissions_data = top["admissions"]
     if not isinstance(admissions_data, list):
         raise ReportError("admissions must be a list")
+    walk_dir = path.parent
     admissions = tuple(
-        _admission(item, f"admissions[{i}]", strata) for i, item in enumerate(admissions_data)
+        _admission(item, f"admissions[{i}]", strata, walk_dir)
+        for i, item in enumerate(admissions_data)
     )
     _check_numbering(admissions, strata)
     audit_digest = top.get(AUDIT_KEY)
@@ -429,8 +444,9 @@ def _read_manifest(path: Path) -> Manifest:
 def _audit_line(raw: bytes) -> dict[str, Any] | None:
     """One audit line as an object, or None if it is not one."""
     try:
-        value = json.loads(raw.decode("utf-8"))
-    except ValueError:
+        value = json.loads(raw.decode("utf-8"), parse_constant=_refuse_constant)
+    except (ValueError, ReportError):
+        # A line with a non-finite value is kept as None, so the screen gate refuses the trail.
         return None
     return value if isinstance(value, dict) else None
 
@@ -484,10 +500,14 @@ def read_inputs(walk_dir: Path, systems_dir: Path, protocol: Protocol) -> Inputs
 def _metric_results(table: object, where: str) -> dict[str, MetricResult]:
     """A frame's metric results as the systems stage writes them: value and capped flag."""
     entries = _object(table, where)
-    return {
-        str(name): MetricResult(float(entry["value"]), bool(entry["capped"]))
-        for name, entry in entries.items()
-    }
+    results: dict[str, MetricResult] = {}
+    for name, entry in entries.items():
+        value = float(entry["value"])
+        if not math.isfinite(value):
+            logger.error("%s.%s is %r, not a finite value", where, name, value)
+            raise ReportError(f"{where}.{name} is not a finite value")
+        results[str(name)] = MetricResult(value, bool(entry["capped"]))
+    return results
 
 
 def _frame_outcome(row: dict[str, Any]) -> FrameOutcome:

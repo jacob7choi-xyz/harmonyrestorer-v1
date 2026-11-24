@@ -13,10 +13,13 @@ Windows when the target exists.
 from __future__ import annotations
 
 import os
+import shutil
 import tempfile
+import uuid
+from collections.abc import Mapping
 from pathlib import Path
 
-__all__ = ["write_atomically"]
+__all__ = ["write_atomically", "write_directory_atomically"]
 
 
 def write_atomically(target: Path, data: bytes | memoryview) -> None:
@@ -42,3 +45,35 @@ def write_atomically(target: Path, data: bytes | memoryview) -> None:
     finally:
         if not replaced:
             Path(temporary).unlink(missing_ok=True)
+
+
+def write_directory_atomically(directory: Path, files: Mapping[str, bytes]) -> None:
+    """Create a new directory holding every file, or leave nothing behind.
+
+    Each file is written with `write_atomically` into a staging directory beside `directory`.
+    The staging directory is then moved to `directory` with `Path.replace`. A failure at any step
+    removes the staging directory, so a partial output is never left under the target name. The
+    callers check that `directory` does not exist first, since an existing empty directory would
+    be replaced by the move. As in `write_atomically`, the parent directory is not fsynced after
+    the move.
+
+    Args:
+        directory: The directory to create. Its parent is created if it does not exist.
+        files: Each file's name inside the directory, mapped to its complete contents.
+
+    Raises:
+        OSError: If a file cannot be written, or the staging directory cannot be moved into place.
+            The staging directory is removed first.
+    """
+    directory.parent.mkdir(parents=True, exist_ok=True)
+    staging = directory.with_name(f".{directory.name}.{uuid.uuid4().hex}.partial")
+    staging.mkdir()
+    published = False
+    try:
+        for name, data in files.items():
+            write_atomically(staging / name, data)
+        staging.replace(directory)
+        published = True
+    finally:
+        if not published:
+            shutil.rmtree(staging, ignore_errors=True)

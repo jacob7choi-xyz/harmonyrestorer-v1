@@ -1,0 +1,149 @@
+{
+  "clips": [
+    {
+      "canonical_sha256": "58c6cbbc988beb20c572948069c3c8385ff0a8a1f926efdb940b0a73d6127fe8",
+      "duration_s": 6.0,
+      "files": [
+        {
+          "path": "opgan/ballade_3_clean.wav",
+          "sha256": "e61e1ba6b4c68f447abfb629778380baadf6f0b16cbe00f31327fa4777aa7eaf"
+        },
+        {
+          "path": "opgan/ballade_3_noisy.wav",
+          "sha256": "652ed3ec16b2619f1ed0d3dd5c048b77a36c5da8c9957a9e08fbc90c4589442e"
+        },
+        {
+          "path": "opgan/ballade_3_restored.wav",
+          "sha256": "7cf41abb1fcac271645c2bf1a3ac45e309e5efc785fc41490a3eb97aa7e1c0fb"
+        },
+        {
+          "path": "uvr/ballade_3_clean.wav",
+          "sha256": "e61e1ba6b4c68f447abfb629778380baadf6f0b16cbe00f31327fa4777aa7eaf"
+        },
+        {
+          "path": "uvr/ballade_3_noisy.wav",
+          "sha256": "652ed3ec16b2619f1ed0d3dd5c048b77a36c5da8c9957a9e08fbc90c4589442e"
+        },
+        {
+          "path": "uvr/ballade_3_restored.wav",
+          "sha256": "8dbd69b4e58bfd499d695b6bac18f79322d1f29638fb7fac5a8082e5b926826e"
+        }
+      ],
+      "gain": 1.2303200042116176,
+      "identifier": "musopen-chopin-complete-works-flac/Ballade no. 3 in A flat major Op. 47.flac",
+      "performer": "Frank Levy",
+      "samples_trimmed": {
+        "clean": 43,
+        "noisy": 43,
+        "opgan": 43,
+        "uvr": 0
+      },
+      "samples_written": 95957,
+      "seed": 20261203,
+      "slug": "ballade_3",
+      "start_s": 450.0
+    },
+    {
+      "canonical_sha256": "50df18f027b91db4dcbc882323be2f6f83f60bf677f165c0712836c9b30c3bcc",
+      "duration_s": 6.0,
+      "files": [
+        {
+          "path": "opgan/mazurka_op56_2_clean.wav",
+          "sha256": "b5ab818baa4391e8ace1ee75cf30790abd66dfe40e0e83d420081409834aa075"
+        },
+        {
+          "path": "opgan/mazurka_op56_2_noisy.wav",
+          "sha256": "ad038251396899188c16f95ddb5ac6dd5eaa5e1ad1cff9581d6e82520f948871"
+        },
+        {
+          "path": "opgan/mazurka_op56_2_restored.wav",
+          "sha256": "e715db024aecf583735552b3e0de41c635817c6a05fd0d08393cfe6a64750b3a"
+        },
+        {
+          "path": "uvr/mazurka_op56_2_clean.wav",
+          "sha256": "b5ab818baa4391e8ace1ee75cf30790abd66dfe40e0e83d420081409834aa075"
+        },
+        {
+          "path": "uvr/mazurka_op56_2_noisy.wav",
+          "sha256": "ad038251396899188c16f95ddb5ac6dd5eaa5e1ad1cff9581d6e82520f948871"
+        },
+        {
+          "path": "uvr/mazurka_op56_2_restored.wav",
+          "sha256": "edd46642876d8abfc94418498c1728fb58598bc9711aeb7187550166c425b532"
+        }
+      ],
+      "gain": 1.9094125302973814,
+      "identifier": "musopen-chopin-complete-works-flac/Mazurka in C major, Op. 56 no. 2.flac",
+      "performer": "Xuan He",
+      "samples_trimmed": {
+        "clean": 43,
+        "noisy": 43,
+        "opgan": 43,
+        "uvr": 0
+      },
+      "samples_written": 95957,
+      "seed": 20261202,
+      "slug": "mazurka_op56_2",
+      "start_s": 31.0
+    },
+    {
+      "canonical_sha256": "62412f9893aadea0eb9f8d07f62cb24e37ced7892df67368e45f0da7966ab64c",
+      "duration_s": 6.0,
+      "files": [
+        {
+          "path": "opgan/waltz_op64_3_clean.wav",
+          "sha256": "912b1a7e04fba3d452bc0b24a18c896f7eccefb2ecfb6055616c29f992ae90e7"
+        },
+        {
+          "path": "opgan/waltz_op64_3_noisy.wav",
+          "sha256": "f8d886b9338dfa3786e7faa4ea22dc3a1a3e1eb7cde92abf42415f42f95c9dd0"
+        },
+        {
+          "path": "opgan/waltz_op64_3_restored.wav",
+          "sha256": "0d64fbdb05cdf2ded030fbd816cf21f64a1fdd31de2054551222a6253b6d513f"
+        },
+        {
+          "path": "uvr/waltz_op64_3_clean.wav",
+          "sha256": "912b1a7e04fba3d452bc0b24a18c896f7eccefb2ecfb6055616c29f992ae90e7"
+        },
+        {
+          "path": "uvr/waltz_op64_3_noisy.wav",
+          "sha256": "f8d886b9338dfa3786e7faa4ea22dc3a1a3e1eb7cde92abf42415f42f95c9dd0"
+        },
+        {
+          "path": "uvr/waltz_op64_3_restored.wav",
+          "sha256": "5b9c9ede089ca055365e06a70da993dce89e44ddfa4ec476532b84f3d9277c90"
+        }
+      ],
+      "gain": 1.9189081562012773,
+      "identifier": "musopen-chopin-complete-works-flac/Waltz in A flat major, Op. 64 no. 3.flac",
+      "performer": "Diana Hughes",
+      "samples_trimmed": {
+        "clean": 43,
+        "noisy": 43,
+        "opgan": 43,
+        "uvr": 0
+      },
+      "samples_written": 95957,
+      "seed": 20261201,
+      "slug": "waltz_op64_3",
+      "start_s": 53.0
+    }
+  ],
+  "noise_policy": "fixed demo profile within the training ranges; per-clip seed for noise samples only",
+  "noise_profile": {
+    "crackle_amplitude": 0.05,
+    "crackle_density": 0.001,
+    "enable_crackle": true,
+    "enable_hum": true,
+    "enable_saturation": false,
+    "hiss_color": "pink",
+    "hiss_snr_db": 10.0,
+    "hum_amplitude": 0.02,
+    "hum_freq": 60.0,
+    "rolloff_hz": 5000.0,
+    "saturation_drive": 0.1
+  },
+  "protocol_version": 14,
+  "sample_rate": 16000
+}

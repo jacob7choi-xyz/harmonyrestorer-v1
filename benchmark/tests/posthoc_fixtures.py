@@ -22,6 +22,7 @@ from report_fixtures import (
     SOLO,
     Bundle,
     bind,
+    copy_walk,
     population_of,
     read_json,
     read_lines,
@@ -171,9 +172,11 @@ def copy_bundle(bundle: Bundle, root: Path) -> Bundle:
     """A copy of the walk and systems directories, so a test can change its own copy."""
     walk = root / "walk"
     systems = root / "systems"
-    _copy_tree(bundle.walk, walk)
+    copy_walk(bundle.walk, walk)
     _copy_tree(bundle.systems, systems)
-    return Bundle(walk, systems)
+    copied = Bundle(walk, systems)
+    bind(copied)
+    return copied
 
 
 def _copy_tree(source: Path, target: Path) -> None:

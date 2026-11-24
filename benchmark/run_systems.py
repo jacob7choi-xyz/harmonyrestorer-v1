@@ -267,6 +267,40 @@ def _stage_context(protocol: Protocol, systems: Sequence[System], run_dir: Path)
     )
 
 
+def _build_and_warm_up(
+    protocol: Protocol,
+    run_dir: Path,
+    opgan_checkpoint: Path,
+    uvr_model_dir: Path,
+    build_systems: SystemsFactory,
+    uvr_check: UvrCheck,
+) -> Sequence[System]:
+    """Build the two systems in the run directory, then warm each one up.
+
+    The UVR model files are checked again after each warm-up.
+
+    Args:
+        protocol: The loaded protocol.
+        run_dir: The run directory, which holds the warm-up input and the progress marker.
+        opgan_checkpoint: The OpGAN checkpoint file.
+        uvr_model_dir: The directory holding the UVR model and its parameter files.
+        build_systems: Builds the systems.
+        uvr_check: Lists the UVR model files that fail their digests.
+
+    Returns:
+        The warmed systems, in the order the factory returned them.
+    """
+    systems = build_systems(protocol, run_dir, opgan_checkpoint, uvr_model_dir)
+    warm_up_all(
+        systems,
+        run_dir,
+        protocol,
+        run_dir / PROGRESS_NAME,
+        after_warm_up=partial(_require_uvr_files, protocol, uvr_model_dir, uvr_check),
+    )
+    return systems
+
+
 def run_systems(
     *,
     walk_dir: Path,
@@ -309,13 +343,8 @@ def run_systems(
         preconditions=preconditions,
     )
     _create_run_dir(run_dir)
-    systems = build_systems(protocol, run_dir, opgan_checkpoint, uvr_model_dir)
-    warm_up_all(
-        systems,
-        run_dir,
-        protocol,
-        run_dir / PROGRESS_NAME,
-        after_warm_up=partial(_require_uvr_files, protocol, uvr_model_dir, uvr_check),
+    systems = _build_and_warm_up(
+        protocol, run_dir, opgan_checkpoint, uvr_model_dir, build_systems, uvr_check
     )
     results = score_manifest(manifest, _stage_context(protocol, systems, run_dir))
     return _write_run(run_dir, results, manifest, manifest_sha256)

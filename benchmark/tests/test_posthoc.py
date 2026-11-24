@@ -322,5 +322,15 @@ def test_a_stratum_with_no_recording_has_no_analysis(protocol: Protocol) -> None
 
 
 def test_the_label_is_the_one_every_number_carries() -> None:
-    """The label names the status of every number: post-hoc, and fixed before any score was read."""
-    assert LABEL == "post-hoc, added after the protocol froze, before any score was read"
+    """The label names the status of every number: post-hoc, and fixed before the report ran."""
+    assert LABEL == "post-hoc, fixed in docs/benchmark-posthoc-analyses.md before the report ran"
+
+
+@pytest.mark.parametrize(
+    "value", [float("nan"), float("inf"), float("-inf")], ids=["NaN", "Infinity", "-Infinity"]
+)
+def test_a_non_finite_paired_difference_is_refused(value: float) -> None:
+    """A paired difference that is not finite is refused, so no interval is computed from it."""
+    differences = [("a", 1.0), ("b", 2.0), ("c", value)]
+    with pytest.raises(PosthocError, match="not finite"):
+        cluster_summary(differences)

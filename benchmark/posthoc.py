@@ -34,6 +34,7 @@ from benchmark.protocol import LogSpectralDistance, Protocol
 from benchmark.scoring import BASELINE, OPGAN, UVR
 
 __all__ = [
+    "BAND_EDGE_HZ",
     "BAND_LAST_BIN",
     "BAND_METRIC",
     "CAPPED_METRICS",
@@ -55,12 +56,14 @@ __all__ = [
 
 logger = logging.getLogger(__name__)
 
-LABEL = "post-hoc, added after the protocol froze, before any score was read"
+LABEL = "post-hoc, fixed in docs/benchmark-posthoc-analyses.md before the report ran"
 BAND_METRIC = "band_log_spectral_distance"
 RECONSTRUCTION_SNR = "reconstruction_snr"
 SI_SNR = "si_snr"
 LOG_SPECTRAL_DISTANCE = "log_spectral_distance"
 CAPPED_METRICS = (RECONSTRUCTION_SNR, SI_SNR)
+# The band's upper edge in hertz: the lowest cutoff the degradation draws.
+BAND_EDGE_HZ = 4000.0
 # The highest transform bin kept, inclusive. At 16 kHz with a 1024-point transform each bin is
 # 15.625 Hz wide, so bin 256 is 4000 Hz, the lowest rolloff the degradation draws.
 BAND_LAST_BIN = 256
@@ -177,8 +180,17 @@ def cluster_summary(differences: Sequence[tuple[str, float]]) -> ClusterSummary:
         and the sign counts.
 
     Raises:
-        PosthocError: If the differences name fewer than two performer clusters.
+        PosthocError: If the differences name fewer than two performer clusters, or a paired
+            difference is not finite.
     """
+    non_finite = [name for name, value in differences if not math.isfinite(value)]
+    if non_finite:
+        logger.error(
+            "%d paired differences are not finite; the first is in %s",
+            len(non_finite),
+            non_finite[0],
+        )
+        raise PosthocError(f"{len(non_finite)} paired differences are not finite")
     cluster_values = _cluster_means(differences)
     count = len(cluster_values)
     if count < 2:

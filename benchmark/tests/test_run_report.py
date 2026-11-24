@@ -20,6 +20,7 @@ from report_fixtures import (
     SOLO,
     Bundle,
     bind,
+    copy_walk,
     pinned_universes,
     read_json,
     read_lines,
@@ -28,15 +29,18 @@ from report_fixtures import (
     write_lines,
 )
 
+from benchmark import atomic_write
 from benchmark.candidate_universe import UNIVERSE_SHA256
 from benchmark.protocol import Protocol, load_protocol
 from benchmark.report import (
     AUDIT_NAME,
     MANIFEST_NAME,
+    RESULTS_KEY,
     RESULTS_NAME,
+    SUMMARY_NAME,
     ReportError,
 )
-from benchmark.run_report import JSON_NAME, MARKDOWN_NAME, main, run_report
+from benchmark.run_report import JSON_NAME, MARKDOWN_NAME, main, run_report, write_report
 
 PRIMARY_NAMES = ["reconstruction_snr", "si_snr", "log_spectral_distance"]
 SHIFT_NAMES = ["reconstruction_snr", "si_snr"]
@@ -239,9 +243,11 @@ def copy_bundle(base: Bundle, root: Path) -> Bundle:
     """A private copy of a bundle, so a test may change it. The canonical files are shared."""
     walk = root / "walk"
     systems = root / "systems"
-    shutil.copytree(base.walk, walk)
+    copy_walk(base.walk, walk)
     shutil.copytree(base.systems, systems)
-    return Bundle(walk, systems)
+    bound = Bundle(walk, systems)
+    bind(bound)
+    return bound
 
 
 def stratum_text(markdown: str, name: str) -> str:
@@ -427,11 +433,11 @@ def test_a_corrupt_canonical_file_fails_the_command_and_writes_nothing(
     assert not output.exists()
 
 
-def test_a_non_finite_value_fails_the_rendering_and_leaves_no_directory(
+def test_a_non_finite_value_is_refused_at_the_read_and_leaves_no_directory(
     base: Bundle, tmp_path: Path
 ) -> None:
-    """JSON refuses NaN, so the report cannot be rendered. Both renderings are built before the
-    directory is created, so no empty or partial directory is left behind."""
+    """A NaN written into the results is refused when the file is read, before any rendering, so
+    no directory is created."""
     bundle = copy_bundle(base, tmp_path / "bundle")
     rows = read_lines(bundle.systems / RESULTS_NAME)
     for row in rows:
@@ -441,7 +447,7 @@ def test_a_non_finite_value_fails_the_rendering_and_leaves_no_directory(
     write_lines(bundle.systems / RESULTS_NAME, rows)
     bind(bundle)
     output = tmp_path / "out"
-    with pytest.raises(ReportError, match="cannot be rendered"):
+    with pytest.raises(ReportError, match="non-finite JSON value NaN"):
         run_report(bundle.walk, bundle.systems, output)
     assert not output.exists()
 
@@ -480,3 +486,89 @@ def test_a_lower_is_better_difference_is_read_as_distance_not_as_a_win(markdown:
         "closer to the clean reference"
     ) in markdown
     assert "UVR scored higher" not in markdown
+
+
+SENTINEL = 123456.5
+
+
+def _systems_with_literal(base: Bundle, tmp_path: Path, literal: str) -> Path:
+    """A copy of the systems outputs whose first scored metric value is written as `literal`.
+
+    json.dumps writes a sentinel number, which is then swapped for the raw token, so the file
+    holds exactly the literal under test. The summary's digest of the file is updated to match,
+    so the report reads the value rather than withholding every stratum on a digest mismatch.
+    """
+    systems = tmp_path / "systems"
+    shutil.copytree(base.systems, systems)
+    path = systems / RESULTS_NAME
+    rows = read_lines(path)
+    row = next(r for r in rows if isinstance(r.get("results"), dict))
+    row["results"][next(iter(row["results"]))]["value"] = SENTINEL
+    text = "".join(json.dumps(r, sort_keys=True) + "\n" for r in rows)
+    assert text.count(str(SENTINEL)) == 1
+    path.write_text(text.replace(str(SENTINEL), literal, 1), encoding="utf-8")
+    summary_path = systems / SUMMARY_NAME
+    summary = read_json(summary_path)
+    summary[RESULTS_KEY] = hashlib.sha256(path.read_bytes()).hexdigest()
+    write_json(summary_path, summary)
+    return systems
+
+
+@pytest.mark.parametrize("literal", ["NaN", "Infinity", "-Infinity"])
+def test_a_non_finite_json_constant_refuses_the_report_and_writes_nothing(
+    base: Bundle, tmp_path: Path, literal: str
+) -> None:
+    """A run file holding NaN, Infinity or -Infinity is refused, and no report directory exists."""
+    systems = _systems_with_literal(base, tmp_path, literal)
+    output = tmp_path / "out"
+    with pytest.raises(ReportError, match="non-finite JSON value"):
+        run_report(base.walk, systems, output)
+    assert not output.exists()
+
+
+def test_a_metric_literal_that_overflows_to_infinity_refuses_the_report(
+    base: Bundle, tmp_path: Path
+) -> None:
+    """The literal 1e400 parses to infinity without a constant hook, so the finite check refuses it."""
+    systems = _systems_with_literal(base, tmp_path, "1e400")
+    output = tmp_path / "out"
+    with pytest.raises(ReportError, match="is not a finite value"):
+        run_report(base.walk, systems, output)
+    assert not output.exists()
+
+
+def test_a_canonical_path_outside_the_walk_directory_refuses_the_report(
+    base: Bundle, tmp_path: Path
+) -> None:
+    """An admission whose canonical file lies outside the walk directory refuses the report."""
+    walk = tmp_path / "walk"
+    copy_walk(base.walk, walk)
+    outside = tmp_path / "outside.f64"
+    manifest = read_json(walk / MANIFEST_NAME)
+    shutil.copy(Path(manifest["admissions"][0]["canonical_path"]), outside)
+    manifest["admissions"][0]["canonical_path"] = str(outside)
+    write_json(walk / MANIFEST_NAME, manifest)
+    output = tmp_path / "out"
+    with pytest.raises(ReportError, match="resolves outside the walk directory"):
+        run_report(walk, base.systems, output)
+    assert not output.exists()
+
+
+def test_a_failed_file_write_leaves_no_report_directory(
+    base: Bundle, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failure while the Markdown is written leaves neither the report nor a partial sibling."""
+    report = run_report(base.walk, base.systems, tmp_path / "unused")
+    real_write = atomic_write.write_atomically
+
+    def fail_on_markdown(target: Path, data: bytes) -> None:
+        if target.name == MARKDOWN_NAME:
+            raise OSError("simulated disk full")
+        real_write(target, data)
+
+    monkeypatch.setattr(atomic_write, "write_atomically", fail_on_markdown)
+    output = tmp_path / "out"
+    with pytest.raises(ReportError, match="cannot be written"):
+        write_report(output, report)
+    assert not output.exists()
+    assert not list(tmp_path.glob(".out.*"))
