@@ -59,6 +59,7 @@ _SAMPLE_RATE_HZ = 16000
 _CLIP_S = 8.0
 _PRESENTATION_BITS = 16
 _CONDITIONS = ("original", "opgan", "uvr")
+CONDITION_NAMES: tuple[str, ...] = _CONDITIONS
 _ANSWERS = ("A", "B", "No preference")
 _MIN_ADULT_AGE = 18
 _DIGEST = re.compile(r"[0-9a-f]{64}")
@@ -209,9 +210,18 @@ class Trials:
 
 @dataclass(frozen=True)
 class Listeners:
-    """Who may take part and what they agree to."""
+    """Who may take part, what they agree to, and how they listen.
+
+    Attributes:
+        minimum_age_years: The age a listener must have reached.
+        self_reported_hearing: The hearing statement a listener confirms.
+        playback: The playback the protocol requires, such as headphones.
+        consent_text: The consent sentence shown before the first trial.
+    """
 
     minimum_age_years: int
+    self_reported_hearing: str
+    playback: str
     consent_text: str
 
 
@@ -803,7 +813,7 @@ def _parse_listeners(data: Mapping[str, Any]) -> Listeners:
         data: The section.
 
     Returns:
-        The eligibility age and the consent text.
+        The eligibility age, the hearing statement, the playback and the consent text.
     """
     keys = frozenset(
         {
@@ -822,7 +832,12 @@ def _parse_listeners(data: Mapping[str, Any]) -> Listeners:
     consent = _get(data, "listeners", "consent_text", str)
     if not consent.strip() or consent.count(".") != 1:
         _refuse("listeners.consent_text must be a single sentence")
-    return Listeners(minimum_age_years=age, consent_text=consent)
+    return Listeners(
+        minimum_age_years=age,
+        self_reported_hearing=_get(data, "listeners", "self_reported_hearing", str),
+        playback=_get(data, "listeners", "playback", str),
+        consent_text=consent,
+    )
 
 
 def _parse_stages(data: Mapping[str, Any]) -> Stages:
