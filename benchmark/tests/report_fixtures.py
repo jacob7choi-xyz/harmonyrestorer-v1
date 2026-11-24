@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import shutil
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -212,12 +213,27 @@ def write_json(path: Path, value: dict[str, Any]) -> None:
     path.write_text(json.dumps(value, sort_keys=True, indent=1))
 
 
+def copy_walk(source: Path, destination: Path) -> Path:
+    """Copy a walk directory and point each admission's canonical path at the copy.
+
+    The report refuses a canonical file outside the walk directory it reads, so a copy of a
+    walk carries its canonical files with it.
+    """
+    shutil.copytree(source, destination)
+    manifest = read_json(destination / MANIFEST_NAME)
+    for admission in manifest["admissions"]:
+        relative = Path(admission["canonical_path"]).relative_to(source)
+        admission["canonical_path"] = str(destination / relative)
+    write_json(destination / MANIFEST_NAME, manifest)
+    return destination
+
+
 def write_base(protocol: Protocol, root: Path) -> Bundle:
     """The walk and the systems outputs of a complete solo piano stratum and a short chamber one."""
-    canonical = root / "canonical"
     walk = root / "walk"
+    canonical = walk / "candidates"
     systems = root / "systems"
-    for directory in (canonical, walk, systems):
+    for directory in (walk, canonical, systems):
         directory.mkdir(parents=True)
     admissions = admission_specs(protocol, canonical)
     audit = [

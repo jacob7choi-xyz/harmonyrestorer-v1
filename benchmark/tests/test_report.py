@@ -18,6 +18,7 @@ from report_fixtures import (
     SOLO,
     Bundle,
     bind,
+    copy_walk,
     frame_value,
     pinned_universes,
     read_json,
@@ -77,9 +78,11 @@ def bundle(base: Bundle, tmp_path: Path) -> Bundle:
     """A private copy of the base bundle that a test may change. Canonical files are shared."""
     walk = tmp_path / "walk"
     systems = tmp_path / "systems"
-    shutil.copytree(base.walk, walk)
+    copy_walk(base.walk, walk)
     shutil.copytree(base.systems, systems)
-    return Bundle(walk, systems)
+    bound = Bundle(walk, systems)
+    bind(bound)
+    return bound
 
 
 def run(protocol: Protocol, bundle: Bundle) -> RunReport:
@@ -447,23 +450,13 @@ def test_a_changed_canonical_file_aborts_the_whole_report(
 ) -> None:
     """A canonical file that no longer hashes to its digest is a failed check on the evidence,
     so the report raises instead of withholding one stratum and publishing the rest."""
-    copied = tmp_path / "walk"
-    shutil.copytree(base.walk, copied)
+    copied = copy_walk(base.walk, tmp_path / "walk")
     systems = tmp_path / "systems"
     shutil.copytree(base.systems, systems)
-    canonical = tmp_path / "canonical"
-    canonical.mkdir()
-    manifest = read_json(copied / MANIFEST_NAME)
-    for admission in manifest["admissions"]:
-        source = Path(admission["canonical_path"])
-        target = canonical / source.name
-        shutil.copy(source, target)
-        admission["canonical_path"] = str(target)
-    target = canonical / "recording-1.f64"
+    target = copied / "candidates" / "recording-1.f64"
     data = bytearray(target.read_bytes())
     data[0] ^= 0xFF
     target.write_bytes(bytes(data))
-    write_json(copied / MANIFEST_NAME, manifest)
     bind(Bundle(copied, systems))
     with pytest.raises(ReportError, match="failed its check"):
         build_report(copied, systems, protocol)

@@ -281,7 +281,9 @@ def _stratum_entry(data: object, name: str) -> StratumEntry:
     return StratumEntry(StratumStatus(status), admitted)
 
 
-def _admission(data: object, index: int, strata: Mapping[str, StratumEntry]) -> Admission:
+def _admission(
+    data: object, index: int, strata: Mapping[str, StratumEntry], walk_dir: Path
+) -> Admission:
     """One admission, validated against the strata it must belong to."""
     where = f"admissions[{index}]"
     fields = _mapping(data, _ADMISSION_KEYS, where)
@@ -294,6 +296,8 @@ def _admission(data: object, index: int, strata: Mapping[str, StratumEntry]) -> 
     canonical_path = _text(fields["canonical_path"], f"{where}.canonical_path")
     if not Path(canonical_path).is_absolute():
         _refuse(f"{where}.canonical_path must be absolute")
+    if not is_within_walk(Path(canonical_path), walk_dir):
+        _refuse(f"{where}.canonical_path resolves outside the walk directory")
     samples = _int(fields["samples"], f"{where}.samples")
     if samples <= 0:
         _refuse(f"{where}.samples must be positive")
@@ -328,10 +332,24 @@ def _check_unique_recordings(admissions: Sequence[Admission]) -> None:
         _refuse("two admissions share a canonical_sha256, so their frames cannot be told apart")
 
 
+def _refuse_constant(token: str) -> NoReturn:
+    """Refuse NaN, Infinity and -Infinity, which a walk manifest does not allow."""
+    _refuse(f"non-finite JSON value {token} is not allowed")
+
+
+def is_within_walk(canonical_path: Path, walk_dir: Path) -> bool:
+    """Whether a canonical file resolves to a location inside the walk directory.
+
+    Both paths are resolved first, so a symbolic link or a `..` segment that leads out of the
+    walk directory counts as outside it.
+    """
+    return canonical_path.resolve().is_relative_to(walk_dir.resolve())
+
+
 def _decode(raw: bytes) -> Any:
     """The manifest's JSON value, or a harness failure if it is not UTF-8 JSON."""
     try:
-        return json.loads(raw.decode("utf-8"))
+        return json.loads(raw.decode("utf-8"), parse_constant=_refuse_constant)
     except ValueError as error:
         logger.error("Walk manifest is not UTF-8 JSON: %s", error)
         raise HarnessFailure(f"walk manifest is not UTF-8 JSON: {error}") from error
@@ -401,7 +419,9 @@ def parse_walk_manifest(raw: bytes, walk_dir: Path, protocol_sha256: str) -> Wal
         _refuse("strata must name exactly the strata in universe_sha256")
     if not isinstance(data["admissions"], list):
         _refuse("admissions must be a list")
-    admissions = [_admission(item, i, strata) for i, item in enumerate(data["admissions"])]
+    admissions = [
+        _admission(item, i, strata, walk_dir) for i, item in enumerate(data["admissions"])
+    ]
     _check_strata(strata, admissions)
     _check_unique_recordings(admissions)
     _check_audit_trail(walk_dir, audit_digest)
