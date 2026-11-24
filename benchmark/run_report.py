@@ -40,7 +40,10 @@ _METRIC_LABELS = {
 _EFFECT_LABELS = {"opgan_minus_uvr": "OpGAN minus UVR", "uvr_minus_opgan": "UVR minus OpGAN"}
 _EFFECT_SIGN_NOTES = {
     "opgan_minus_uvr": "a positive difference means OpGAN scored higher on this metric",
-    "uvr_minus_opgan": "a positive difference means UVR scored higher on this metric",
+    "uvr_minus_opgan": (
+        "a positive difference means UVR's distance is larger, so OpGAN's output is spectrally "
+        "closer to the clean reference"
+    ),
 }
 
 

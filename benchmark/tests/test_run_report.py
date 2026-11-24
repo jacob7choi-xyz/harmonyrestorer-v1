@@ -467,3 +467,16 @@ def test_a_tampered_systems_file_publishes_every_stratum_withheld(
 def test_the_paired_difference_states_which_system_scored_higher(markdown: str) -> None:
     """A positive paired difference is OpGAN minus UVR, so it means OpGAN scored higher."""
     assert "a positive difference means OpGAN scored higher on this metric" in markdown
+
+
+def test_a_lower_is_better_difference_is_read_as_distance_not_as_a_win(markdown: str) -> None:
+    """UVR minus OpGAN on a distance is positive when UVR's distance is larger, which favours OpGAN.
+
+    The note must say so. A note reading "UVR scored higher" would invert the result for a
+    metric where lower is better.
+    """
+    assert (
+        "a positive difference means UVR's distance is larger, so OpGAN's output is spectrally "
+        "closer to the clean reference"
+    ) in markdown
+    assert "UVR scored higher" not in markdown
