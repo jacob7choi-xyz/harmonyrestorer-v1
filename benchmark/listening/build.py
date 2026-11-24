@@ -409,7 +409,11 @@ def _stage(
 def _build_manifest(
     protocol: ListeningProtocol, files: Mapping[str, bytes], key_bytes: bytes, acquisition_sha: str
 ) -> bytes:
-    """The public build manifest: digests of every clip file and of the sealed key. No mapping."""
+    """The public build manifest: digests of every clip file and of the sealed key. No mapping.
+
+    The key is listed by `key_path` and `key_sha256` only, so `clips` names the files under
+    `clips/` and nothing else.
+    """
     clips = [
         {
             "blinded_id": Path(name).stem,
@@ -417,6 +421,7 @@ def _build_manifest(
             "sha256": hashlib.sha256(data).hexdigest(),
         }
         for name, data in sorted(files.items())
+        if name.startswith(f"{CLIPS_DIR}/")
     ]
     manifest = {
         "study": protocol.study,

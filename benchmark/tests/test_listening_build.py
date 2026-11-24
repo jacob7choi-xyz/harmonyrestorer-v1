@@ -241,6 +241,24 @@ def test_the_public_manifest_carries_the_key_digest(built: tuple[Path, Path]) ->
     assert manifest["key_path"] == "sealed/key.json"
 
 
+def test_the_public_manifest_lists_exactly_the_clip_files(built: tuple[Path, Path]) -> None:
+    """The manifest's clip list names each file under clips/ with its digest, and not the key."""
+    out, _ = built
+    manifest = json.loads((out / BUILD_NAME).read_text())
+    on_disk = {
+        f"clips/{path.name}": hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in (out / "clips").iterdir()
+    }
+
+    listed = {clip["path"]: clip["sha256"] for clip in manifest["clips"]}
+
+    assert listed == on_disk
+    assert len(manifest["clips"]) == len(on_disk)
+    assert {clip["blinded_id"] for clip in manifest["clips"]} == {
+        Path(path).stem for path in on_disk
+    }
+
+
 def test_each_clip_measures_its_recordings_loudness_target(
     built: tuple[Path, Path], protocol: ListeningProtocol
 ) -> None:
