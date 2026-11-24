@@ -705,3 +705,40 @@ def test_main_reports_a_file_system_error_and_returns_one(
     monkeypatch.setattr(mds, "load_clip_specs", fail)
     assert mds.main(_main_args(tmp_path, tmp_path / "clips.json", tmp_path / "samples")) == 1
     assert "disk full" in capsys.readouterr().err
+
+
+def _write_engine_wav(path: Path, samples: np.ndarray, rate: int) -> Path:
+    """Write float samples to *path* as a WAV at *rate*, for an engine output."""
+    sf.write(str(path), samples, rate, subtype="FLOAT")
+    return path
+
+
+def test_read_engine_output_returns_mono_samples_at_the_canonical_rate(tmp_path: Path) -> None:
+    """A mono output at the canonical rate is read back exactly."""
+    samples = np.linspace(-0.5, 0.5, 1600)
+    path = _write_engine_wav(tmp_path / "out.wav", samples, mds.SAMPLE_RATE)
+
+    result = mds.read_engine_output(path, "clip OpGAN")
+
+    assert result.dtype == np.float64
+    assert np.allclose(result, samples, atol=1e-6)
+
+
+def test_read_engine_output_refuses_wrong_rate_and_stereo(tmp_path: Path) -> None:
+    """A wrong rate and a stereo output each raise DemoSampleError naming the clip."""
+    wrong_rate = _write_engine_wav(tmp_path / "rate.wav", np.zeros(100), 8_000)
+    stereo = tmp_path / "stereo.wav"
+    sf.write(str(stereo), np.zeros((100, 2)), mds.SAMPLE_RATE, subtype="FLOAT")
+
+    for path in (wrong_rate, stereo):
+        with pytest.raises(DemoSampleError, match="clip UVR is not 16000 Hz mono"):
+            mds.read_engine_output(path, "clip UVR")
+
+
+def test_read_engine_output_refuses_an_unreadable_file(tmp_path: Path) -> None:
+    """A file that is not audio raises DemoSampleError rather than a soundfile error."""
+    path = tmp_path / "not_audio.wav"
+    path.write_bytes(b"not a wav file at all")
+
+    with pytest.raises(DemoSampleError, match="clip UVR cannot be read"):
+        mds.read_engine_output(path, "clip UVR")
