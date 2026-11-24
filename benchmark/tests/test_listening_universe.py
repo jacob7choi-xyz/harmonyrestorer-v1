@@ -141,7 +141,7 @@ def test_the_manifest_records_each_decision_and_counts_the_exclusions(
         protocol, Listing(ids, 3), facts, protocol.universe.rule, "2026-11-24T00:00:00+00:00"
     )
     assert data["study"] == "historical_listening"
-    assert data["protocol_version"] == 1
+    assert data["protocol_version"] == protocol.protocol_version
     assert data["kept"] == 1
     assert data["listed"] == 3
     assert [entry["identifier"] for entry in data["items"]] == ["78_kept"]

@@ -1,10 +1,12 @@
 """Immutable, validated access to the frozen listening-study protocol.
 
-`benchmark/listening/protocols/v1.json` is the study's frozen values. This module answers two
+`benchmark/listening/protocols/v2.json` is the study's frozen values. This module answers two
 questions. Is the file well formed: every required key is present, no key is unknown, each
 value has its type, and the values agree with one another. Is it the protocol this code was
 written for: the file's own digest, the digest of the benchmark protocol it refers to, and the
-digest of the universe manifest must each equal the value pinned in this module.
+digest of the universe manifest must each equal the value pinned in this module. The amendment
+chain is checked as well: the predecessor's file and archived document must hash to the digests
+the protocol records.
 
 Explanatory text is carried in keys whose names end in `note` (and `mfcc_skip_reason`, which is
 required). Those keys are checked to be strings and are not otherwise interpreted.
@@ -43,9 +45,14 @@ logger = logging.getLogger(__name__)
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 # Private, so that the only supported route to the file is `load_listening_protocol`.
-_PROTOCOL_PATH = _REPO_ROOT / "benchmark" / "listening" / "protocols" / "v1.json"
+_PROTOCOL_PATH = _REPO_ROOT / "benchmark" / "listening" / "protocols" / "v2.json"
 _STUDY = "historical_listening"
-_VERSION = 1
+_VERSION = 2
+# The predecessor that version 2 amends, named by path rather than read from the file, so the
+# amendment chain cannot be redirected by editing the protocol file.
+_PREDECESSOR_VERSION = 1
+_PREDECESSOR_PROTOCOL_PATH = "benchmark/listening/protocols/v1.json"
+_PREDECESSOR_DOCUMENT_PATH = "docs/listening-study-protocol-v1.md"
 _BENCHMARK_PATH = "benchmark/protocols/v14.json"
 _UNIVERSE_PATH = "benchmark/listening/manifests/universe_v1.json"
 _SAMPLE_RATE_HZ = 16000
@@ -60,6 +67,7 @@ _ROOT_KEYS = frozenset(
     {
         "study",
         "protocol_version",
+        "amends",
         "benchmark_protocol",
         "source",
         "fetch",
@@ -77,11 +85,12 @@ _ROOT_KEYS = frozenset(
     }
 )
 
-# Pinned digests. Each one is written beside the matching value in v1.json, and the loader
-# refuses a mismatch in either place. The protocol digest is set last, once the file's content
-# is final. The universe digest is set once the universe file is built, from its own bytes.
+# Pinned digests. The protocol digest is the digest of v2.json's bytes, set last, once the file's
+# content is final. The universe digest is set once the universe file is built, from its own
+# bytes. The predecessor digests are not pinned here: v2.json records them under `amends`, and
+# `_check_amends` recomputes them from the archived files.
 PINNED_PROTOCOL_SHA256 = (
-    "c09ea242d9b98544d1b10c661fdd3dada6391066cb1dbc2b39ebe6a454175ad4"  # pragma: allowlist secret
+    "1b5c1d33aa4d64a9d35e2434f957338824ec19a63df958c5f61a259dbf55c89e"  # pragma: allowlist secret
 )
 PINNED_UNIVERSE_SHA256 = (
     "c21230d99ccc69c728da36913f428f3fe0647b2210a8b0d8b225c22eb2a83497"  # pragma: allowlist secret
@@ -101,6 +110,22 @@ class BenchmarkReference:
 
     path: str
     sha256: str
+
+
+@dataclass(frozen=True)
+class Amends:
+    """The predecessor this version amends, with the digests of its file and archived document.
+
+    The loader recomputes both digests from the archived files, so the chain is checked rather
+    than only recorded.
+    """
+
+    protocol_version: int
+    protocol_path: str
+    protocol_sha256: str
+    document_path: str
+    document_sha256: str
+    reason: str
 
 
 @dataclass(frozen=True)
@@ -219,6 +244,7 @@ class ListeningProtocol:
     sha256: str
     study: str
     protocol_version: int
+    amends: Amends
     benchmark: BenchmarkReference
     source: Source
     fetch: Fetch
@@ -430,6 +456,53 @@ def _parse_benchmark(data: Mapping[str, Any]) -> BenchmarkReference:
     if sha256 != PINNED_BENCHMARK_PROTOCOL_SHA256:
         _refuse("benchmark_protocol.sha256 does not match the pinned benchmark protocol")
     return BenchmarkReference(path=path, sha256=sha256)
+
+
+def _parse_amends(data: Mapping[str, Any]) -> Amends:
+    """The amends section: the predecessor's version and paths, its digests, and the reason.
+
+    Args:
+        data: The section.
+
+    Returns:
+        The amendment record. Its paths are the frozen predecessor paths, and its digests are
+        checked for form here and against the files on disk by `_check_amends`.
+
+    Raises:
+        ListeningProtocolError: If a key is missing or unknown, the version or a path is not the
+            predecessor's, or the reason is empty.
+    """
+    keys = frozenset(
+        {
+            "protocol_version",
+            "protocol_path",
+            "protocol_sha256",
+            "document_path",
+            "document_sha256",
+            "reason",
+        }
+    )
+    _exact(data, "amends", keys)
+    version = _get(data, "amends", "protocol_version", int)
+    if version != _PREDECESSOR_VERSION:
+        _refuse(f"amends.protocol_version must be {_PREDECESSOR_VERSION}, got {version}")
+    for key, frozen in (
+        ("protocol_path", _PREDECESSOR_PROTOCOL_PATH),
+        ("document_path", _PREDECESSOR_DOCUMENT_PATH),
+    ):
+        if _get(data, "amends", key, str) != frozen:
+            _refuse(f"amends.{key} must be {frozen!r}; the amendment chain is not redirectable")
+    reason = _get(data, "amends", "reason", str)
+    if not reason.strip():
+        _refuse("amends.reason must not be empty")
+    return Amends(
+        protocol_version=version,
+        protocol_path=_PREDECESSOR_PROTOCOL_PATH,
+        protocol_sha256=_digest(data, "amends", "protocol_sha256"),
+        document_path=_PREDECESSOR_DOCUMENT_PATH,
+        document_sha256=_digest(data, "amends", "document_sha256"),
+        reason=reason,
+    )
 
 
 def _parse_source(data: Mapping[str, Any]) -> Source:
@@ -865,6 +938,7 @@ def _parse_document(data: Mapping[str, Any], sha256: str) -> ListeningProtocol:
         sha256=sha256,
         study=_STUDY,
         protocol_version=_VERSION,
+        amends=_parse_amends(_get(data, "protocol", "amends", dict)),
         benchmark=_parse_benchmark(_get(data, "protocol", "benchmark_protocol", dict)),
         source=_parse_source(_get(data, "protocol", "source", dict)),
         fetch=_parse_fetch(_get(data, "protocol", "fetch", dict)),
@@ -943,6 +1017,46 @@ def _check_benchmark_file(benchmark: BenchmarkReference) -> None:
         _refuse(f"{benchmark.path} on disk does not match the digest this study pins")
 
 
+def _file_sha256(rel_path: str) -> str:
+    """The SHA-256 of a repository file, read from the path relative to the repository root.
+
+    Args:
+        rel_path: The repository-relative path.
+
+    Returns:
+        The lowercase hexadecimal digest of the file's bytes.
+
+    Raises:
+        ListeningProtocolError: If the file cannot be read.
+    """
+    try:
+        return hashlib.sha256((_REPO_ROOT / rel_path).read_bytes()).hexdigest()
+    except OSError as error:
+        logger.error("Listening protocol: cannot read %s: %s", rel_path, error)
+        raise ListeningProtocolError(f"cannot read {rel_path}") from error
+
+
+def _check_amends(amends: Amends) -> None:
+    """Refuse an amendment chain whose predecessor files differ from the digests it records.
+
+    Args:
+        amends: The amendment record, whose digests are the ones the protocol file states.
+
+    Raises:
+        ListeningProtocolError: If a predecessor file is missing or its digest differs.
+    """
+    for label, rel_path, recorded in (
+        ("protocol", amends.protocol_path, amends.protocol_sha256),
+        ("document", amends.document_path, amends.document_sha256),
+    ):
+        actual = _file_sha256(rel_path)
+        if actual != recorded:
+            _refuse(
+                f"amends.{label}_sha256 records {recorded[:12]} but {rel_path} hashes to "
+                f"{actual[:12]}; the archived predecessor has been modified"
+            )
+
+
 def load_listening_protocol() -> ListeningProtocol:
     """The frozen listening protocol, with every digest checked.
 
@@ -956,6 +1070,7 @@ def load_listening_protocol() -> ListeningProtocol:
     protocol = _parse_bytes(raw)
     _check_pins(protocol)
     _check_benchmark_file(protocol.benchmark)
+    _check_amends(protocol.amends)
     return protocol
 
 
@@ -963,7 +1078,8 @@ def load_protocol_for_listing() -> ListeningProtocol:
     """The protocol for building the universe, with every digest except the universe's checked.
 
     The universe digest cannot be checked before the universe exists, so this is the one
-    caller that skips that check. It still checks the protocol file and the benchmark file.
+    caller that skips that check. It still checks the protocol file, the benchmark file and the
+    amendment chain.
 
     Returns:
         The protocol.
@@ -977,4 +1093,5 @@ def load_protocol_for_listing() -> ListeningProtocol:
     if protocol.sha256 != PINNED_PROTOCOL_SHA256:
         _refuse("the protocol file's digest does not match the pinned protocol digest")
     _check_benchmark_file(protocol.benchmark)
+    _check_amends(protocol.amends)
     return protocol
