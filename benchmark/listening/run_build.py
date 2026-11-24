@@ -1,9 +1,10 @@
 """The build command: blinded listening clips and a sealed key, from an acquisition directory.
 
-Run it from the repository root, with the OpGAN checkpoint and the UVR model directory in place:
+Run it from the repository root, with the OpGAN checkpoint and the UVR model directory in place.
+The engines import the backend's `app` package, so `backend` goes on the import path:
 
-    uv run python -m benchmark.listening.run_build --acquisition-dir DIR --out-dir NEW_DIR
-        --blind-seed SEED --uvr-model-dir DIR
+    PYTHONPATH=backend uv run --frozen python -m benchmark.listening.run_build
+        --acquisition-dir DIR --out-dir NEW_DIR --blind-seed SEED --uvr-model-dir DIR
 
 The blinding seed is an operator secret. It is written only into the sealed key, and it should not
 be stored in the repository. The output directory must not exist, and it is published whole or not
