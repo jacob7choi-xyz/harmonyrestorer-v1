@@ -1,0 +1,169 @@
+{
+  "study": "historical_listening",
+  "protocol_version": 2,
+  "note": "Frozen protocol for a blind listening study comparing the original, OpGAN and UVR restorations of pre-1923 78 rpm recordings. Code reads this file through benchmark.listening.protocol.load_listening_protocol, which rejects unknown and missing keys, checks the semantic relations below, and checks the pinned digests. Changing a value here changes the study and needs a new protocol version.",
+  "amends": {
+    "protocol_version": 1,
+    "protocol_path": "benchmark/listening/protocols/v1.json",
+    "protocol_sha256": "c09ea242d9b98544d1b10c661fdd3dada6391066cb1dbc2b39ebe6a454175ad4",
+    "document_path": "docs/listening-study-protocol-v1.md",
+    "document_sha256": "8f7c5fe84aa3fa79201bcfc1d0e63753a1adf105e667fc502418f711b375d209",
+    "reason": "Written on 2026-11-24. No audio had been downloaded under protocol v1 when this amendment was written. The only network code in the listening package is in benchmark/listening/universe.py, which requests the listing and the item metadata and no audio. This amendment changes two things. First, protocol v1 says the build downmixes and resamples the UVR output to 16 kHz itself. The backend UVR service already makes that conversion before it returns the file. In backend/app/services/denoiser.py, _separate_and_convert writes load_mono(clean_file, _OUTPUT_SR) with _OUTPUT_SR set to 16000. In backend/app/services/wav_io.py, load_mono averages the channels in float32 when the stem has more than one channel, and resamples with librosa.resample when the sample rate differs from 16000. The locked librosa is 0.11.0, whose resample default res_type is soxr_hq. The file is written with subtype PCM_16. The study therefore reads the service's 16 kHz output and does not convert it a second time. Second, protocol v1 replaces an item that fails to download. A transient network failure should not decide which recordings are tested. Benchmark protocol v14 applies that principle through its retries_exhausted rule, selection.retries_exhausted_code ACQUISITION_RETRIES_EXHAUSTED, and this amendment applies it to the replacement rule of this study."
+  },
+  "benchmark_protocol": {
+    "path": "benchmark/protocols/v14.json",
+    "sha256": "c381a0103c0ad8337c8abd3e5a3c0425757ddfa4d69325152345045983c3c2f2",
+    "note": "The canonicalisation recipe and the model pins are read from this file and are not repeated here. The model digests are system_execution.opgan_checkpoint_sha256 and the three uvr digests beside it."
+  },
+  "source": {
+    "collection": "georgeblood",
+    "search_query": "collection:georgeblood AND date:[1900-01-01 TO 1922-12-31] AND subject:(classical)",
+    "search_fields": ["identifier", "date", "title", "subject", "creator"],
+    "search_sort": "identifier asc",
+    "search_rows_per_page": 100,
+    "search_url": "https://archive.org/advancedsearch.php",
+    "metadata_url_template": "https://archive.org/metadata/{identifier}",
+    "listing_date": "2026-11-24",
+    "note": "The Internet Archive collection of 78 rpm transfers by George Blood. The listing date is the day the collection was read. The search is paged and the pages are read until the count reported by the first page is reached."
+  },
+  "fetch": {
+    "user_agent": "research-client",
+    "timeout_s": 60.0,
+    "max_response_bytes": 8388608,
+    "pause_s_between_requests": 0.6,
+    "note": "Only metadata responses are fetched. No audio is downloaded before this protocol is merged. A non-200 response stops the listing, since a partial universe would not be the one this file describes."
+  },
+  "universe": {
+    "path": "benchmark/listening/manifests/universe_v1.json",
+    "sha256": "c21230d99ccc69c728da36913f428f3fe0647b2210a8b0d8b225c22eb2a83497",
+    "rule": {
+      "require_instrumentation_line": true,
+      "require_main_flac_count": 1,
+      "keep_if_instrumentation_matches": [
+        "\\b(violin|violoncello|cello|viola|piano|pianoforte|harp)\\s+solo\\b",
+        "\\bstring\\s+(quartet|trio|quintet)\\b"
+      ],
+      "drop_if_instrumentation_or_title_matches_vocal": [
+        "\\b(tenor|soprano|baritone|bariton\\w*|contralto|mezzo|basso|vocal\\w*|voices?|sung|sings?|singing|singer|chorus|choir|choral|aria|recitative|duet|songs?)\\b|\\bin (italian|english|french|german|russian|latin|spanish)\\b"
+      ],
+      "drop_if_instrumentation_or_title_matches_accordion": [
+        "\\baccordion\\b"
+      ],
+      "flags": ["ignorecase"],
+      "note": "Patterns are applied with Python's re module. The instrumentation line is the description text that is neither a Performer or Writer label nor a digitisation or matrix note. The title is checked for the two drop patterns only. A keep pattern is checked on the instrumentation line only, so a title cannot make an item a solo recording. An item is kept when no drop pattern matches and a keep pattern matches. A listed item with no instrumentation line, or without exactly one main FLAC file, is dropped before the patterns are read."
+    },
+    "note": "The universe is the set of items the rule keeps from the listing. Its file records every kept item, and every excluded item with its reason, so the rule can be checked against the listing."
+  },
+  "selection": {
+    "seed": 20261124,
+    "sample_size": 10,
+    "order": "benchmark.selection.walk_order over the universe identifiers: sorted by code point, then indexed by numpy PCG64(seed).permutation.",
+    "performer_split_patterns": [";", "\\band\\b", "&"],
+    "performer_split_note": "Each listed performer name is split by each pattern in turn, in list order, with the same flags as the universe rule. The parts are stripped and empty parts are dropped. A name such as 'Fritz Kreisler and Efrem Zimbalist' therefore gives two performers. 'Flonzaley Quartet' stays one.",
+    "performer_rule": "Each part from performer_split_patterns is compared by casefold() and whitespace collapse. Two parts match when their keys are equal. Accents and punctuation are not stripped. An item is skipped when any of its performer parts matches a part already selected.",
+    "replacement_rule": "An item is replaced only for one of four reasons, and the reason is recorded with the replacement. (1) Permanent unavailability: a fetch ends in an HTTP status that benchmark protocol v14 lists in selection.permanent_failure_codes, which are 401, 403, 404, 410 and 451 in that file. (2) Checksum mismatch: every attempt on the item ends in a size, md5 or sha1 mismatch with the pinned universe. (3) Canonicalisation refusal: the canonicalisation of protocol v14 refuses the downloaded bytes. (4) Too short: the item has no valid window, as item_with_no_valid_window_rule states. Any other fetch failure is transient. A transient failure is retried on the same item up to selection.acquisition_retries times in benchmark protocol v14, which is 3 in that file, so at most 4 attempts are made. A size, md5 or sha1 mismatch on one attempt is a transient failure of that attempt. When every attempt ends in a mismatch, the item is replaced under reason (2). When the attempts end without success and any of them is a transient failure other than a mismatch, the acquisition run aborts with no output and is run again later, and no replacement is made. A network condition must not decide which items are tested. When an item is replaced, its selection is removed and the walk continues with the next item after the last item already considered. The walk does not return to the start of the order, so the names of a removed item do not reopen an earlier skipped item.",
+    "item_with_no_valid_window_rule": "An item whose duration gives no valid window (see clips) is replaced under the same rule, with the reason too_short.",
+    "note": "Selection is a deterministic function of the universe file and this section."
+  },
+  "clips": {
+    "duration_s": 8.0,
+    "margin_s": 15,
+    "sample_rate_hz": 16000,
+    "duration_source": "The duration of a recording is its canonical sample count divided by sample_rate_hz, as read from the decoded v14 canonical waveform.",
+    "start_range_whole_seconds": "Whole seconds from margin_s to floor(duration_s) - margin_s - duration_s, both ends inclusive. A recording with floor(duration_s) below 38 has no valid window.",
+    "seed_rule": "digest = sha256 of the UTF-8 bytes of the identifier. words = the 8 big-endian unsigned 32-bit integers of the first 32 bytes of the digest. The generator is numpy Generator(PCG64(SeedSequence([selection.seed, *words]))). The start is drawn with integers(low, high, endpoint=True).",
+    "one_window_per_recording": true,
+    "note": "The same window is cut from every condition after the whole side has been processed, so every condition presents the same eight seconds of the same performance. The window is drawn once per recording and is not chosen by a listener or by the result."
+  },
+  "conditions": {
+    "names": ["original", "opgan", "uvr"],
+    "original": "The v14 canonical waveform: 16 kHz mono, produced by the protocol v14 canonicalisation recipe from the whole side.",
+    "opgan": "The backend OpGAN service run on the whole canonical 16 kHz side.",
+    "uvr": "The whole side is downmixed to mono and resampled to 44100 Hz with librosa soxr_hq, as protocol v14 resamples. The backend UVR service runs on that input. The service then converts its denoised stem itself. If the stem has more than one channel, the channels are averaged in float32. If the stem's sample rate is not 16000 Hz, the samples are resampled to 16000 Hz with librosa.resample, whose default res_type is soxr_hq in librosa 0.11.0. The 16 kHz samples are written as a WAV with subtype PCM_16, which is a 16-bit file. This is the conversion the backend applies to the UVR stem before it returns the file. The build reads that 16 kHz output and does not resample it again.",
+    "presentation": "All three conditions are presented at 16 kHz mono. Listeners never hear the full-band transfer. The UVR input is processed at 44.1 kHz. Listeners hear only the 16 kHz UVR output that the backend returns.",
+    "same_window_rule": "The clip window (see clips) is cut from each condition after the whole side is processed."
+  },
+  "loudness": {
+    "meter": "ITU-R BS.1770-4 integrated loudness, with K-weighting, 400 ms gating blocks overlapping by 0.75, an absolute gate of -70 LKFS and a relative gate of -10 LU.",
+    "measured_on": "Each eight-second window at 16 kHz, for each condition.",
+    "target_lkfs": -23.0,
+    "sample_peak_ceiling_dbfs": -1.0,
+    "sample_peak_note": "The ceiling applies to the sample peak after gain, not to a true peak as BS.1770 defines it.",
+    "target_step_lu": 0.1,
+    "target_lowering_rule": "When any condition's sample peak after gain exceeds the ceiling, the target is lowered by target_step_lu for all three conditions of that clip together, and the check is repeated until no condition exceeds the ceiling. Every gain applied is recorded.",
+    "step_note": "No lowering step size is specified elsewhere, so this protocol sets 0.1 LU. A smaller step lowers the target by less at each check.",
+    "presentation_format": "16-bit PCM WAV. Each sample is multiplied by 2**15 and rounded to the nearest integer. A window whose rounded sample falls outside the int16 range is refused, so no sample is clipped."
+  },
+  "trials": {
+    "pairs": [
+      ["original", "opgan"],
+      ["original", "uvr"],
+      ["opgan", "uvr"]
+    ],
+    "scored_trials_per_listener": 30,
+    "catch_trials_per_listener": 2,
+    "catch_trial_rule": "A catch trial plays one condition on both sides. Two catch trials are drawn for each listener from the listener's generator, each on a different clip and a condition chosen from the three conditions.",
+    "question": "Which sounds better overall?",
+    "answers": ["A", "B", "No preference"],
+    "comment": "An optional free-text comment is accepted for each trial.",
+    "order_rule": "The trial order and the side of each condition (A or B) are drawn from numpy Generator(PCG64(SeedSequence([selection.seed, listener_index]))). listener_index counts listeners in order of consent, from 0.",
+    "note": "Each clip appears in each of the three pairs once per listener, which gives 30 scored trials for 10 clips."
+  },
+  "listeners": {
+    "minimum_age_years": 18,
+    "self_reported_hearing": "normal",
+    "playback": "headphones",
+    "excluded_from_scored_panel": ["the author of the OpGAN model"],
+    "identifier": "A pseudonymous listener ID assigned by the study. No name, email address or other contact detail is stored with a listener's answers.",
+    "consent_text": "I agree that my answers may be counted and published only as summary results, and I understand that I can stop at any time.",
+    "note": "Listeners are asked to confirm the age and hearing statements before the first trial. The consent sentence is shown before the first trial."
+  },
+  "exclusion": {
+    "catch_trial_rule": "A listener who answers A or B on both catch trials is excluded.",
+    "incomplete_rule": "A listener who does not answer every scored and catch trial is excluded.",
+    "reporting": "Excluded listeners are counted, and each exclusion is reported with its reason. Their answers are not analysed."
+  },
+  "stages": {
+    "pilot": {
+      "max_listeners": 10,
+      "definition": "The first complete listeners, in order of consent, up to max_listeners."
+    },
+    "full_study": {
+      "minimum_listeners_total": 15,
+      "count_basis": "The number of listeners who consent to take part, pilot listeners included. Results are not part of this count.",
+      "decision_rule": "The full study runs if and only if the count in count_basis reaches minimum_listeners_total. The decision depends only on that count, never on any answer."
+    },
+    "pooling_rule": "Pilot answers are pooled with the full study only if nothing in this protocol or in the stimuli changed between the stages."
+  },
+  "analysis": {
+    "descriptive_only": true,
+    "reported_per_pair": [
+      "counts and shares of judgments preferring the first condition, the second condition, and no preference"
+    ],
+    "reported_per_listener": "counts of each answer per listener",
+    "reported_per_clip": "a table of counts for each clip and pair",
+    "interval": {
+      "method": "percentile bootstrap, resampling listeners",
+      "level": 0.95,
+      "iterations": 10000,
+      "seed": 20261124,
+      "minimum_included_listeners": 10,
+      "label": "descriptive"
+    },
+    "reporting_rules": [
+      "No p-values are reported.",
+      "No significance language is used.",
+      "No overall winner is named."
+    ]
+  },
+  "publication": {
+    "published": "Results only, as described in analysis.",
+    "great78_audio": "Not published. Recordings from the collection are not redistributed with the results.",
+    "training_overlap": {
+      "raw_digest_check": "Each candidate's raw FLAC sha256 is compared with the sha256 of each of the 145 training recordings in benchmark/manifests/training_corpus.json.",
+      "decoded_digest_check": "Each candidate's decoded PCM digest is compared with the recordings in benchmark/manifests/training_decoded_pcm.json.",
+      "mfcc_screen": "Skipped.",
+      "mfcc_skip_reason": "Reasoning, not a measurement. If the training recordings are performances made after 1922, a recording made before 1923 cannot be a copy of one of them, so an MFCC match between the two would not indicate copying. This protocol does not check the premise about the training dates. The MFCC screen has also not been calibrated on noisy audio, as protocol v14 duplicate_detection records."
+    }
+  }
+}

@@ -1,8 +1,21 @@
 # Blind listening study protocol (historical recordings)
 
-This document explains the listening study that compares three versions of each recording: the original transfer, the OpGAN restoration, and the UVR restoration. The frozen values are in `benchmark/listening/protocols/v1.json`. This page describes them and gives the reason for each choice where a reason exists.
+This document explains the listening study that compares three versions of each recording: the original transfer, the OpGAN restoration, and the UVR restoration. The frozen values are in `benchmark/listening/protocols/v2.json`. This page describes them and gives the reason for each choice where a reason exists.
 
 > **Note:** The protocol is frozen when this change is merged. No audio was downloaded before the merge. The listing used to build the universe read archive.org metadata only.
+
+## Amendment record: version 1 to version 2
+
+Version 2 was written on 2026-11-24. It amends version 1, which is archived in `benchmark/listening/protocols/v1.json`, with this document archived as `docs/listening-study-protocol-v1.md`. The loader reads version 2 only. It recomputes the SHA-256 of both archived files and refuses the protocol if either differs from the digest recorded in the amendment. Those digests are `c09ea242d9b98544d1b10c661fdd3dada6391066cb1dbc2b39ebe6a454175ad4` for the protocol file and `8f7c5fe84aa3fa79201bcfc1d0e63753a1adf105e667fc502418f711b375d209` for the document.
+
+> **Note:** No audio had been downloaded under version 1 when this amendment was written. The only network code in the listening package is in `benchmark/listening/universe.py`, which requests the listing and the item metadata and no audio.
+
+Version 2 changes two things and nothing else.
+
+1. The UVR condition. Version 1 says the build downmixes and resamples the UVR output to 16 kHz itself. The backend UVR service already makes that conversion before it returns the file. In `backend/app/services/denoiser.py`, `_separate_and_convert` writes `load_mono(clean_file, 16000)`. In `backend/app/services/wav_io.py`, `load_mono` averages the channels in float32 when the stem has more than one channel, and resamples with `librosa.resample` when the stem's rate differs from 16000 Hz. The locked librosa is 0.11.0, whose default `res_type` is `soxr_hq`. The file is written with subtype `PCM_16`. The study uses that 16 kHz output and does not convert it a second time.
+2. The replacement rule. Version 1 replaces an item that fails to download. A transient network failure should not decide which recordings are tested. Benchmark protocol v14 applies that principle through its `retries_exhausted` rule, and version 2 applies it here. An item is replaced for four named reasons only. A transient failure is retried, and when the retries end without success the acquisition run stops with no output and is run again later.
+
+The universe manifest, `benchmark/listening/manifests/universe_v1.json`, is unchanged. It still records `protocol_version` 1, the version it was listed under. The reader does not check that field.
 
 ## What the study asks
 
@@ -32,7 +45,9 @@ The rule is written as regular expressions in the protocol file. The code compil
 
 Ten recordings are selected. The walk takes the universe in a fixed order: the identifiers are sorted, then permuted with numpy's PCG64 generator seeded with 20261124. Each listed performer name is split on semicolons, on the whole word `and`, and on `&`. A name such as `Fritz Kreisler and Efrem Zimbalist` therefore gives two performers, and `Flonzaley Quartet` stays one. An item is taken when none of its performer parts has already been taken. Parts are compared after casefolding and whitespace collapse, so accents and punctuation still distinguish names.
 
-If a taken item later fails to download, fails its size, md5 or sha1 check, or fails the canonicalisation of protocol v14, its choice is removed and the walk continues after the last item it considered. It does not start again from the beginning. The reason is recorded. This choice matters: a removed item frees its performer names, and a walk that started again would take an item it had already passed over. The rule and its test are in `benchmark/tests/test_listening_selection.py`.
+A taken item is replaced only for one of four reasons. It is permanently unavailable, meaning a fetch ends in an HTTP status that benchmark protocol v14 lists as permanent (401, 403, 404, 410 or 451 in that file). Its size, md5 or sha1 differs from the pinned universe on every attempt. Protocol v14 canonicalisation refuses its bytes. Or it has no valid clip, which is recorded as `too_short`. A transient fetch failure, such as a network error, a timeout or a server error, is retried on the same item up to the number of retries that benchmark protocol v14 sets, which is 3 in that file. A size, md5 or sha1 mismatch on one attempt counts as a transient failure of that attempt, so a damaged transfer on one attempt does not decide the item. When every attempt ends in a mismatch, the item is replaced. When the attempts end without success and any of them was a transient failure other than a mismatch, the acquisition run stops with no output and is run again later. No item is replaced in that case, because a network condition must not decide which recordings are tested.
+
+When a taken item is replaced, its choice is removed and the walk continues after the last item it considered. It does not start again from the beginning. The reason is recorded. This choice matters: a removed item frees its performer names, and a walk that started again would take an item it had already passed over. The rule and its test are in `benchmark/tests/test_listening_selection.py`.
 
 ## Clips
 
@@ -48,9 +63,11 @@ Each clip is presented in three conditions.
 
 - `original` is the canonical 16 kHz mono waveform from the protocol v14 recipe.
 - `opgan` is the OpGAN service run on the whole canonical side.
-- `uvr` is the UVR service run on the whole side, downmixed to mono and resampled to 44.1 kHz. Its output is downmixed to mono if needed and resampled to 16 kHz.
+- `uvr` is the UVR service run on the whole side, downmixed to mono and resampled to 44.1 kHz. The service converts its denoised stem to 16 kHz mono itself. It averages the channels in float32 when the stem has more than one channel, resamples to 16000 Hz with librosa `soxr_hq` when the rate differs, and writes a 16-bit WAV (subtype `PCM_16`). The build reads that 16 kHz output and does not resample it again.
 
-All three are presented at 16 kHz mono. Listeners never hear the 44.1 kHz output, only its 16 kHz version.
+All three are presented at 16 kHz mono. Listeners hear only the 16 kHz output of the UVR service, never the 44.1 kHz input.
+
+> **Note:** The backend writes the UVR output as 16-bit PCM, so the samples the build reads for the UVR condition are already quantised to 16 bits. This version keeps that write as it is, and the loudness gain is applied after the build reads the file.
 
 ## Loudness
 
