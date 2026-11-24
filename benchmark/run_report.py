@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from benchmark.aggregation import BaselineSummary, MetricSummary
-from benchmark.atomic_write import write_atomically
+from benchmark.atomic_write import write_directory_atomically
 from benchmark.protocol import ProtocolError, load_protocol
 from benchmark.report import Outcome, ReportError, RunReport, StratumReport, build_report
 from benchmark.scoring import OPGAN, UVR
@@ -283,24 +283,24 @@ def _renderings(report: RunReport) -> tuple[bytes, bytes]:
 
 
 def write_report(output_dir: Path, report: RunReport) -> None:
-    """Write the JSON and the Markdown into a new directory, each through an atomic replace.
+    """Write the JSON and the Markdown into a new directory, published together or not at all.
 
     Both renderings are built before the directory is created, so a rendering failure leaves no
     directory behind.
 
     Raises:
         ReportError: If the directory exists already, a rendering fails, or the directory cannot be
-            created.
+            written.
     """
     _refuse_existing(output_dir)
     json_bytes, markdown_bytes = _renderings(report)
     try:
-        output_dir.mkdir(parents=True)
+        write_directory_atomically(
+            output_dir, {JSON_NAME: json_bytes, MARKDOWN_NAME: markdown_bytes}
+        )
     except OSError as error:
-        logger.error("Cannot create report directory %s: %s", output_dir, error)
-        raise ReportError(f"report directory {output_dir} cannot be created: {error}") from error
-    write_atomically(output_dir / JSON_NAME, json_bytes)
-    write_atomically(output_dir / MARKDOWN_NAME, markdown_bytes)
+        logger.error("Cannot write report directory %s: %s", output_dir, error)
+        raise ReportError(f"report directory {output_dir} cannot be written: {error}") from error
 
 
 def _refuse_existing(output_dir: Path) -> None:

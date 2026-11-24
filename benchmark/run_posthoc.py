@@ -28,7 +28,7 @@ from typing import Any
 import numpy as np
 import numpy.typing as npt
 
-from benchmark.atomic_write import write_atomically
+from benchmark.atomic_write import write_directory_atomically
 from benchmark.canonicalisation import CanonicalWaveform
 from benchmark.conditioning import InvalidSystemOutput, condition_pair
 from benchmark.degradation import degrade_frame, frame_seed
@@ -38,6 +38,8 @@ from benchmark.frame_scoring import reference_frame
 from benchmark.framing import frame
 from benchmark.metrics import MetricInputError, log_spectral_distance
 from benchmark.posthoc import (
+    BAND_EDGE_HZ,
+    BAND_LAST_BIN,
     BAND_METRIC,
     CAPPED_METRICS,
     LABEL,
@@ -574,14 +576,48 @@ def render_markdown(report: RunReport, analyses: Mapping[str, StratumAnalysis]) 
 
 
 def _write(output_dir: Path, json_bytes: bytes, markdown_bytes: bytes) -> None:
-    """Create the new directory and write both files, each through an atomic replace."""
+    """Publish both files as one new directory, or nothing."""
     try:
-        output_dir.mkdir(parents=True)
+        write_directory_atomically(
+            output_dir, {JSON_NAME: json_bytes, MARKDOWN_NAME: markdown_bytes}
+        )
     except OSError as error:
-        logger.error("Cannot create post-hoc directory %s: %s", output_dir, error)
-        raise ReportError(f"post-hoc directory {output_dir} cannot be created: {error}") from error
-    write_atomically(output_dir / JSON_NAME, json_bytes)
-    write_atomically(output_dir / MARKDOWN_NAME, markdown_bytes)
+        logger.error("Cannot write post-hoc directory %s: %s", output_dir, error)
+        raise ReportError(f"post-hoc directory {output_dir} cannot be written: {error}") from error
+
+
+def _check_band_edge(protocol: Protocol) -> None:
+    """Refuse a protocol whose band edge disagrees with the post-hoc band.
+
+    The band is bins 0 to BAND_LAST_BIN inclusive. The bin at BAND_EDGE_HZ is
+    BAND_EDGE_HZ * n_fft / sample_rate, and BAND_EDGE_HZ must equal the lowest cutoff the
+    degradation draws. Both are checked against the protocol, so a change to either one fails
+    the run instead of silently moving the band.
+
+    Args:
+        protocol: The loaded protocol.
+
+    Raises:
+        PosthocError: If the bin or the lowest rolloff disagrees with BAND_EDGE_HZ.
+    """
+    expected_bin = (
+        BAND_EDGE_HZ
+        * protocol.metrics.log_spectral_distance.n_fft
+        / protocol.conditioning.sample_rate
+    )
+    if expected_bin != BAND_LAST_BIN:
+        logger.error(
+            "BAND_LAST_BIN %d does not match the protocol's band edge bin %s",
+            BAND_LAST_BIN,
+            expected_bin,
+        )
+        raise PosthocError(
+            f"BAND_LAST_BIN {BAND_LAST_BIN} does not match the band edge bin {expected_bin}"
+        )
+    lowest = min(protocol.degradation.ranges.rolloff_hz)
+    if lowest != BAND_EDGE_HZ:
+        logger.error("The lowest rolloff drawn is %s Hz, not BAND_EDGE_HZ %s", lowest, BAND_EDGE_HZ)
+        raise PosthocError(f"the lowest rolloff drawn is {lowest} Hz, not {BAND_EDGE_HZ} Hz")
 
 
 def _refuse_existing(output_dir: Path) -> None:
@@ -605,10 +641,12 @@ def run_posthoc(walk_dir: Path, systems_dir: Path, output_dir: Path) -> RunRepor
     Raises:
         ReportError: If the output exists, or the report's inputs cannot be read.
         ProtocolError: If the protocol does not load.
-        PosthocError: If a file does not match the systems results, or an analysis cannot run.
+        PosthocError: If a file does not match the systems results, an analysis cannot run,
+            or the protocol's band edge disagrees with the post-hoc band.
     """
     _refuse_existing(output_dir)
     protocol = load_protocol()
+    _check_band_edge(protocol)
     report = build_report(walk_dir, systems_dir, protocol)
     inputs = read_inputs(walk_dir, systems_dir, protocol)
     analyses = {

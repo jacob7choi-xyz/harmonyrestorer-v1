@@ -29,6 +29,7 @@ from report_fixtures import (
     write_lines,
 )
 
+from benchmark import atomic_write
 from benchmark.candidate_universe import UNIVERSE_SHA256
 from benchmark.protocol import Protocol, load_protocol
 from benchmark.report import (
@@ -39,7 +40,7 @@ from benchmark.report import (
     SUMMARY_NAME,
     ReportError,
 )
-from benchmark.run_report import JSON_NAME, MARKDOWN_NAME, main, run_report
+from benchmark.run_report import JSON_NAME, MARKDOWN_NAME, main, run_report, write_report
 
 PRIMARY_NAMES = ["reconstruction_snr", "si_snr", "log_spectral_distance"]
 SHIFT_NAMES = ["reconstruction_snr", "si_snr"]
@@ -551,3 +552,23 @@ def test_a_canonical_path_outside_the_walk_directory_refuses_the_report(
     with pytest.raises(ReportError, match="resolves outside the walk directory"):
         run_report(walk, base.systems, output)
     assert not output.exists()
+
+
+def test_a_failed_file_write_leaves_no_report_directory(
+    base: Bundle, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failure while the Markdown is written leaves neither the report nor a partial sibling."""
+    report = run_report(base.walk, base.systems, tmp_path / "unused")
+    real_write = atomic_write.write_atomically
+
+    def fail_on_markdown(target: Path, data: bytes) -> None:
+        if target.name == MARKDOWN_NAME:
+            raise OSError("simulated disk full")
+        real_write(target, data)
+
+    monkeypatch.setattr(atomic_write, "write_atomically", fail_on_markdown)
+    output = tmp_path / "out"
+    with pytest.raises(ReportError, match="cannot be written"):
+        write_report(output, report)
+    assert not output.exists()
+    assert not list(tmp_path.glob(".out.*"))

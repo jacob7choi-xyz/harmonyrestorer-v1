@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import hashlib
 import json
 from collections.abc import Iterator
@@ -14,6 +15,8 @@ import soundfile as sf
 from posthoc_fixtures import build_bundle, copy_bundle, update_results
 from report_fixtures import CHAMBER, SOLO, Bundle, pinned_universes
 
+from benchmark import atomic_write
+from benchmark import run_posthoc as run_posthoc_module
 from benchmark.posthoc import BAND_METRIC, LABEL, PosthocError
 from benchmark.protocol import Protocol, load_protocol
 from benchmark.report import RESULTS_NAME, ReportError
@@ -22,6 +25,7 @@ from benchmark.run_posthoc import (
     JSON_NAME,
     MARKDOWN_NAME,
     OUTPUTS_DIR,
+    _check_band_edge,
     main,
     run_posthoc,
 )
@@ -294,3 +298,47 @@ def test_a_reliability_finding_gets_no_post_hoc_number(copied: Bundle, fresh_out
     strata = read_document(fresh_output)["strata"]
     assert strata[SOLO] == {"outcome": "reliability_finding"}
     assert strata[CHAMBER] == {"outcome": "withheld"}
+
+
+def test_the_band_edge_agrees_with_the_loaded_protocol() -> None:
+    """The committed protocol puts the band edge at 4 kHz, which is bin 256 at 16 kHz and 1024 points."""
+    _check_band_edge(load_protocol())
+
+
+def test_a_band_last_bin_that_disagrees_with_the_protocol_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A band whose last bin does not sit at the band edge is refused before any analysis runs."""
+    monkeypatch.setattr(run_posthoc_module, "BAND_LAST_BIN", 255)
+    with pytest.raises(PosthocError, match="BAND_LAST_BIN 255"):
+        _check_band_edge(load_protocol())
+
+
+def test_a_lowest_rolloff_other_than_the_band_edge_is_refused() -> None:
+    """A degradation whose lowest cutoff is not the band edge is refused, since the band would be wrong."""
+    protocol = load_protocol()
+    ranges = dataclasses.replace(protocol.degradation.ranges, rolloff_hz=(4500.0, 8000.0))
+    changed = dataclasses.replace(
+        protocol, degradation=dataclasses.replace(protocol.degradation, ranges=ranges)
+    )
+    with pytest.raises(PosthocError, match=r"lowest rolloff drawn is 4500\.0 Hz"):
+        _check_band_edge(changed)
+
+
+def test_a_failed_file_write_leaves_no_post_hoc_directory(
+    base: Bundle, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A failure while the Markdown is written leaves neither the output nor a partial sibling."""
+    real_write = atomic_write.write_atomically
+
+    def fail_on_markdown(target: Path, data: bytes) -> None:
+        if target.name == MARKDOWN_NAME:
+            raise OSError("simulated disk full")
+        real_write(target, data)
+
+    monkeypatch.setattr(atomic_write, "write_atomically", fail_on_markdown)
+    output = tmp_path / "posthoc"
+    with pytest.raises(ReportError, match="cannot be written"):
+        run_into(base, output)
+    assert not output.exists()
+    assert not list(tmp_path.glob(".posthoc.*"))
