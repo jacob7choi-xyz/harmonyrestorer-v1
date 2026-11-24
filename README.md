@@ -291,23 +291,13 @@ Earlier SDR, PESQ and STOI figures were withdrawn: they were measured on the tra
 
 ## Samples
 
-Three noisy, restored and clean triplets for each model. Each link opens the WAV file.
+Three 6-second passages of Chopin piano music from the benchmark's demo partition: recordings from the CC0 Musopen Chopin collection that the selection checks found outside OpGAN's training set, and that no score used. The passages were chosen by ear. Each was degraded with one fixed noise profile inside the training ranges (pink hiss at 10 dB SNR, crackle, 60 Hz hum, a 5 kHz low-pass, no saturation), chosen so the noise is clearly audible; the benchmark itself draws its noise at random within those ranges. Both systems restored the same noisy file through the backend's own denoiser services. `scripts/make_demo_samples.py` regenerates the files, and `samples/MANIFEST.json` records the settings and each file's SHA-256. Each link opens the WAV file.
 
-**OpGAN** (custom-trained, in-distribution):
-
-| Track | Noisy | Restored | Clean |
-|-------|-------|----------|-------|
-| Bach | [noisy](samples/opgan/noisy_bach.wav) | [restored](samples/opgan/restored_bach.wav) | [clean](samples/opgan/clean_bach.wav) |
-| Beethoven | [noisy](samples/opgan/noisy_beethoven.wav) | [restored](samples/opgan/restored_beethoven.wav) | [clean](samples/opgan/clean_beethoven.wav) |
-| Tchaikovsky | [noisy](samples/opgan/noisy_tchaikovsky.wav) | [restored](samples/opgan/restored_tchaikovsky.wav) | [clean](samples/opgan/clean_tchaikovsky.wav) |
-
-**UVR** (pretrained baseline, for comparison):
-
-| Track | Noisy | Restored | Clean |
-|-------|-------|----------|-------|
-| Bach | [noisy](samples/uvr/bach_noisy.wav) | [restored](samples/uvr/bach_restored.wav) | [clean](samples/uvr/bach_clean.wav) |
-| Beethoven | [noisy](samples/uvr/beethoven_noisy.wav) | [restored](samples/uvr/beethoven_restored.wav) | [clean](samples/uvr/beethoven_clean.wav) |
-| Mozart | [noisy](samples/uvr/mozart_noisy.wav) | [restored](samples/uvr/mozart_restored.wav) | [clean](samples/uvr/mozart_clean.wav) |
+| Piece | Performer | Noisy | OpGAN | UVR | Clean |
+|---|---|---|---|---|---|
+| Ballade no. 3, Op. 47 (from 7:30) | Frank Levy | [noisy](samples/opgan/ballade_3_noisy.wav) | [restored](samples/opgan/ballade_3_restored.wav) | [restored](samples/uvr/ballade_3_restored.wav) | [clean](samples/opgan/ballade_3_clean.wav) |
+| Mazurka in C major, Op. 56 no. 2 (from 0:31) | Xuan He | [noisy](samples/opgan/mazurka_op56_2_noisy.wav) | [restored](samples/opgan/mazurka_op56_2_restored.wav) | [restored](samples/uvr/mazurka_op56_2_restored.wav) | [clean](samples/opgan/mazurka_op56_2_clean.wav) |
+| Waltz in A flat major, Op. 64 no. 3 (from 0:53) | Diana Hughes | [noisy](samples/opgan/waltz_op64_3_noisy.wav) | [restored](samples/opgan/waltz_op64_3_restored.wav) | [restored](samples/uvr/waltz_op64_3_restored.wav) | [clean](samples/opgan/waltz_op64_3_clean.wav) |
 
 ## Roadmap
 
