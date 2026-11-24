@@ -98,7 +98,7 @@ _EFFECT_NOTES = {
     ),
 }
 _CLAIM_NOTE = (
-    "These analyses were fixed in docs/benchmark-posthoc-analyses.md before any score was read. "
+    "These analyses were fixed in docs/benchmark-posthoc-analyses.md before the report ran. "
     "They are secondary to the protocol's primary results and change none of them."
 )
 _RowKey = tuple[str, int, str]

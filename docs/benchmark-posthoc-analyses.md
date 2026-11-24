@@ -80,3 +80,11 @@ Results broken down by degradation component, a held-out noise family, UVR run a
 native 44.1 kHz rate, further metrics (multi-resolution STFT distance, Frechet Audio
 Distance), an oracle ceiling, and a listening test are left to a separate study, to be
 specified and externally timestamped before any of its runs.
+
+## Note added 2026-11-24
+
+This document was merged in PR #33 at 00:35:18 UTC on 2026-11-24 (merge commit c40aaa6). The report's `report.json` was last modified at 00:35:51 UTC, about 33 seconds later. The merge therefore precedes the report's files, which orders this plan before the report ran. It cannot show that no score was viewed before the merge; that rests on the author's account.
+
+The sentence at line 25, "the band every frame keeps", is inexact. The degradation's lowest cutoff is 4 kHz, and its 4th-order Butterworth low-pass attenuates the top of the band in frames whose cutoff is near 4 kHz, by about 3 dB at 4 kHz for a 4 kHz cutoff (measured with `scipy.signal.butter(4, 4000, fs=16000)` and `freqz`). The band is therefore not kept unchanged in every frame.
+
+The label quoted under Rules, "post-hoc, added after the protocol froze, before any score was read", was changed in the code on 2026-11-24 to "post-hoc, fixed in docs/benchmark-posthoc-analyses.md before the report ran", because the first form cannot be shown from the repository.

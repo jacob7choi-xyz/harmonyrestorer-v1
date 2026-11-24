@@ -55,7 +55,7 @@ __all__ = [
 
 logger = logging.getLogger(__name__)
 
-LABEL = "post-hoc, added after the protocol froze, before any score was read"
+LABEL = "post-hoc, fixed in docs/benchmark-posthoc-analyses.md before the report ran"
 BAND_METRIC = "band_log_spectral_distance"
 RECONSTRUCTION_SNR = "reconstruction_snr"
 SI_SNR = "si_snr"

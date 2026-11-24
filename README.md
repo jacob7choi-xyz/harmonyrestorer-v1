@@ -203,7 +203,7 @@ From-scratch implementation of **1D Operational GANs** based on [Ince et al. 202
 
 ### Benchmark Results
 
-On solo piano and chamber recordings that are not in OpGAN's training set, degraded by OpGAN's own synthetic training noise and scored at 16 kHz mono, OpGAN's outputs were, on average, closer to the clean recording than UVR-DeNoise's on all three metrics in both strata. This is a narrow result:
+On solo piano and chamber recordings that are not in OpGAN's training set, degraded by OpGAN's own synthetic training noise and scored at 16 kHz mono, OpGAN's outputs were, on average, closer to the clean recording than UVR-DeNoise's on all three metrics in both strata, although for chamber log-spectral distance the performer-level t-interval in the post-hoc analyses includes zero. This is a narrow result:
 
 - **It is a test on OpGAN's training-family noise.** The degradation adds hiss and may add crackle, hum and saturation, and it always applies a low-pass filter (cutoff 4 to 8 kHz). OpGAN was trained on this same mix. UVR-DeNoise is a denoising model and, as far as we know, was not trained to restore filtered-out high frequencies or undo saturation, so part of OpGAN's lead likely comes from that difference rather than from denoising alone.
 - **UVR likely ran outside the setting it was designed for.** It received 16 kHz mono input, one 2-second frame at a time, with no surrounding context.
@@ -237,13 +237,13 @@ Means over the 30 test recordings. The interval is a 95% bootstrap interval that
 | *Diagnostic:* shift-tolerant reconstruction SNR | 15.17 | 15.66 | 18.64 | +2.99 [1.76, 4.02] |
 | *Diagnostic:* shift-tolerant SI-SNR | 17.85 | 18.46 | 20.10 | +1.64 [1.28, 1.94] |
 
-The low-pass filter delays the degraded input by about one sample, and reconstruction SNR and SI-SNR credit undoing that delay, which OpGAN was trained on and UVR, as far as we know, was not. The shift-tolerant rows score both systems at the best of a -1, 0 and +1 sample shift; with the delay set aside, OpGAN's SI-SNR lead falls from about 5 dB to about 2 dB in both strata. A single integer shift likely corrects this only in part, because the filter's delay varies with frequency. These rows are a diagnostic, not a headline. The same is true of the degraded input: against it, OpGAN raised reconstruction SNR by about 6.7 dB (piano) and 5.9 dB (chamber), UVR by about 0.7 and 0.3 dB.
+The low-pass filter delays the degraded input by about one sample, and reconstruction SNR and SI-SNR credit undoing that delay, which OpGAN was trained on and UVR, as far as we know, was not. The shift-tolerant rows score each system at the best of a -1, 0 and +1 sample shift per frame. That is a selection over three shifts, not an estimate of the delay. Under it, OpGAN's SI-SNR lead is 1.94 dB (piano) and 1.64 dB (chamber), against 5.16 and 4.94 dB for the primary metric. The shift raises UVR's SI-SNR by about 3.8 dB (piano) and 4.0 dB (chamber), and OpGAN's by about 0.6 and 0.7 dB. These rows are a diagnostic, not a headline. The same is true of the degraded input: against it, OpGAN raised reconstruction SNR by about 6.7 dB (piano) and 5.9 dB (chamber), UVR by about 0.7 and 0.3 dB.
 
 > **Note:** 11 and 14 performers are few for a bootstrap interval, which can then be narrower than its nominal 95%. Treat the intervals as descriptive uncertainty, not as a significance test. The post-hoc analyses below give a second interval that weights each performer equally rather than each recording; it is wider than the bootstrap interval in 5 of the 6 primary comparisons.
 
 #### Post-hoc analyses
 
-These were fixed in [docs/benchmark-posthoc-analyses.md](docs/benchmark-posthoc-analyses.md), merged before any score was read, and are secondary to the results above.
+These were fixed in [docs/benchmark-posthoc-analyses.md](docs/benchmark-posthoc-analyses.md), merged before the report ran (PR #33 merged at 00:35:18 UTC on 2026-11-24; the report's files were written about 33 seconds later), and are secondary to the results above.
 
 - **One paired difference per performer, with a t-interval over performers:**
 
@@ -253,7 +253,7 @@ These were fixed in [docs/benchmark-posthoc-analyses.md](docs/benchmark-posthoc-
   | Chamber (14 performers) | +5.20 [4.10, 6.29], 14 of 14 | +4.85 [4.36, 5.34], 14 of 14 | +0.70 [-0.07, 1.47], 13 of 14 | +1.30 [0.49, 2.12], 14 of 14 |
 
   Each cell gives the mean OpGAN advantage, its 95% t-interval, and how many performers favour OpGAN. Every performer favours OpGAN on reconstruction SNR and SI-SNR. For chamber log-spectral distance, the t-interval includes zero while the bootstrap interval above does not, so that result is less certain under the t-interval.
-- **Log-spectral distance below 4 kHz** (the lowest cutoff the degradation draws, so every frame keeps this band), means for degraded input, UVR and OpGAN: piano 8.86, 8.55, 8.19; chamber 6.30, 7.23, 5.78. On piano, OpGAN's lead below 4 kHz (+0.36 dB) is much smaller than its full-band lead (+1.50 dB). This suggests, but does not measure, that most of its spectral lead lies above 4 kHz, where the filter's cutoff falls. On chamber, UVR's output is further from the clean recording below 4 kHz than the degraded input is; this was observed, not explained.
+- **Log-spectral distance below 4 kHz** (4 kHz is the lowest cutoff the degradation draws; the 4th-order low-pass still attenuates the top of this band in frames whose cutoff is near 4 kHz, by about 3 dB at 4 kHz for a 4 kHz cutoff), means for degraded input, UVR and OpGAN: piano 8.86, 8.55, 8.19; chamber 6.30, 7.23, 5.78. On piano, OpGAN's lead below 4 kHz (+0.36 dB) is much smaller than its full-band lead (+1.50 dB). Log-spectral distance values are not additive across bands, so this does not measure what share of the lead lies above 4 kHz. On chamber, UVR's output is further from the clean recording below 4 kHz than the degraded input is; this was observed, not explained.
 - No output from either system reached the metrics' 60 dB cap, and none was silent.
 
 #### Informal blind listen
@@ -268,7 +268,7 @@ The benchmark follows a protocol frozen in code (`benchmark/protocols/v14.json`)
 |---|---|---|
 | v12 | Listing the original candidate collection showed it held exactly the 145 training recordings | Two new strata from other sources (Chopin piano, MusicNet chamber) |
 | v13 | An informal pilot on 4 tracks outside both training and test sources, which saw system outputs, found the filter's one-sample delay | Added the shift-tolerant diagnostic and the degraded-input baseline; primary metrics unchanged |
-| v14 | A selection walk under v13 (no system output) admitted no chamber recording, because MusicNet ships 32-bit float WAV | Admitted the WAV float format; the piano admissions were identical under v14 |
+| v14 | A selection walk under v13 (no system output) admitted no chamber recording, because MusicNet ships 32-bit float WAV | Admitted the WAV float format; the piano admissions were identical under v14 (checked by comparing the two runs' walk manifests: identifiers, partitions, positions and canonical digests) |
 
 The full record is in [docs/benchmark-protocol.md](docs/benchmark-protocol.md). One recording in the solo-piano test set is Chopin's Variations for Flute and Piano (B. 9); the frozen candidate list excluded the cello sonata but not this piece, and it was left in rather than changing the protocol after selection.
 

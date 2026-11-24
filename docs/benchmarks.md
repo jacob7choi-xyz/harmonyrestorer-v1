@@ -41,7 +41,7 @@ Model: UVR-DeNoise.pth via audio-separator. UVR internally upsamples to 44.1kHz 
 | PESQ     | **4.04**  | 3.72  | +0.32     |
 | STOI     | **0.960** | 0.953 | +0.007    |
 
-OpGAN outperforms UVR across all three metrics. The SDR gap (~12 dB) is substantial, roughly 4x better noise reduction. PESQ and STOI differences are smaller but consistent.
+OpGAN scored higher than UVR on all three metrics. PESQ and STOI differences are smaller but consistent.
 
 **Caveat**: Both models evaluated in-distribution (same dataset as OpGAN training). UVR was not trained on this data, so it is a genuinely out-of-distribution test for UVR but not for OpGAN. Out-of-distribution evaluation for OpGAN is a planned next step.
 
