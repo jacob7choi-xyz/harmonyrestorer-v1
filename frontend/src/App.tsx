@@ -537,7 +537,7 @@ export default function HarmonyRestorer(): React.JSX.Element {
                   />
                   <NowHearing source={demoPlayback.state.activeSource} />
                   <p className="max-w-sm text-center text-xs leading-relaxed text-ink-muted">
-                    Bach, degraded to tape-era noise and restored by the model.
+                    Chopin, Ballade no. 3, with synthetic tape-era noise added, then restored by the model.
                     Press play, then drag the line to hear the difference.
                   </p>
                 </div>
