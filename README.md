@@ -1,6 +1,6 @@
 # HarmonyRestorer v1
 
-A web app for denoising audio. You upload a recording, the backend runs it through a 1D Operational GAN (OpGAN) trained from scratch on classical recordings, and you get the restored audio back to compare and download.
+A web app built to restore analog-era classical recordings (tape hiss, vinyl crackle, hum, high-frequency loss). It runs a custom OpGAN at 16 kHz mono, chosen with historical transfers in mind. The model was trained and benchmarked on synthetic versions of these artifacts; it has not yet been tested on real analog transfers. You upload a recording, the backend runs it through the OpGAN, a 1D Operational GAN trained from scratch on classical recordings, and you get the restored audio back to compare and download.
 
 - **Model**: a custom-trained OpGAN, based on [Ince et al. 2022](https://arxiv.org/abs/2212.14618). UVR-DeNoise, through [audio-separator](https://github.com/karaokenerds/python-audio-separator), can be selected instead with `DENOISER_ENGINE=uvr`.
 - **Formats**: WAV, MP3, FLAC, OGG, M4A and AAC in; WAV, MP3, FLAC, OGG and M4A out. Restored audio is 16 kHz mono, the model's native rate.
@@ -203,13 +203,91 @@ From-scratch implementation of **1D Operational GANs** based on [Ince et al. 202
 
 ### Benchmark Results
 
-**Withdrawn pending re-evaluation.** Trained 100 epochs on Tesla T4 (~51 hours, ~$100 total GCP). Model operates at 16 kHz mono.
+On solo piano and chamber recordings that are not in OpGAN's training set, degraded by OpGAN's own synthetic training noise and scored at 16 kHz mono, OpGAN's outputs were, on average, closer to the clean recording than UVR-DeNoise's on all three metrics in both strata. This is a narrow result:
 
-Previously published SDR, PESQ, and STOI figures were computed across the full generated pair corpus rather than a source-track-disjoint evaluation set. Training and evaluation therefore shared source recordings, and in many cases the identical clean 2-second frame: the dataset holds five noise variants per frame, and the 90/10 split was drawn over pairs rather than over recordings, so roughly 41% of clean frames are expected to have sibling variants on both sides. Those figures characterize reconstruction over the corpus; they do not support a claim about generalization to unseen recordings, and the head-to-head margin against UVR is the most affected claim, since UVR never trained on any of this data and OpGAN trained on most of it.
+- **It is a test on OpGAN's training-family noise.** The degradation adds hiss and may add crackle, hum and saturation, and it always applies a low-pass filter (cutoff 4 to 8 kHz). OpGAN was trained on this same mix. UVR-DeNoise is a denoising model and, as far as we know, was not trained to restore filtered-out high frequencies or undo saturation, so part of OpGAN's lead likely comes from that difference rather than from denoising alone.
+- **UVR likely ran outside the setting it was designed for.** It received 16 kHz mono input, one 2-second frame at a time, with no surrounding context.
+- **There was no formal listening test.** The metrics are signal-level, not perceptual.
+- **Some references may be live recordings.** Room or audience noise that a system removes from one is scored as distortion.
+- **Some material was not tested:** orchestral music, real degraded transfers (for example 78 rpm discs), and noise outside the training family.
 
-The figures and their full context are retained in [docs/benchmarks.md](docs/benchmarks.md).
+#### What was measured
 
-A replacement is in progress, and its protocol was frozen before any evaluation material was selected: recording-level partitions, bootstrap intervals that resample performers rather than frames or single recordings, three signal-fidelity metrics chosen for music instead of the speech metrics used before, and publication gates that withhold a comparison unless both systems covered an identical declared population. The protocol is [documented](docs/benchmark-protocol.md) and, more usefully, enforced by a validating loader that refuses to run a configuration contradicting it.
+Two strata, each reported on its own and never pooled. **Solo piano:** Musopen's Chopin set on the Internet Archive (CC0). **Chamber:** MusicNet. The checks found none of it in OpGAN's training set: a seeded selection walk checked each candidate's file and decoded-audio digests against OpGAN's 145 training recordings and against every earlier admission, and screened it for a duplicate performance. UVR-DeNoise's training data was not checked, so the report's frozen claim scope, which says neither model was trained on these recordings, is unverified for UVR. Each stratum's test set is 30 recordings; piano has 3,909 scored 2-second frames from 11 performers, chamber 6,391 frames from 14 performer groups. Every frame was degraded once with a reproducible seed, run through both systems, and scored against the clean original; the degraded input was scored the same way as a baseline. All seven publication gates held in both strata, and both systems produced a valid output for every frame (coverage 1.000).
+
+Means over the 30 test recordings. The interval is a 95% bootstrap interval that resamples performers, not frames or recordings. A positive paired value means OpGAN scored better.
+
+**Solo piano**
+
+| Metric | Degraded input | UVR | OpGAN | OpGAN advantage, 95% interval |
+|---|---|---|---|---|
+| Reconstruction SNR (dB, higher is better) | 13.05 | 13.75 | 19.78 | +6.03 [5.49, 6.49] |
+| SI-SNR (dB, higher is better) | 15.08 | 15.95 | 21.11 | +5.16 [4.96, 5.30] |
+| Log-spectral distance (dB, lower is better) | 17.94 | 15.00 | 13.39 | +1.61 [1.38, 1.78] |
+| *Diagnostic:* shift-tolerant reconstruction SNR | 15.71 | 16.76 | 20.29 | +3.54 [2.95, 4.03] |
+| *Diagnostic:* shift-tolerant SI-SNR | 18.41 | 19.77 | 21.71 | +1.94 [1.65, 2.19] |
+
+**Chamber**
+
+| Metric | Degraded input | UVR | OpGAN | OpGAN advantage, 95% interval |
+|---|---|---|---|---|
+| Reconstruction SNR (dB, higher is better) | 12.14 | 12.48 | 18.06 | +5.59 [4.47, 6.58] |
+| SI-SNR (dB, higher is better) | 14.06 | 14.45 | 19.39 | +4.94 [4.54, 5.33] |
+| Log-spectral distance (dB, lower is better) | 13.94 | 12.20 | 11.26 | +0.94 [0.35, 1.51] |
+| *Diagnostic:* shift-tolerant reconstruction SNR | 15.17 | 15.66 | 18.64 | +2.99 [1.76, 4.02] |
+| *Diagnostic:* shift-tolerant SI-SNR | 17.85 | 18.46 | 20.10 | +1.64 [1.28, 1.94] |
+
+The low-pass filter delays the degraded input by about one sample, and reconstruction SNR and SI-SNR credit undoing that delay, which OpGAN was trained on and UVR, as far as we know, was not. The shift-tolerant rows score both systems at the best of a -1, 0 and +1 sample shift; with the delay set aside, OpGAN's SI-SNR lead falls from about 5 dB to about 2 dB in both strata. A single integer shift likely corrects this only in part, because the filter's delay varies with frequency. These rows are a diagnostic, not a headline. The same is true of the degraded input: against it, OpGAN raised reconstruction SNR by about 6.7 dB (piano) and 5.9 dB (chamber), UVR by about 0.7 and 0.3 dB.
+
+> **Note:** 11 and 14 performers are few for a bootstrap interval, which can then be narrower than its nominal 95%. Treat the intervals as descriptive uncertainty, not as a significance test. The post-hoc analyses below give a second interval that weights each performer equally rather than each recording; it is wider than the bootstrap interval in 5 of the 6 primary comparisons.
+
+#### Post-hoc analyses
+
+These were fixed in [docs/benchmark-posthoc-analyses.md](docs/benchmark-posthoc-analyses.md), merged before any score was read, and are secondary to the results above.
+
+- **One paired difference per performer, with a t-interval over performers:**
+
+  | Stratum | Reconstruction SNR | SI-SNR | Log-spectral distance | Log-spectral distance below 4 kHz |
+  |---|---|---|---|---|
+  | Solo piano (11 performers) | +5.76 [5.31, 6.21], 11 of 11 | +5.03 [4.69, 5.36], 11 of 11 | +1.50 [1.20, 1.79], 11 of 11 | +0.36 [0.02, 0.71], 9 of 11 |
+  | Chamber (14 performers) | +5.20 [4.10, 6.29], 14 of 14 | +4.85 [4.36, 5.34], 14 of 14 | +0.70 [-0.07, 1.47], 13 of 14 | +1.30 [0.49, 2.12], 14 of 14 |
+
+  Each cell gives the mean OpGAN advantage, its 95% t-interval, and how many performers favour OpGAN. Every performer favours OpGAN on reconstruction SNR and SI-SNR. For chamber log-spectral distance, the t-interval includes zero while the bootstrap interval above does not, so that result is less certain under the t-interval.
+- **Log-spectral distance below 4 kHz** (the lowest cutoff the degradation draws, so every frame keeps this band), means for degraded input, UVR and OpGAN: piano 8.86, 8.55, 8.19; chamber 6.30, 7.23, 5.78. On piano, OpGAN's lead below 4 kHz (+0.36 dB) is much smaller than its full-band lead (+1.50 dB). This suggests, but does not measure, that most of its spectral lead lies above 4 kHz, where the filter's cutoff falls. On chamber, UVR's output is further from the clean recording below 4 kHz than the degraded input is; this was observed, not explained.
+- No output from either system reached the metrics' 60 dB cap, and none was silent.
+
+#### Informal blind listen
+
+One listener, the author of OpGAN, compared eight 10-second clips (four per stratum) chosen by a seeded rule written down before the clips were made, with the two systems' outputs in random order and the key revealed after the answers were recorded. OpGAN was preferred in 5 clips, UVR in 1, and 2 were close to a tie (one leaning UVR). This is not a listening test: one listener, eight clips, no statistics.
+
+#### Protocol and disclosures
+
+The benchmark follows a protocol frozen in code (`benchmark/protocols/v14.json`) and checked by a loader that refuses unknown keys, a different version, and a broken amendment chain. It is a frozen protocol with disclosed amendments, not a pre-registration held by a third party. Three amendments followed contact with candidate material or system outputs, and none followed a score of the test recordings:
+
+| Version | What prompted it | What changed |
+|---|---|---|
+| v12 | Listing the original candidate collection showed it held exactly the 145 training recordings | Two new strata from other sources (Chopin piano, MusicNet chamber) |
+| v13 | An informal pilot on 4 tracks outside both training and test sources, which saw system outputs, found the filter's one-sample delay | Added the shift-tolerant diagnostic and the degraded-input baseline; primary metrics unchanged |
+| v14 | A selection walk under v13 (no system output) admitted no chamber recording, because MusicNet ships 32-bit float WAV | Admitted the WAV float format; the piano admissions were identical under v14 |
+
+The full record is in [docs/benchmark-protocol.md](docs/benchmark-protocol.md). One recording in the solo-piano test set is Chopin's Variations for Flute and Piano (B. 9); the frozen candidate list excluded the cello sonata but not this piece, and it was left in rather than changing the protocol after selection.
+
+#### Reproduce
+
+> **Note:** The run's preconditions pass only on the reference platform (darwin_arm64); elsewhere they abort with `ENVIRONMENT_MISMATCH` before any audio is fetched. The UVR model and its parameter files must already be in the model directory with their pinned digests, because the run refuses to download them, and the OpGAN checkpoint must be fetched first with `scripts/fetch_checkpoint.py`.
+
+```bash
+uv run python -m benchmark.run_walk --uvr-model-dir DIR
+PYTHONPATH=backend uv run python -m benchmark.run_systems --walk-dir WALK_DIR --run-dir NEW_DIR --uvr-model-dir DIR
+PYTHONPATH=backend uv run python -m benchmark.run_report --walk-dir WALK_DIR --systems-dir SYSTEMS_DIR --output-dir NEW_DIR
+PYTHONPATH=backend uv run python -m benchmark.run_posthoc --walk-dir WALK_DIR --systems-dir SYSTEMS_DIR --output-dir NEW_DIR
+```
+
+Run digests (SHA-256): protocol `c381a0103c0ad8337c8abd3e5a3c0425757ddfa4d69325152345045983c3c2f2`, walk manifest `4c05b1c3db675260c8bd263c8e14fc69959cf8c7d6a9dee47be3e20143c976e6`, audit trail `5454914179ee4148232fde69b655c8ba94853be8f533ff68e6dccf3c0d6d9c2d`, systems results `8ee44a681e9019bfd31c9b7ecf57fe179e926a7711065dad9b8682c0b4b31169`.
+
+#### Earlier figures
+
+Earlier SDR, PESQ and STOI figures were withdrawn: they were measured on the training corpus, so training and evaluation shared source recordings. They are kept, with that context, in [docs/benchmarks.md](docs/benchmarks.md).
 
 ## Samples
 
@@ -250,9 +328,14 @@ Three noisy, restored and clean triplets for each model. Each link opens the WAV
 - [x] Freeze a replacement protocol before selecting any evaluation material, enforced
       by a validating loader rather than by prose. See
       [benchmark-protocol.md](docs/benchmark-protocol.md)
-- [ ] Run the replacement benchmark on track-disjoint recordings and publish the result
-      with per-recording intervals
-- [ ] Out-of-distribution audio evaluation
+- [x] Run the replacement benchmark on recordings outside OpGAN's training set, and publish
+      the result with performer-level intervals (see [Benchmark Results](#benchmark-results))
+- [ ] A second study, specified and timestamped before it runs: real historical transfers
+      with a listening test, noise outside the training family, and UVR at its native
+      44.1 kHz
+- [ ] Architecture ablation: a plain Conv1D GAN and a small U-Net trained on the same data,
+      to test whether the Self-ONN layers account for the result
+- [ ] A full-bandwidth model (44.1 or 48 kHz) for recordings with content above 8 kHz
 - [ ] Stage 2 of ADR 009: storage for files and jobs that outlives one Lambda environment
 
 ## License
