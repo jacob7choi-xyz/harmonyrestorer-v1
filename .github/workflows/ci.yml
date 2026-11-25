@@ -210,11 +210,12 @@ jobs:
   # only this repository's aws-backend environment. It can get an ECR sign-in token (granted
   # on *, as in AWS's example), push to the one ECR repository, and deploy, warm and alias
   # the one function (docs/aws-stage-1-runbook.md). Runs of this job share a concurrency
-  # group, so two of them do not deploy at the same time. A run still waiting for approval
-  # was cancelled when a newer run's deploy job joined the group: run 45336614337 was
-  # cancelled one second after run 45364801329's deploy job started (2026-11-24). So only
-  # the newest waiting run can be approved. Changes made outside this job, by hand or by the
-  # kill switch, are not part of the group.
+  # group, so two of them do not deploy at the same time. A deploy job waiting for approval
+  # holds the group. Later deploy jobs queue behind it as pending, and a newer pending job
+  # cancels the older one: from 2026-11-20 to 2026-11-25, run 44677835640 waited for
+  # approval while later runs' deploy jobs queued and were cancelled in turn. Reject a stale
+  # waiting deploy to let the newest one run. Changes made outside this job, by hand or by
+  # the kill switch, are not part of the group.
   deploy:
     needs: publish
     runs-on: ubuntu-latest
