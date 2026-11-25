@@ -8,12 +8,12 @@ Research papers relevant to HarmonyRestorer's audio restoration approach, organi
    Time-frequency two-stage U-Net targeting shellac/78-RPM artifacts (hiss, crackle, thumps). Strong baseline for historical music denoising.
    [arXiv:2202.08702](https://arxiv.org/abs/2202.08702)
 
-2. **Fonseca et al.**: "Learning to Denoise Historical Music" (ISMIR 2020)
-   SEANet audio-to-audio model with adversarial + reconstruction losses. Synthetic pairs from clean music + real historical noise segments. Gold-standard recipe for paired training data.
+2. **Li et al.**: "Learning to Denoise Historical Music" (ISMIR 2020)
+   Multi-scale generator built on a 2D convolutional U-Net over the complex STFT, trained with reconstruction and adversarial losses. Training pairs mix clean music with about 8,900 noise samples extracted from quiet segments of 801 historical recordings.
    [arXiv:2008.02027](https://arxiv.org/abs/2008.02027)
 
 3. **Diffusion-Based Denoising of Historical Recordings** (Colibri/MDIB report)
-   First serious treatment of diffusion models for historical audio denoising. Generative counterpart to U-Net and SEANet for analog artifacts.
+   First serious treatment of diffusion models for historical audio denoising. Generative counterpart to the U-Net models above for analog artifacts.
 
 4. **Ince et al.**: "Blind Restoration of Real-World Audio by 1D Operational GANs" (2022)
    Time-domain 1D Op-GAN handling multiple unknown artifacts (noise, clipping, bandwidth loss, reverberation) in a blind setting. **This is the architecture HarmonyRestorer implements.**
@@ -60,8 +60,8 @@ Research papers relevant to HarmonyRestorer's audio restoration approach, organi
 
 ## Synthetic Data Generation
 
-15. **Fonseca et al.**: training procedure in "Learning to Denoise Historical Music"
-    Extracts pure noise from silent sections of historical records and mixes with clean modern music. This is the approach HarmonyRestorer's dataset pipeline is based on (see also entry #2).
+15. **Li et al.**: training procedure in "Learning to Denoise Historical Music"
+    Extracts pure noise from silent sections of historical records and mixes with clean modern music. HarmonyRestorer's v1 pipeline does not do this: it generates its noise (`dataset/noise.py`). This real-noise approach is the one considered for model v2 (`docs/model-v2-phase0.md`; see also entry #2).
     [arXiv:2008.02027](https://arxiv.org/abs/2008.02027)
 
 ## Priority Reading Order
@@ -71,7 +71,7 @@ For HarmonyRestorer specifically:
 1. Ince 2022 (our architecture)
 2. Ince 2020 (Self-ONN theory behind our model)
 3. Moliner & Valimaki 2022 (closest competitor to benchmark against)
-4. Fonseca 2020 (synthetic noise recipe similar to ours)
+4. Li 2020 (real-noise pair recipe; v1 generates its noise instead)
 5. AudioSR (diffusion-based SR baseline and potential fallback if Op-GAN underperforms on bandwidth restoration)
 
 ## Evaluation Metrics
