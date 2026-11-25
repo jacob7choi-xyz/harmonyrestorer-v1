@@ -59,6 +59,31 @@ For each recording, the difference is the mean SI-SNR improvement on `synthetic`
 
 If the gate passes, Phase 1 (freezing the training experiment) is planned. If it fails, training work does not start from this result, and the next step is decided from what the measurement shows.
 
+## Result
+
+The measurement ran on 2026-11-25 on main `d42208d` (the merge of this document) and wrote `data/real_noise_gap_1/real_noise_gap.json` (not tracked; SHA-256 `e91d832bf0e169a8d7a6d9c3bdc0f155b46c9de10206e8555d9abc5a684a0218`).
+
+The gate failed. The mean of the six differences is 1.45 dB, below the 3 dB margin. Its 95% bootstrap interval, 1.17 to 1.76 dB, lies above zero.
+
+| Recording | SI-SNR improvement (dB): synthetic, great78, freesound | Output log-spectral distance: synthetic, great78, freesound |
+|---|---|---|
+| Ballade no. 3, Op. 47 | 1.65, 0.68, -0.30 | 14.03, 17.11, 17.76 |
+| Mazurka, Op. 56 no. 2 | 2.69, 0.86, 0.14 | 16.14, 19.71, 20.88 |
+| Mazurka, Op. 50 no. 3 | 2.42, 0.38, -0.42 | 17.96, 22.37, 21.99 |
+| Scherzo no. 2, Op. 31 | 1.26, -0.16, -0.88 | 13.83, 18.59, 18.62 |
+| Waltz, Op. 64 no. 3 | 2.25, 1.04, 0.06 | 16.49, 20.45, 21.97 |
+| Waltz in A minor, B. 150 | 1.16, -0.09, -0.58 | 18.26, 22.63, 24.50 |
+
+On all six recordings, v1's SI-SNR improvement is largest on `synthetic`, then `great78`, then `freesound`. On `great78` it ranges from -0.16 to 1.04 dB, and on `freesound` it is negative on four of the six recordings. The log-spectral distance of v1's output is higher on both real noises than on `synthetic` for every recording: by 3.1 to 4.8 on `great78` and by 3.7 to 6.2 on `freesound`.
+
+> **Note:** v1's SI-SNR improvement on `synthetic` is 1.16 to 2.69 dB here, below the 3 dB margin on every recording. With a mean of 1.90 dB on `synthetic`, the margin could be reached only if v1's mean improvement on `great78` were -1.10 dB or lower, that is, only if v1 made those mixtures worse than their input. This was not checked when the margin was set. The rule is kept as written, and the result above stands.
+
+The interval is 0.59 dB wide, narrower than the Limits section below expected.
+
+In the 2026-11-23 benchmark, the mean SI-SNR of v1's output was 6.03 dB (piano) and 5.33 dB (chamber) above that of the degraded input (the README's results tables). That degradation kept the low-pass and saturation on, so those figures are not directly comparable with the ones above. The README notes that SI-SNR there credits undoing the low-pass filter's delay of about one sample. One possible reading is that much of v1's benchmark gain comes from undoing the low-pass rather than from removing added noise; this measurement does not test that.
+
+As the rule states, model v2's training work does not start from this result.
+
 ## Limits
 
 - Six recordings, all solo piano, two of them by one performer; the interval will be wide.
