@@ -2,12 +2,12 @@
 # stays the one whose provenance attestation was checked.
 FROM ghcr.io/astral-sh/uv:0.12.23@sha256:61d393e44e249f2e4b526b6c7ddcecce245946826e608e11c93ad4f5bba55b21 AS uv
 
-# ADR 009 (docs/adr/009-pay-per-use-hosting.md) plans to run the app on AWS Lambda
-# through the Lambda Web Adapter.
-# 1.1.0's release notes add AWS_LWA_READINESS_CHECK_TIMEOUT_SECONDS, set below. The digest
-# is the multi-platform index. No GitHub provenance attestation was found for it, so the
-# digest fixes which bytes are used but does not show who built them.
-FROM public.ecr.aws/awsguru/aws-lambda-adapter:1.1.0@sha256:17cfd08eff1dfea3f6a9a1e9c65fdac80aa4919b6085e746615530f43f57d2f1 AS lambda-adapter
+# ADR 009 (docs/adr/009-pay-per-use-hosting.md) runs the app on AWS Lambda through the Lambda
+# Web Adapter; 1.1.0's release notes add AWS_LWA_READINESS_CHECK_TIMEOUT_SECONDS, set below.
+# The digest is AWS's multi-platform index from public.ecr.aws, copied byte for byte to GHCR
+# (.github/workflows/mirror-lambda-adapter.yml). No GitHub provenance attestation was found
+# for it, so the digest fixes which bytes are used but does not show who built them.
+FROM ghcr.io/jacob7choi-xyz/aws-lambda-adapter:1.1.0@sha256:17cfd08eff1dfea3f6a9a1e9c65fdac80aa4919b6085e746615530f43f57d2f1 AS lambda-adapter
 
 # Stages: build installs the locked dependencies, compiling diffq; build-test adds the
 # test group; base holds the system packages used at run time (see below); test and
