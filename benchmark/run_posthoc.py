@@ -31,10 +31,9 @@ from benchmark.atomic_write import write_directory_atomically
 from benchmark.canonical_json import canonical_json
 from benchmark.canonicalisation import CanonicalWaveform
 from benchmark.conditioning import InvalidSystemOutput, condition_pair
-from benchmark.degradation import degrade_frame, frame_seed
 from benchmark.eligibility import frame_floors
 from benchmark.eligibility_outcomes import frame_verdicts
-from benchmark.frame_scoring import reference_frame
+from benchmark.frame_scoring import degrade_with_reference
 from benchmark.framing import frame
 from benchmark.metrics import MetricInputError, log_spectral_distance
 from benchmark.posthoc import (
@@ -284,14 +283,7 @@ def _frame_measures(
 ) -> dict[str, _Measure]:
     """Every source's measurements on one eligible frame, against the rebuilt reference."""
     clean = cut.frames[index]
-    degraded = degrade_frame(
-        clean,
-        recording_peak=cut.peak,
-        sample_rate=protocol.canonicalisation.resample.target_sample_rate,
-        ranges=protocol.degradation.ranges,
-        seed=frame_seed(protocol.degradation.seed, canonical_sha256, index),
-    )
-    reference = reference_frame(clean, degraded.gain)
+    _, reference = degrade_with_reference(clean, cut.peak, canonical_sha256, index, protocol)
     stem = _frame_stem(canonical_sha256, index)
     return {
         source: _measure(

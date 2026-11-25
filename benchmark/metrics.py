@@ -48,7 +48,7 @@ from benchmark.protocol import LogSpectralDistance, ReconstructionSnr, SiSnr
 # The dB factor follows from the named operation rather than being configurable, because
 # 20 against 10 distinguishes amplitude spectra from power spectra and is a kind of
 # measurement rather than a magnitude anyone should be free to choose.
-_DB_MULTIPLIER = {"amplitude_db_additive_offset": 20.0}
+DB_MULTIPLIER = {"amplitude_db_additive_offset": 20.0}
 
 
 class MetricInputError(ValueError):
@@ -68,7 +68,7 @@ class MetricResult:
     capped: bool
 
 
-def _validated_pair(reference: np.ndarray, estimate: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+def validated_pair(reference: np.ndarray, estimate: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     """Check a pair is scoreable and return it as float64.
 
     Args:
@@ -143,7 +143,7 @@ def reconstruction_snr(
     Raises:
         MetricInputError: If the pair is not scoreable.
     """
-    clean, restored = _validated_pair(reference, estimate)
+    clean, restored = validated_pair(reference, estimate)
     residual = float(np.sum((clean - restored) ** 2))
     if residual < config.residual_floor:
         # Indistinguishable from the reference. Reported at the cap and marked censored,
@@ -172,7 +172,7 @@ def si_snr(reference: np.ndarray, estimate: np.ndarray, config: SiSnr) -> Metric
     Raises:
         MetricInputError: If the pair is not scoreable.
     """
-    clean, restored = _validated_pair(reference, estimate)
+    clean, restored = validated_pair(reference, estimate)
 
     if config.constant_reference != "invalid_item":
         raise NotImplementedError(
@@ -302,8 +302,8 @@ def log_spectral_distance(
         MetricInputError: If the pair is not scoreable.
         KeyError: If the config names a log operation this module does not implement.
     """
-    clean, restored = _validated_pair(reference, estimate)
-    multiplier = _DB_MULTIPLIER[config.log_magnitude.operation]
+    clean, restored = validated_pair(reference, estimate)
+    multiplier = DB_MULTIPLIER[config.log_magnitude.operation]
     offset = config.log_magnitude.offset
 
     clean_db = multiplier * np.log10(stft_magnitude(clean, config) + offset)

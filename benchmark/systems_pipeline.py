@@ -49,14 +49,13 @@ import numpy.typing as npt
 
 from benchmark.atomic_write import write_atomically
 from benchmark.canonicalisation import CanonicalWaveform
-from benchmark.degradation import degrade_frame, frame_seed
 from benchmark.eligibility import frame_floors
 from benchmark.eligibility_outcomes import FrameVerdict, frame_verdicts
 from benchmark.frame_scoring import (
     FrameOutcome,
     FrameScore,
     SystemFailure,
-    reference_frame,
+    degrade_with_reference,
     score_output,
 )
 from benchmark.framing import FramedWaveform, frame
@@ -537,16 +536,11 @@ def _score_frame(
     """Degrade one eligible frame, call each system on it, and score every outcome."""
     protocol = context.protocol
     rate = protocol.canonicalisation.resample.target_sample_rate
-    degraded = degrade_frame(
-        clean,
-        recording_peak=peak,
-        sample_rate=rate,
-        ranges=protocol.degradation.ranges,
-        seed=frame_seed(protocol.degradation.seed, admission.canonical_sha256, index),
+    degraded, reference = degrade_with_reference(
+        clean, peak, admission.canonical_sha256, index, protocol
     )
     input_path = context.input_dir / f"{admission.canonical_sha256}-{index:06d}.wav"
     write_frame_input(degraded.degraded, input_path, rate)
-    reference = reference_frame(clean, degraded.gain)
     records = [_baseline_record(admission, index, reference, degraded.degraded, protocol)]
     identity = FrameIdentity(admission.canonical_sha256, index)
     for system in context.systems:

@@ -29,7 +29,7 @@ import numpy as np
 import numpy.typing as npt
 from scipy.stats import t as student_t
 
-from benchmark.metrics import _DB_MULTIPLIER, _validated_pair, stft_magnitude
+from benchmark.metrics import DB_MULTIPLIER, stft_magnitude, validated_pair
 from benchmark.protocol import LogSpectralDistance, Protocol
 from benchmark.scoring import BASELINE, OPGAN, UVR
 
@@ -281,12 +281,12 @@ def band_log_spectral_distance(
     Raises:
         MetricInputError: If the pair is not scoreable, as for the protocol's metric.
     """
-    clean, restored = _validated_pair(reference, estimate)
+    clean, restored = validated_pair(reference, estimate)
     return band_distance_from_magnitudes(
         stft_magnitude(clean, config),
         stft_magnitude(restored, config),
         offset=config.log_magnitude.offset,
-        multiplier=_DB_MULTIPLIER[config.log_magnitude.operation],
+        multiplier=DB_MULTIPLIER[config.log_magnitude.operation],
         last_bin=last_bin,
     )
 

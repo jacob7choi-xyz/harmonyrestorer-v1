@@ -78,9 +78,7 @@ from benchmark.protocol import Protocol
 from benchmark.runner import CanonicalFile, CanonicalFileError
 from benchmark.scoring import (
     BASELINE,
-    OPGAN,
     SYSTEMS,
-    UVR,
     PopulationError,
     SystemFrameResult,
     coverage,
@@ -171,7 +169,6 @@ class Gate(StrEnum):
 
 
 _COVERAGE_GATES = frozenset({Gate.COVERAGE_OPGAN, Gate.COVERAGE_UVR})
-_COVERAGE_BY_SYSTEM = {OPGAN: Gate.COVERAGE_OPGAN, UVR: Gate.COVERAGE_UVR}
 
 
 class Outcome(StrEnum):
