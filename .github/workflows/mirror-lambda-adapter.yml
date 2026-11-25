@@ -1,0 +1,54 @@
+name: Mirror the Lambda Web Adapter
+
+# The image job pulls the Lambda Web Adapter (Dockerfile:10) from public.ecr.aws without an
+# AWS account. AWS limits such pulls to 500 GB of data a month, by source IP, and the image
+# job failed with HTTP 429 from that registry in runs 45520491802, 45555489335 and
+# 45702798969 (the last: "toomanyrequests: Data limit exceeded"). This copies the pinned
+# index, with every platform, to GHCR byte for byte, so the Dockerfile can pull the same
+# digest from there.
+#
+# Run by hand only. It checks out no code and runs none of the project's. It publishes with
+# GITHUB_TOKEN, which links the package to this repository; a package pushed from a
+# laptop is not linked, and a later GITHUB_TOKEN push to an unlinked package fails.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  mirror:
+    # The runner image's software list for Ubuntu 24.04 includes Skopeo.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      SOURCE: docker://public.ecr.aws/awsguru/aws-lambda-adapter@sha256:17cfd08eff1dfea3f6a9a1e9c65fdac80aa4919b6085e746615530f43f57d2f1
+      DEST: docker://ghcr.io/jacob7choi-xyz/aws-lambda-adapter:1.1.0
+      DIGEST: sha256:17cfd08eff1dfea3f6a9a1e9c65fdac80aa4919b6085e746615530f43f57d2f1
+
+    steps:
+      - name: Sign in to GHCR
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$TOKEN" | skopeo login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+      # --preserve-digests makes the copy fail rather than change any manifest's bytes.
+      - name: Copy the pinned index and every platform
+        run: skopeo copy --all --preserve-digests "$SOURCE" "$DEST"
+
+      # A manifest's digest is the SHA-256 of its raw bytes, so this reads the copied index
+      # and fails unless it is the index the Dockerfile pins.
+      - name: Check the copy has the pinned digest
+        run: |
+          set -o pipefail
+          copied="sha256:$(skopeo inspect --raw "$DEST" | sha256sum | cut -d ' ' -f 1)"
+          echo "copied index: $copied"
+          if [ "$copied" != "$DIGEST" ]; then
+            echo "expected $DIGEST"
+            exit 1
+          fi
+
+      - name: Sign out of GHCR
+        if: always()
+        run: skopeo logout ghcr.io
