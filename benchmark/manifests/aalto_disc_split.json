@@ -3,9 +3,12 @@
  "seed": 20261125,
  "evaluation_fraction": 0.15,
  "validation_fraction": 0.05,
- "source_sha256": {
-  "info.csv": "9ba1848b790f2ec12cfcbbc09d6ca387c5049ab643bfed7d92e6de208b086c20"
- },
+ "source": [
+  {
+   "file": "info.csv",
+   "sha256": "9ba1848b790f2ec12cfcbbc09d6ca387c5049ab643bfed7d92e6de208b086c20"
+  }
+ ],
  "excluded_study_discs": [
   "0298455"
  ],

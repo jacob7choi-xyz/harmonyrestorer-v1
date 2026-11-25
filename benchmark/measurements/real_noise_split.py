@@ -58,7 +58,9 @@ EVALUATION_FRACTION = 0.15
 VALIDATION_FRACTION = 0.05
 SPLIT_PATH = Path(__file__).resolve().parents[1] / "manifests" / "aalto_disc_split.json"
 # Set from the manifest written by `main`; a manifest with any other digest is refused.
-PINNED_SPLIT_SHA256 = "0b86f11a68b1c87648b3e6380fead3a65d79b7dacb42b9fe4ca8c5add843abfe"
+PINNED_SPLIT_SHA256 = (
+    "75849f6248044aae9c2dc4218bf9d0e5214a86fd14fa700c7be6592c79a07363"  # pragma: allowlist secret
+)
 INFO_NAME = "info.csv"
 SEGMENTS_DIR = "segments"
 _DISC = re.compile(r"_gbia(\d{7})")
@@ -166,7 +168,7 @@ def _split_document(
         "seed": SPLIT_SEED,
         "evaluation_fraction": EVALUATION_FRACTION,
         "validation_fraction": VALIDATION_FRACTION,
-        "source_sha256": dict(sorted(digests.items())),
+        "source": [{"file": name, "sha256": digest} for name, digest in sorted(digests.items())],
         "excluded_study_discs": sorted(excluded),
         "evaluation": list(split.evaluation),
         "validation": list(split.validation),
