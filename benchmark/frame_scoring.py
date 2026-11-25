@@ -36,10 +36,18 @@ import numpy as np
 import numpy.typing as npt
 
 from benchmark.conditioning import InvalidSystemOutput, condition_pair
+from benchmark.degradation import DegradedFrame, degrade_frame, frame_seed
 from benchmark.metrics import PRIMARY_METRICS, MetricInputError, MetricResult, shift_tolerant
 from benchmark.protocol import Protocol
 
-__all__ = ["FrameScore", "FrameScoringError", "SystemFailure", "reference_frame", "score_output"]
+__all__ = [
+    "FrameScore",
+    "FrameScoringError",
+    "SystemFailure",
+    "degrade_with_reference",
+    "reference_frame",
+    "score_output",
+]
 
 
 class FrameScoringError(Exception):
@@ -80,6 +88,38 @@ def reference_frame(frame: npt.NDArray[np.float64], gain: float) -> npt.NDArray[
     reference: npt.NDArray[np.float64] = np.asarray(frame, dtype=np.float64) * gain
     reference.flags.writeable = False
     return reference
+
+
+def degrade_with_reference(
+    clean: npt.NDArray[np.float64],
+    recording_peak: float,
+    canonical_sha256: str,
+    index: int,
+    protocol: Protocol,
+) -> tuple[DegradedFrame, npt.NDArray[np.float64]]:
+    """Degrade one eligible frame as the systems stage does, and build its clean reference.
+
+    The systems stage scores against this reference, and the post-hoc analyses rebuild it to
+    score the same outputs again, so both call this one function.
+
+    Args:
+        clean: The frame's canonical samples.
+        recording_peak: The largest absolute sample of the complete canonical waveform.
+        canonical_sha256: The recording's canonical digest, which seeds the frame.
+        index: The frame's index in the recording.
+        protocol: The loaded protocol.
+
+    Returns:
+        The degraded frame and the reference, `clean` times the degradation's gain.
+    """
+    degraded = degrade_frame(
+        clean,
+        recording_peak=recording_peak,
+        sample_rate=protocol.canonicalisation.resample.target_sample_rate,
+        ranges=protocol.degradation.ranges,
+        seed=frame_seed(protocol.degradation.seed, canonical_sha256, index),
+    )
+    return degraded, reference_frame(clean, degraded.gain)
 
 
 def score_output(

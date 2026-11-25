@@ -7,10 +7,12 @@ import numpy.typing as npt
 import pytest
 
 from benchmark.conditioning import ConditioningError
+from benchmark.degradation import degrade_frame, frame_seed
 from benchmark.frame_scoring import (
     FrameScore,
     FrameScoringError,
     SystemFailure,
+    degrade_with_reference,
     reference_frame,
     score_output,
 )
@@ -38,6 +40,41 @@ class TestReferenceFrame:
         np.testing.assert_array_equal(reference, frame * 1.7)
         assert reference.dtype == np.float64
         assert not reference.flags.writeable
+
+
+class TestDegradeWithReference:
+    """The shared helper degrades and builds the reference exactly as the two steps did."""
+
+    def test_the_helper_matches_degrading_then_building_the_reference(
+        self, protocol: Protocol
+    ) -> None:
+        clean = music(seed=3)
+        digest = "ab" * 32
+
+        degraded, reference = degrade_with_reference(clean, 0.4, digest, 7, protocol)
+
+        expected = degrade_frame(
+            clean,
+            recording_peak=0.4,
+            sample_rate=protocol.canonicalisation.resample.target_sample_rate,
+            ranges=protocol.degradation.ranges,
+            seed=frame_seed(protocol.degradation.seed, digest, 7),
+        )
+        np.testing.assert_array_equal(degraded.degraded, expected.degraded)
+        assert degraded.gain == expected.gain
+        assert degraded.params == expected.params
+        np.testing.assert_array_equal(reference, reference_frame(clean, expected.gain))
+        assert not reference.flags.writeable
+
+    def test_the_frame_index_and_digest_change_the_degradation(self, protocol: Protocol) -> None:
+        clean = music(seed=3)
+
+        first, _ = degrade_with_reference(clean, 0.4, "ab" * 32, 7, protocol)
+        other_index, _ = degrade_with_reference(clean, 0.4, "ab" * 32, 8, protocol)
+        other_digest, _ = degrade_with_reference(clean, 0.4, "cd" * 32, 7, protocol)
+
+        assert not np.array_equal(first.degraded, other_index.degraded)
+        assert not np.array_equal(first.degraded, other_digest.degraded)
 
 
 class TestScoreOutput:
