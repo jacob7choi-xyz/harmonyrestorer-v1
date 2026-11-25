@@ -1,11 +1,11 @@
 name: Mirror the Lambda Web Adapter
 
-# The image job pulls the Lambda Web Adapter (Dockerfile:10) from public.ecr.aws without an
+# The image job pulled the Lambda Web Adapter (Dockerfile:10) from public.ecr.aws without an
 # AWS account. AWS limits such pulls to 500 GB of data a month, by source IP, and the image
 # job failed with HTTP 429 from that registry in runs 45520491802, 45555489335 and
 # 45702798969 (the last: "toomanyrequests: Data limit exceeded"). This copies the pinned
-# index, with every platform, to GHCR byte for byte, so the Dockerfile can pull the same
-# digest from there.
+# index, with every platform, to GHCR byte for byte; the Dockerfile pulls the same digest
+# from there. Run 45708731500 made the copy on 2026-11-25.
 #
 # Run by hand only. It checks out no code and runs none of the project's. It publishes with
 # GITHUB_TOKEN, which links the package to this repository; a package pushed from a
