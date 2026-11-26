@@ -60,7 +60,15 @@ from benchmark.systems_stage import (
     write_frame_input,
 )
 
-__all__ = ["GateResult", "gate", "noise_excerpt", "scale_to_snr", "synthetic_noise"]
+__all__ = [
+    "GateResult",
+    "demo_admissions",
+    "gate",
+    "noise_excerpt",
+    "recording_interval",
+    "scale_to_snr",
+    "synthetic_noise",
+]
 
 logger = logging.getLogger(__name__)
 
@@ -153,23 +161,29 @@ def synthetic_noise(
     return noise
 
 
-def gate(differences: Sequence[float], protocol: Protocol) -> GateResult:
-    """The gate over per-recording differences, with a bootstrap over recordings.
+def recording_interval(values: Sequence[float], protocol: Protocol) -> tuple[float, float]:
+    """The 95% bootstrap interval of the mean of per-recording values.
 
     The bootstrap uses the protocol's seed and iteration count and resamples recordings with
     replacement; the interval is the 2.5th to 97.5th percentile of the resampled means.
     """
-    values = np.asarray(differences, dtype=np.float64)
+    array = np.asarray(values, dtype=np.float64)
     config = protocol.aggregation.bootstrap
     generator = np.random.Generator(np.random.PCG64(config.seed))
-    draws = generator.integers(0, values.size, size=(config.iterations, values.size))
-    means = values[draws].mean(axis=1)
+    draws = generator.integers(0, array.size, size=(config.iterations, array.size))
+    means = array[draws].mean(axis=1)
     low, high = np.percentile(means, [2.5, 97.5], method="linear")
-    mean = float(values.mean())
+    return float(low), float(high)
+
+
+def gate(differences: Sequence[float], protocol: Protocol) -> GateResult:
+    """The gate over per-recording differences, with `recording_interval` over recordings."""
+    low, high = recording_interval(differences, protocol)
+    mean = float(np.asarray(differences, dtype=np.float64).mean())
     return GateResult(
         mean_difference_db=mean,
-        interval_db=(float(low), float(high)),
-        passed=mean >= GATE_MARGIN_DB and float(low) > 0.0,
+        interval_db=(low, high),
+        passed=mean >= GATE_MARGIN_DB and low > 0.0,
     )
 
 
@@ -362,7 +376,7 @@ def measure_recording(run: MeasurementRun, admission: Admission) -> dict[str, di
     }
 
 
-def _demo_admissions(walk_dir: Path, protocol: Protocol) -> list[Admission]:
+def demo_admissions(walk_dir: Path, protocol: Protocol) -> list[Admission]:
     """The walk's demo admissions, in walk order.
 
     Raises:
@@ -404,7 +418,7 @@ def run_measurement(args: argparse.Namespace) -> bytes:
         great78=great78_pieces(args.aalto_dir, rate),
         freesound=freesound_pieces(args.freesound_dir, rate),
     )
-    admissions = _demo_admissions(args.walk_dir, protocol)
+    admissions = demo_admissions(args.walk_dir, protocol)
     with tempfile.TemporaryDirectory(prefix="real-noise-gap-") as scratch:
         opgan, _ = build_production_systems(
             protocol, Path(scratch), OPGAN_CHECKPOINT, args.uvr_model_dir
