@@ -91,6 +91,19 @@ class TestGate:
         assert not result.passed
 
 
+class TestRecordingInterval:
+    """The interval brackets the mean of the per-recording values and is the gate's interval."""
+
+    def test_identical_values_give_a_point_interval(self, protocol: Protocol) -> None:
+        assert gap.recording_interval([1.5] * 6, protocol) == (1.5, 1.5)
+
+    def test_it_is_the_interval_the_gate_reports(self, protocol: Protocol) -> None:
+        values = [1.0, 2.5, 0.5, 3.0, 1.2, 2.2]
+        low, high = gap.recording_interval(values, protocol)
+        assert low < float(np.mean(values)) < high
+        assert gap.gate(values, protocol).interval_db == (low, high)
+
+
 class _Identity:
     """A system whose output is its input, so every improvement is zero."""
 
